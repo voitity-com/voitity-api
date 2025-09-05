@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: voitity-laravel-app
+    container_name: voitity-laravel-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=voitity
+      - DB_USERNAME=voitity
+      - DB_PASSWORD=voitity
+
+  db:
+    image: ankane/pgvector
+    container_name: voitity-pgvector-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voitity
+      POSTGRES_USER: voitity
+      POSTGRES_PASSWORD: voitity
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
