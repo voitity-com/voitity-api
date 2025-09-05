@@ -1,3 +1,21 @@
+## API Documentation (Swagger)
+
+This project uses [L5-Swagger](https://github.com/DarkaOnLine/L5-Swagger) to generate OpenAPI (Swagger) documentation automatically from annotations in your controllers.
+
+### Generate Swagger Docs
+
+To generate or update the API documentation, run:
+
+```sh
+docker compose exec app php artisan l5-swagger:generate
+```
+
+### View the Documentation
+
+Once generated, you can view the interactive API docs at:
+
+- [http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)
+
 
 # voitity-api
 

@@ -11,6 +11,33 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /**
+     * @OA\Post(
+     *     path="/api/auth/get-token",
+     *     summary="Get access token",
+     *     tags={"Auth"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email","password"},
+     *             @OA\Property(property="email", type="string", example="voitity@gmail.com"),
+     *             @OA\Property(property="password", type="string", example="qwerty123")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful login, returns access token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="access_token", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Invalid credentials",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Your email or password are incorrect.")
+     *         )
+     *     )
+     * )
      * Returns an access token.
      *
      * @param Request $request
