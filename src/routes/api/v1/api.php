@@ -14,6 +14,12 @@ Route::get('health', function() {
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 
+
 Route::prefix('/auth')->group(function() {
     Route::post('/get-token', [AuthController::class, 'getToken']);
+});
+
+use App\Http\Controllers\api\v1\ProfileController;
+Route::prefix('/profile')->group(function() {
+    Route::post('', [ProfileController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
 });

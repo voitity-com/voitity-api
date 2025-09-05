@@ -58,4 +58,12 @@ class User extends Authenticatable
     {
         return Config::get('roles.' . $this->role . '.abilities') ?? [];
     }
+    
+    /**
+     * Get the profiles for the user.
+     */
+    public function profiles()
+    {
+        return $this->hasMany(Profile::class);
+    }
 }
