@@ -5,14 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Models\Profile;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
 {
-    use RefreshDatabase, WithFaker;
 
     /**
      * Profile api endpoint

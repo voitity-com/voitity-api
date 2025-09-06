@@ -10,10 +10,33 @@ use Illuminate\Http\JsonResponse;
 class ProfileController extends Controller
 {
     /**
-     * Store a newly created profile in storage.
-     *
-     * @param StoreProfileRequest $request
-     * @return JsonResponse
+     * @OA\Post(
+     *     path="/api/profile",
+     *     summary="Create a new profile",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","description","genre","personality"},
+     *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
+     *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
+     *             @OA\Property(property="genre", type="string", maxLength=10, example="male"),
+     *             @OA\Property(property="personality", type="string", maxLength=200, example="friendly"),
+     *             @OA\Property(property="active", type="boolean", example=true)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile created successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Profile created successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function store(StoreProfileRequest $request): JsonResponse
     {
@@ -34,11 +57,41 @@ class ProfileController extends Controller
     }
 
     /**
-     * Update a specific profile
-     *
-     * @param UpdateProfileRequest $request
-     * @param integer $id
-     * @return JsonResponse
+     * @OA\Patch(
+     *     path="/api/profile/{id}",
+     *     summary="Update a profile",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="Profile ID",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
+     *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
+     *             @OA\Property(property="genre", type="string", maxLength=10, example="male"),
+     *             @OA\Property(property="personality", type="string", maxLength=200, example="friendly"),
+     *             @OA\Property(property="active", type="boolean", example=true)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile updated successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function update(UpdateProfileRequest $request, int $id): JsonResponse
     {

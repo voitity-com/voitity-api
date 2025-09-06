@@ -4,6 +4,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use Faker\Factory;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TestAPI extends TestCase
@@ -21,9 +22,6 @@ class TestAPI extends TestCase
     public function setUp(): void
     {
         parent::setUp();
-        // Run migrations and seeders for sqlite in-memory
-        Artisan::call('migrate:fresh');
-        Artisan::call('db:seed', ['--class' => 'DatabaseSeeder']);
 
         $this->faker = Factory::create();
     }

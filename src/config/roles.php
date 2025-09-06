@@ -15,12 +15,14 @@ return [
 
     'admin' => [
         'abilities' => [
-            'test:test'
+            'test:test',
+            'profile:write'
         ]
     ],
     'profile' => [
         'abilities' => [
-            'test:test'
+            'test:test',
+            'profile:write'
         ]
     ]
 ];
