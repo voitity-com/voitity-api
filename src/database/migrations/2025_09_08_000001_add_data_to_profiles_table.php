@@ -12,7 +12,7 @@ return new class extends Migration
             $table->json('data')->after('personality')->default(json_encode([
                 'me' => new stdClass(),
                 'work' => new stdClass(),
-                'Projects' => new stdClass(),
+                'projects' => new stdClass(),
             ]));
         });
     }

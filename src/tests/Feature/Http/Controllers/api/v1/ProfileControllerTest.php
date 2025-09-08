@@ -121,4 +121,66 @@ class ProfileControllerTest extends TestAPI
         $this->assertFalse((boolean)$new_profile->active);
     }
 
+    public function test_unauthorized_user_can_not_update_a_profile_data()
+    {
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+            ->json('PUT', self::ENDPOINT_PROFILE . '/100/data', []);
+
+        $response_content = json_decode($response->getContent());
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_user_can_not_update_profile_data_if_he_is_not_owner()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id'       => $user->id,
+            'name'          => $this->faker->name,
+            'description'   => $this->faker->text(200),
+            'genre'         => 'male',
+            'personality'   => $this->faker->text(100)
+        ]);
+
+        $new_data = [
+            'me'            => ['description' => $this->faker->text(200)],
+            'work'          => [$this->faker->text(100), $this->faker->text(100)],
+            'projects'      => [$this->faker->text(100), $this->faker->text(100)],
+        ];
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+            ->json('PUT', self::ENDPOINT_PROFILE . '/' . $profile->id . '/data', ['data' => $new_data]);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_user_can_update_profile_data()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id'       => $user->id,
+            'name'          => $this->faker->name,
+            'description'   => $this->faker->text(200),
+            'genre'         => 'male',
+            'personality'   => $this->faker->text(100)
+        ]);
+
+        $new_data = [
+            'me'            => ['description' => $this->faker->text(200)],
+            'work'          => [$this->faker->text(100), $this->faker->text(100)],
+            'projects'      => [$this->faker->text(100), $this->faker->text(100)],
+        ];
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE . '/' . $profile->id . '/data', ['data' => $new_data]);
+
+        $response->assertJsonPath('message', 'Profile updated successfully.');
+        $response->assertStatus(200);
+
+        $new_profile = Profile::find($profile->id);
+        $this->assertEquals($new_data, $new_profile->data);
+    }
+
 }

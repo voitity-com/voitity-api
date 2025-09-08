@@ -248,6 +248,90 @@
                     }
                 ]
             }
+        },
+        "/api/profile/{profile}/data": {
+            "put": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Update the data field of a profile",
+                "operationId": "3ef79e95be711bb89f5f5ad251ed1e4a",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "description": "Profile ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "data"
+                                ],
+                                "properties": {
+                                    "data": {
+                                        "type": "object",
+                                        "example": {
+                                            "me": {
+                                                "bio": "text"
+                                            },
+                                            "work": {
+                                                "company": "Acme"
+                                            }
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Profile updated successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "tags": [
