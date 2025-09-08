@@ -17,6 +17,11 @@ class Profile extends Model
         'genre',
         'personality',
         'active',
+        'data',
+    ];
+
+    protected $casts = [
+        'data' => 'array',
     ];
 
     public function user()
