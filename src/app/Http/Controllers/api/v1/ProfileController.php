@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreProfileRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Models\Profile;
 use Illuminate\Http\JsonResponse;
 
 class ProfileController extends Controller
@@ -93,7 +94,7 @@ class ProfileController extends Controller
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
-    public function update(UpdateProfileRequest $request, int $id): JsonResponse
+    public function update(UpdateProfileRequest $request, Profile $profile): JsonResponse
     {
         try {
             $user = $request->user();
@@ -102,9 +103,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            $profile = $user->profiles()->find($id);
-
-            if (!$profile) {
+            if (!$profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 

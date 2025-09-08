@@ -20,5 +20,5 @@ Route::prefix('/auth')->group(function() {
 
 Route::prefix('/profile')->group(function() {
     Route::post('', [ProfileController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
-    Route::patch('/{id}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
 });
