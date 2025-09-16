@@ -66,4 +66,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Profile::class);
     }
+    
+    /**
+     * Get the voices for the user.
+     */
+    public function voices()
+    {
+        return $this->hasMany(Voice::class);
+    }
 }
