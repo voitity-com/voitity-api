@@ -16,13 +16,15 @@ return [
     'admin' => [
         'abilities' => [
             'test:test',
-            'profile:write'
+            'profile:write',
+            'voice:write'
         ]
     ],
     'profile' => [
         'abilities' => [
             'test:test',
-            'profile:write'
+            'profile:write',
+            'voice:write'
         ]
     ]
 ];
