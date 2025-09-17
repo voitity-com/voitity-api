@@ -8,6 +8,34 @@ use Illuminate\Http\JsonResponse;
 
 class VoiceController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/voice",
+     *     summary="Create a new voice",
+     *     tags={"Voice"},
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name"},
+     *             @OA\Property(property="name", type="string", maxLength=100, example="Sample Voice"),
+     *             @OA\Property(property="description", type="string", maxLength=500, example="Voice description")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Voice created successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Voice created successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="User already has an active voice."),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=404, description="User not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function store(StoreVoiceRequest $request): JsonResponse
     {
         try {

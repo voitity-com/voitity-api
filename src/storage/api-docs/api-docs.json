@@ -332,6 +332,78 @@
                     }
                 ]
             }
+        },
+        "/api/voice": {
+            "post": {
+                "tags": [
+                    "Voice"
+                ],
+                "summary": "Create a new voice",
+                "operationId": "9c58a58094cc9597319761dc1b93d618",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "Sample Voice"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "Voice description"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Voice created successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Voice created successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "User already has an active voice."
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "tags": [
@@ -342,6 +414,10 @@
         {
             "name": "Profile",
             "description": "Profile"
+        },
+        {
+            "name": "Voice",
+            "description": "Voice"
         }
     ]
 }
