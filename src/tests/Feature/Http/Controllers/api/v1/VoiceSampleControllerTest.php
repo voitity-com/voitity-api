@@ -4,14 +4,46 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\VoiceSampleFileManager;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Mockery;
 
 class VoiceSampleControllerTest extends TestAPI
 {
     const ENDPOINT_VOICESAMPLE = '/api/voice/voice-id/sample';
+
+    public function setUp(): void
+    {
+        parent::setUp();
+        
+        // Use fake storage to prevent actual file operations
+        Storage::fake('local');
+        
+        /*
+         * APPROACH 1 (Current): Mock VoiceSampleFileManager
+         * - Prevents actual file creation
+         * - Faster test execution
+         * - Tests controller logic without file I/O
+         * - Recommended for controller tests
+         * 
+         * APPROACH 2 (Alternative): Real file operations with cleanup
+         * - Replace Storage::fake('local') with Storage::fake()
+         * - Remove VoiceSampleFileManager mocking in individual tests
+         * - Files will be automatically cleaned up by Storage::fake()
+         * - Better for integration testing but slower
+         */
+    }
+
+    protected function tearDown(): void
+    {
+        // Clean up Mockery mocks
+        Mockery::close();
+        parent::tearDown();
+    }
 
     public function test_store_fails_with_invalid_fields()
     {
@@ -37,6 +69,10 @@ class VoiceSampleControllerTest extends TestAPI
 
     public function test_user_can_not_create_voice_sample_if_he_is_not_voice_owner()
     {
+        // Mock the VoiceSampleFileManager (even though this test should fail before using it)
+        $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
+        $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
+
         // Create a user with id 2 first
         $user = User::factory()->create();
         $voice = Voice::factory()->create(['user_id' => $user->id]);
@@ -53,6 +89,21 @@ class VoiceSampleControllerTest extends TestAPI
 
     public function test_user_can_create_voice_sample()
     {
+        // Mock the VoiceSampleFileManager to avoid actual file operations
+        $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
+        $mockFileManager->shouldReceive('processSampleFile')
+            ->once()
+            ->andReturn(true);
+        $mockFileManager->shouldReceive('getFileName')
+            ->once()
+            ->andReturn('test-uuid-123.mp3');
+        $mockFileManager->shouldReceive('getFileDuration')
+            ->once()
+            ->andReturn(120);
+
+        // Bind the mock to the service container
+        $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
+
         $voice = Voice::factory()->create(['user_id' => 1]);
         $data = [
             'file' => UploadedFile::fake()->create('sample.mp3', 100, 'audio/mpeg')
@@ -66,7 +117,7 @@ class VoiceSampleControllerTest extends TestAPI
         $response_content = json_decode($response->getContent());
 
         $new_sample = VoiceSample::find($response_content->data->id);
-        $this->assertEquals($data['file']->getClientOriginalExtension(), pathinfo($new_sample->file, PATHINFO_EXTENSION));
+        $this->assertEquals('mp3', pathinfo($new_sample->file, PATHINFO_EXTENSION));
         $this->assertTrue((boolean)$new_sample->active);
     }
 }

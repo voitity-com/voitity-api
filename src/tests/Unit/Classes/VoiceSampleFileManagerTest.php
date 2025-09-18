@@ -14,6 +14,8 @@ class VoiceSampleFileManagerTest extends TestCase
 {
     protected function tearDown(): void
     {
+        // Storage::fake() automatically cleans up fake files, 
+        // so no manual cleanup is needed for mocked Storage
         Mockery::close();
         parent::tearDown();
     }
@@ -41,11 +43,13 @@ class VoiceSampleFileManagerTest extends TestCase
         // Create instance with mocked getID3
         $fileManager = new VoiceSampleFileManager($getID3Mock);
         
+        $expectedPath = 'files/samples/test-uuid.mp3';
+        
         // Mock Storage::putFileAs to return a path
         Storage::shouldReceive('putFileAs')
             ->with(VoiceSampleFileManager::VOICE_SAMPLES_FOLDER, $fileMock, Mockery::any())
             ->once()
-            ->andReturn('files/samples/test-uuid.mp3');
+            ->andReturn($expectedPath);
 
         // Execute
         $result = $fileManager->processSampleFile($fileMock);
@@ -77,11 +81,13 @@ class VoiceSampleFileManagerTest extends TestCase
         // Create instance with mocked getID3
         $fileManager = new VoiceSampleFileManager($getID3Mock);
         
+        $expectedPath = 'files/samples/test-uuid-error.mp3';
+        
         // Mock Storage::putFileAs to return a path
         Storage::shouldReceive('putFileAs')
             ->with(VoiceSampleFileManager::VOICE_SAMPLES_FOLDER, $fileMock, Mockery::any())
             ->once()
-            ->andReturn('files/samples/test-uuid.mp3');
+            ->andReturn($expectedPath);
 
         // Expect exception
         $this->expectException(VoiceSampleFileManagerCouldNotProcessSample::class);
