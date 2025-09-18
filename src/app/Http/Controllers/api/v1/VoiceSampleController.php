@@ -3,20 +3,35 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Voice\StoreVoiceSampleRequest;
+use App\Models\Voice;
 use App\Models\VoiceSample;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class VoiceSampleController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(StoreVoiceSampleRequest $request, Voice $voice): JsonResponse
     {
-        $validated = $request->validate([
-            'voice_id' => ['required', 'integer', 'exists:voices,id'],
-            'file' => ['required', 'string', 'max:255'],
-            'duration' => ['required', 'integer', 'min:0'],
-            'active' => ['boolean'],
-        ]);
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        if (!$voice || $voice->user_id !== $user->id) {
+            return response()->json(['message' => 'Voice not found.'], 404);
+        }
+
+        $validated = $request->validated();
+        $validated['voice_id'] = $voice->id;
+        
+        // Handle file upload and get duration
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $validated['file'] = $fileName;
+            $validated['duration'] = 120; // Default duration for now
+        }
 
         $voiceSample = VoiceSample::create($validated);
 

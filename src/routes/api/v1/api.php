@@ -7,6 +7,7 @@ use App\Http\Controllers\api\v1\TestController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\VoiceController;
+use App\Http\Controllers\api\v1\VoiceSampleController;
 
 Route::get('health', function() {
     return response()->json(['message' => 'ok']);
@@ -27,4 +28,5 @@ Route::prefix('/profile')->group(function() {
 
 Route::prefix('/voice')->group(function() {
     Route::post('', [VoiceController::class, 'store'])->middleware(['auth:sanctum', 'abilities:voice:write']);
+    Route::post('/{voice}/sample', [VoiceSampleController::class, 'store'])->middleware(['auth:sanctum', 'abilities:voice:write']);
 });
