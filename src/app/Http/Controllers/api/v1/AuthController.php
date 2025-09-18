@@ -55,8 +55,11 @@ class AuthController extends Controller
                 return response()->json(['message' => 'Your email or password are incorrect.'], 403);
             }
 
-            
             $user = Auth::user();
+
+            if (!($user instanceof \App\Models\User)) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
 
             if($user->role === "forgotten") {
                 $user->role = $user->active ? 'user' : 'inactive';
