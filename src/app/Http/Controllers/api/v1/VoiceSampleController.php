@@ -11,6 +11,55 @@ use Illuminate\Http\JsonResponse;
 
 class VoiceSampleController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/voice/{voice}/sample",
+     *     summary="Upload a voice sample for a specific voice",
+     *     tags={"Voice Sample"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="voice",
+     *         in="path",
+     *         required=true,
+     *         description="Voice ID",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"file"},
+     *                 @OA\Property(
+     *                     property="file",
+     *                     type="file",
+     *                     format="binary",
+     *                     description="Audio file (MP3, WAV, etc.)",
+     *                     example="sample.mp3"
+     *                 ),
+     *                 @OA\Property(
+     *                     property="active",
+     *                     type="boolean",
+     *                     description="Whether the sample is active",
+     *                     example=true
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Voice sample uploaded successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Voice sample created successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Failed to process file"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=404, description="Voice not found or user not authorized"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function store(StoreVoiceSampleRequest $request, Voice $voice, VoiceSampleFileManager $fileManager): JsonResponse
     {
         try {

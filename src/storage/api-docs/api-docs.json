@@ -404,6 +404,90 @@
                     }
                 ]
             }
+        },
+        "/api/voice/{voice}/sample": {
+            "post": {
+                "tags": [
+                    "Voice Sample"
+                ],
+                "summary": "Upload a voice sample for a specific voice",
+                "operationId": "d12828be90f8090dcedd5aac25d78d01",
+                "parameters": [
+                    {
+                        "name": "voice",
+                        "in": "path",
+                        "description": "Voice ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file"
+                                ],
+                                "properties": {
+                                    "file": {
+                                        "description": "Audio file (MP3, WAV, etc.)",
+                                        "type": "file",
+                                        "format": "binary",
+                                        "example": "sample.mp3"
+                                    },
+                                    "active": {
+                                        "description": "Whether the sample is active",
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Voice sample uploaded successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Voice sample created successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Failed to process file"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Voice not found or user not authorized"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "tags": [
@@ -418,6 +502,10 @@
         {
             "name": "Voice",
             "description": "Voice"
+        },
+        {
+            "name": "Voice Sample",
+            "description": "Voice Sample"
         }
     ]
 }
