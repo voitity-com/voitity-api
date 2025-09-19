@@ -79,7 +79,7 @@ class VoiceSampleFileManager
      */
     public function getFileName(): string
     {
-        return $this->fileName;
+        return self::VOICE_SAMPLES_FOLDER . '/' . $this->fileName;
     }
 
     /**
