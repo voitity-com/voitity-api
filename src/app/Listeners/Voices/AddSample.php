@@ -41,6 +41,7 @@ class AddSample implements ShouldQueue
      */
     public function handle(VoiceSampleAdded $event): void
     {
+        $voice = $event->voice;
         $voiceSample = $event->voiceSample;
         
         Log::info('AddSample listener triggered', [

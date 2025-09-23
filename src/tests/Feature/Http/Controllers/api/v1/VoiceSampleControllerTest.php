@@ -10,6 +10,7 @@ use App\Models\Voice;
 use App\Models\VoiceSample;
 use App\Models\VoiceProviderRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 
@@ -172,6 +173,8 @@ class VoiceSampleControllerTest extends TestAPI
 
     public function test_user_can_process_a_voice_sample()
     {
+        Event::fake();
+
         $voice = Voice::factory()->create(['user_id' => 1]);
 
         // Create a voice sample and mark it as already processed
@@ -191,5 +194,9 @@ class VoiceSampleControllerTest extends TestAPI
 
         $new_voice_provider_request = VoiceProviderRequest::find($response_content->data->id);
         $this->assertFalse(empty($new_voice_provider_request->status));
+
+        Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voiceSample) {
+            return $event->voiceSample->id === $voiceSample->id;
+        });
     }
 }

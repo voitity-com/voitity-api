@@ -2,7 +2,7 @@
 
 namespace App\Listeners\Voices;
 
-use App\Events\Voices\VoiceCreated;
+use App\Events\Voices\VoiceSampleAdded;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -36,10 +36,10 @@ class CloneVoice implements ShouldQueue
     /**
      * Handle the event.
      *
-     * @param VoiceCreated $event
+     * @param VoiceSampleAdded $event
      * @return void
      */
-    public function handle(VoiceCreated $event): void
+    public function handle(VoiceSampleAdded $event): void
     {
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
@@ -75,11 +75,11 @@ class CloneVoice implements ShouldQueue
     /**
      * Handle a job failure.
      *
-     * @param VoiceCreated $event
+     * @param VoiceSampleAdded $event
      * @param \Throwable $exception
      * @return void
      */
-    public function failed(VoiceCreated $event, \Throwable $exception): void
+    public function failed(VoiceSampleAdded $event, \Throwable $exception): void
     {
         Log::error('CloneVoice listener failed', [
             'voice_id' => $event->voice->id,

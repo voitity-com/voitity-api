@@ -129,6 +129,7 @@ class VoiceSampleController extends Controller
             ]);
 
             // Call to event or service to process the voice sample
+            event(new \App\Events\Voices\VoiceSampleAdded($voice, $voiceSample));
 
             return response()->json([
                 'message' => 'Voice sample is processing successfully.',

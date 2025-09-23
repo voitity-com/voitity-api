@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Events\Voices\VoiceCreated;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Listeners\Voices\CloneVoice;
 use App\Listeners\Voices\AddSample;
@@ -16,10 +15,8 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
-        VoiceCreated::class => [
-            CloneVoice::class,
-        ],
         VoiceSampleAdded::class => [
+            CloneVoice::class,
             AddSample::class,
         ],
     ];
