@@ -8,6 +8,7 @@ use App\Models\Voice;
 use App\Models\VoiceSample;
 use App\Classes\VoiceSampleFileManager;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class VoiceSampleController extends Controller
 {
@@ -87,6 +88,29 @@ class VoiceSampleController extends Controller
 
             return response()->json([
                 'message' => 'Voice sample created successfully.',
+                'data' => $voiceSample
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function process(Request $request, Voice $voice, VoiceSample $voiceSample): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (!$voice || $voice->user_id !== $user->id) {
+                return response()->json(['message' => 'Voice not found.'], 404);
+            }
+
+            return response()->json([
+                'message' => 'Voice sample is processing successfully.',
                 'data' => $voiceSample
             ], 200);
 

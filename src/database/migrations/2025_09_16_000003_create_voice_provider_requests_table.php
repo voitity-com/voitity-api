@@ -9,8 +9,8 @@ return new class extends Migration {
     {
         Schema::create('voice_provider_requests', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('voice_id')->constrained('voices')->onDelete('cascade');
-            $table->foreignId('voice_sample_id')->constrained('voice_samples')->onDelete('cascade');
+            $table->bigInteger('voice_id')->nullable();
+            $table->bigInteger('voice_sample_id')->nullable();
             $table->string('source', 100);
             $table->string('request_url', 255);
             $table->text('response')->nullable();
