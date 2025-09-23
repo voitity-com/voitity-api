@@ -7,6 +7,7 @@ use App\Http\Requests\Voice\StoreVoiceSampleRequest;
 use App\Models\Voice;
 use App\Models\VoiceSample;
 use App\Classes\VoiceSampleFileManager;
+use App\Models\VoiceProviderRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -109,9 +110,29 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
 
+            // Check if voice sample was already processed
+            $existingRequest = \App\Models\VoiceProviderRequest::where('voice_id', $voice->id)
+                ->where('voice_sample_id', $voiceSample->id)
+                ->first();
+
+            if ($existingRequest) {
+                return response()->json(['message' => 'Voice sample was already processed.'], 400);
+            }
+
+            // Create voiceProviderRequest record 
+            $voiceProviderRequest = VoiceProviderRequest::create([
+                'voice_id'          => $voice->id,
+                'voice_sample_id'   => $voiceSample->id,
+                'source'            => '',
+                'request_url'       => '',
+                'status'            => VoiceProviderRequest::STATUS_PENDING
+            ]);
+
+            // Call to event or service to process the voice sample
+
             return response()->json([
                 'message' => 'Voice sample is processing successfully.',
-                'data' => $voiceSample
+                'data' => $voiceProviderRequest
             ], 200);
 
         } catch (\Throwable $e) {

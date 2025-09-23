@@ -8,6 +8,7 @@ use App\Classes\VoiceSampleFileManager;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
+use App\Models\VoiceProviderRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
@@ -15,6 +16,7 @@ use Mockery;
 class VoiceSampleControllerTest extends TestAPI
 {
     const ENDPOINT_VOICESAMPLE = '/api/voice/voice-id/sample';
+    const ENDPOINT_VOICESAMPLE_PROCESS = '/api/voice/voice-id/sample/voice-sample-id/process';
 
     public function setUp(): void
     {
@@ -43,6 +45,18 @@ class VoiceSampleControllerTest extends TestAPI
         // Clean up Mockery mocks
         Mockery::close();
         parent::tearDown();
+    }
+
+    /**
+     * Gen url for process voice sample endpoint
+     */
+    public function getProcessVoiceSampleUrl(int $voice_id = 1, int $voice_sample_id = 1): string
+    {
+        return str_replace(
+            ['voice-id', 'voice-sample-id'], 
+            [(string)$voice_id, (string)$voice_sample_id], 
+            self::ENDPOINT_VOICESAMPLE_PROCESS
+        );
     }
 
     public function test_store_fails_with_invalid_fields()
@@ -119,5 +133,63 @@ class VoiceSampleControllerTest extends TestAPI
         $new_sample = VoiceSample::find($response_content->data->id);
         $this->assertEquals('mp3', pathinfo($new_sample->file, PATHINFO_EXTENSION));
         $this->assertTrue((boolean)$new_sample->active);
+    }
+
+    public function test_unauthorized_user_can_not_process_a_voice_sample()
+    {
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+            ->postJson($this->getProcessVoiceSampleUrl(1, 1));
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_user_can_not_process_a_voice_sample_if_it_was_processed_previously()
+    {
+        $voice = Voice::factory()->create(['user_id' => 1]);
+
+        // Create a voice sample
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'test-uuid-123.mp3',
+            'duration' => 120,
+            'active' => true
+        ]);
+
+        // Create a voice provider request to indicate it was already processed
+        VoiceProviderRequest::factory()->create([
+            'voice_id' => $voice->id,
+            'voice_sample_id' => $voiceSample->id,
+            'status' => 'processing',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertStatus(400);
+        $response->assertJsonPath('message', 'Voice sample was already processed.');
+    }
+
+    public function test_user_can_process_a_voice_sample()
+    {
+        $voice = Voice::factory()->create(['user_id' => 1]);
+
+        // Create a voice sample and mark it as already processed
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'test-uuid-123.mp3',
+            'duration' => 120,
+            'active' => true
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice sample is processing successfully.');
+        $response_content = json_decode($response->getContent());
+
+        $new_voice_provider_request = VoiceProviderRequest::find($response_content->data->id);
+        $this->assertFalse(empty($new_voice_provider_request->status));
     }
 }
