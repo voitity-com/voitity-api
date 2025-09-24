@@ -68,17 +68,17 @@ class ElevenLabsVoiceClient implements VoiceClient
             ]);
 
             // Get the audio file from storage
-            $audioPath = Storage::path($voiceSample->file);
-            
-            if (!file_exists($audioPath)) {
+            if (!Storage::exists($voiceSample->file)) {
                 throw new \Exception("Voice sample file not found: {$voiceSample->file}");
             }
+
+            $audioContent = Storage::get($voiceSample->file);
 
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
             ])->attach(
                 'files',
-                file_get_contents($audioPath),
+                $audioContent,
                 basename($voiceSample->file)
             )->post("{$this->baseUrl}/v1/voices/add", [
                 'name' => $voice->name,
@@ -87,7 +87,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'labels' => json_encode([
                     'voice_id' => $voice->id,
                     'source' => 'voitity_clone'
-                ])
+                ]),
             ]);
 
             if ($response->successful()) {
@@ -107,7 +107,8 @@ class ElevenLabsVoiceClient implements VoiceClient
                     $responseData
                 );
             } else {
-                $error = $response->json()['detail']['message'] ?? 'Unknown error';
+                $json = $response->json();
+                $error = isset($json['detail']['message']) ? $json['detail']['message'] : 'Unknown error';
                 
                 Log::error('ElevenLabs: Voice cloning failed', [
                     'voice_id' => $voice->id,
@@ -142,28 +143,28 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'voice_sample_id' => $voiceSample->id,
             ]);
 
-            // For ElevenLabs, we need the provider voice ID to add samples
-            if (!$voice->provider_voice_id) {
-                Log::warning('ElevenLabs: No provider voice ID found for voice', [
+            // For ElevenLabs, we need the source voice ID to add samples
+            if (!$voice->source_voice_id) {
+                Log::error('ElevenLabs: No source voice ID found for voice', [
                     'voice_id' => $voice->id,
                 ]);
-                return false;
+                throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Voice must have a source_voice_id to add samples');
             }
 
             // Get the audio file from storage
-            $audioPath = Storage::path($voiceSample->file);
-            
-            if (!file_exists($audioPath)) {
+            if (!Storage::exists($voiceSample->file)) {
                 throw new \Exception("Voice sample file not found: {$voiceSample->file}");
             }
+
+            $audioContent = Storage::get($voiceSample->file);
 
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
             ])->attach(
                 'files',
-                file_get_contents($audioPath),
+                $audioContent,
                 basename($voiceSample->file)
-            )->post("{$this->baseUrl}/v1/voices/{$voice->provider_voice_id}/samples");
+            )->post("{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/samples");
 
             if ($response->successful()) {
                 Log::info('ElevenLabs: Voice sample added successfully', [
@@ -185,7 +186,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'error' => $e->getMessage(),
             ]);
 
-            throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Voice cloning failed: ' . $e->getMessage());
+            throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Failed to add voice sample: ' . $e->getMessage());
         }
     }
 
@@ -238,11 +239,9 @@ class ElevenLabsVoiceClient implements VoiceClient
                     ['provider' => 'elevenlabs']
                 );
             } else {
-                $error = $response->json()['detail']['message'] ?? 'Unknown error';
-                
                 Log::error('ElevenLabs: Audio generation failed', [
                     'voice_id' => $voice->id,
-                    'error' => $error,
+                    'response' => $response->body(),
                 ]);
 
                 return new VoiceClientGeneratedAudio(
@@ -253,7 +252,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                     'mp3',
                     null,
                     'failed',
-                    ['error' => $error, 'response' => $response->json()]
+                    ['error' => $response->body()]
                 );
             }
         } catch (\Exception $e) {
