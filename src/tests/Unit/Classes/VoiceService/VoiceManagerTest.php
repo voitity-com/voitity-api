@@ -17,6 +17,7 @@ class VoiceManagerTest extends TestCase
 {
     private VoiceManager $voiceManager;
     private MockInterface $mockConfig;
+    /** @var MockInterface&Container */
     private MockInterface $mockContainer;
 
     public function setUp(): void
@@ -25,12 +26,12 @@ class VoiceManagerTest extends TestCase
         
         $this->mockConfig = Mockery::mock(Config::class);
         $this->mockContainer = Mockery::mock(Container::class);
-        
+
         // Mock the container to return our mocked config when 'config' is requested
         $this->mockContainer->shouldReceive('make')
             ->with('config')
             ->andReturn($this->mockConfig);
-        
+
         $this->voiceManager = new VoiceManager($this->mockContainer);
     }
 
