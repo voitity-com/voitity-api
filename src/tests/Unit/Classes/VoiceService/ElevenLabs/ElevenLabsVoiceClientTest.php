@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class ElevenLabsVoiceClientTest extends TestCase
@@ -36,7 +37,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_be_instantiated_with_valid_config(): void
     {
         $client = new ElevenLabsVoiceClient();
@@ -44,7 +45,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $this->assertInstanceOf(ElevenLabsVoiceClient::class, $client);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_api_key_is_not_configured(): void
     {
         Config::set('voice.drivers.elevenlabs.api_key', null);
@@ -55,7 +56,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         new ElevenLabsVoiceClient();
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_api_key_is_empty(): void
     {
         Config::set('voice.drivers.elevenlabs.api_key', '');
@@ -66,7 +67,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         new ElevenLabsVoiceClient();
     }
 
-    /** @test */
+    #[Test]
     public function it_can_clone_voice_successfully(): void
     {
         // Arrange
@@ -111,7 +112,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_voice_sample_file_not_found(): void
     {
         // Arrange
@@ -133,7 +134,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->cloneVoice($voice, $voiceSample);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_clone_voice_api_fails(): void
     {
         // Arrange
@@ -166,7 +167,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->cloneVoice($voice, $voiceSample);
     }
 
-        /** @test */
+    #[Test]
     public function it_can_add_voice_sample_successfully(): void
     {
         // Arrange
@@ -200,7 +201,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $this->assertTrue($result);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_voice_has_no_source_voice_id(): void
     {
         // Arrange
@@ -227,7 +228,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->addVoice($voice, $voiceSample);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_add_voice_sample_file_not_found(): void
     {
         // Arrange
@@ -252,7 +253,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->addVoice($voice, $voiceSample);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_add_voice_api_fails(): void
     {
         // Arrange
@@ -285,7 +286,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->addVoice($voice, $voiceSample);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_http_request_fails_for_clone_voice(): void
     {
         // Arrange
@@ -316,7 +317,7 @@ class ElevenLabsVoiceClientTest extends TestCase
         $client->cloneVoice($voice, $voiceSample);
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_when_http_request_fails_for_add_voice(): void
     {
         // Arrange
