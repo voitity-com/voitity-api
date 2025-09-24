@@ -5,6 +5,9 @@ namespace App\Classes\VoiceService\ElevenLabs;
 use App\Classes\VoiceService\VoiceClient;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
+use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAddSample;
+use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAuthenticate;
+use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
 use App\Models\Voice;
 use App\Models\VoiceSample;
 use Illuminate\Http\Client\Response;
@@ -45,7 +48,7 @@ class ElevenLabsVoiceClient implements VoiceClient
         $this->defaultVoiceSettings = config('voice.drivers.elevenlabs.default_voice_settings');
 
         if (!$this->apiKey) {
-            throw new \InvalidArgumentException('ElevenLabs API key is not configured');
+            throw new ElevenLabsVoiceClientCouldNotAuthenticate('ElevenLabs API key is not configured');
         }
     }
 
@@ -112,13 +115,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                     'response' => $response->body(),
                 ]);
 
-                return new VoiceClientClonedVoice(
-                    $voice,
-                    $voiceSample,
-                    null,
-                    'failed',
-                    ['error' => $error, 'response' => $response->json()]
-                );
+                throw new ElevenLabsVoiceClientCouldNotCloneVoice($error);
             }
         } catch (\Exception $e) {
             Log::error('ElevenLabs: Voice cloning exception', [
@@ -126,13 +123,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'error' => $e->getMessage(),
             ]);
 
-            return new VoiceClientClonedVoice(
-                $voice,
-                $voiceSample,
-                null,
-                'failed',
-                ['error' => $e->getMessage()]
-            );
+            throw new ElevenLabsVoiceClientCouldNotCloneVoice('ElevenLabs: Voice cloning failed: ' . $e->getMessage());
         }
     }
 
@@ -185,14 +176,16 @@ class ElevenLabsVoiceClient implements VoiceClient
                     'voice_id' => $voice->id,
                     'error' => $response->body(),
                 ]);
-                return false;
+                throw new ElevenLabsVoiceClientCouldNotAddSample($response->body());
             }
+
         } catch (\Exception $e) {
             Log::error('ElevenLabs: Exception adding voice sample', [
                 'voice_id' => $voice->id,
                 'error' => $e->getMessage(),
             ]);
-            return false;
+
+            throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Voice cloning failed: ' . $e->getMessage());
         }
     }
 
