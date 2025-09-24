@@ -15,12 +15,10 @@ class VoiceServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton('voice', function ($app) {
-            return new VoiceManager($app);
-        });
-
+        $this->app->singleton(VoiceManager::class, fn($app) => new VoiceManager($app));
+        
         $this->app->bind(VoiceClient::class, function ($app) {
-            return $app['voice']->driver();
+            return $app->make(VoiceManager::class)->driver(); // según config('voice.default')
         });
     }
 
