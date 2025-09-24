@@ -100,8 +100,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 ]);
 
                 return new VoiceClientClonedVoice(
-                    $voice,
-                    $voiceSample,
+                    'elevenlabs',
                     $providerVoiceId,
                     'completed',
                     $responseData

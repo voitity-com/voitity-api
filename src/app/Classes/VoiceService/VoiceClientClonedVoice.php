@@ -2,24 +2,14 @@
 
 namespace App\Classes\VoiceService;
 
-use App\Models\Voice;
-use App\Models\VoiceSample;
-
 class VoiceClientClonedVoice
 {
     /**
-     * The voice that was cloned.
+     * The source provider for the voice cloning.
      *
-     * @var Voice
+     * @var string
      */
-    public $voice;
-
-    /**
-     * The voice sample used for cloning.
-     *
-     * @var VoiceSample
-     */
-    public $voiceSample;
+    public $source;
 
     /**
      * The external provider voice ID.
@@ -45,21 +35,18 @@ class VoiceClientClonedVoice
     /**
      * Create a new VoiceClientClonedVoice instance.
      *
-     * @param Voice $voice
-     * @param VoiceSample $voiceSample
+     * @param string $source
      * @param string|null $providerVoiceId
      * @param string $status
      * @param array $metadata
      */
     public function __construct(
-        Voice $voice,
-        VoiceSample $voiceSample,
+        string $source,
         ?string $providerVoiceId = null,
         string $status = 'pending',
         array $metadata = []
     ) {
-        $this->voice = $voice;
-        $this->voiceSample = $voiceSample;
+        $this->source = $source;
         $this->providerVoiceId = $providerVoiceId;
         $this->status = $status;
         $this->metadata = $metadata;
@@ -125,8 +112,7 @@ class VoiceClientClonedVoice
     public function toArray(): array
     {
         return [
-            'voice_id' => $this->voice->id,
-            'voice_sample_id' => $this->voiceSample->id,
+            'source' => $this->source,
             'provider_voice_id' => $this->providerVoiceId,
             'status' => $this->status,
             'metadata' => $this->metadata,

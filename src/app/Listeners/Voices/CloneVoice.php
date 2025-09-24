@@ -2,6 +2,7 @@
 
 namespace App\Listeners\Voices;
 
+use App\Classes\VoiceService\VoiceService;
 use App\Events\Voices\VoiceSampleAdded;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -51,21 +52,32 @@ class CloneVoice implements ShouldQueue
             'voice_sample_id' => $voiceSample->id, 
         ]);
 
-        // TODO: Implement voice cloning logic here
-        // This could involve:
-        // 1. Calling an external API to clone the voice
-        // 2. Processing voice samples
-        // 3. Creating voice provider requests
-        // 4. Updating voice status
-        
-        // Example placeholder logic:
-        // if ($voice->source_voice_id) {
-        //     // Clone from existing voice
-        //     $this->cloneFromExistingVoice($voice);
-        // } else {
-        //     // Create new voice profile
-        //     $this->createNewVoiceProfile($voice);
-        // }
+        try {
+            // Create VoiceService instance for this voice
+            $voiceService = new VoiceService($voice);
+            
+            // Clone the voice using the voice sample
+            $clonedVoice = $voiceService->cloneVoice($voiceSample);
+            
+            Log::info('Voice cloning successful', [
+                'voice_id' => $voice->id,
+                'voice_sample_id' => $voiceSample->id,
+                'source' => $clonedVoice->source,
+                'provider_voice_id' => $clonedVoice->getProviderVoiceId(),
+                'status' => $clonedVoice->status,
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Voice cloning failed during processing', [
+                'voice_id' => $voice->id,
+                'voice_sample_id' => $voiceSample->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            // Re-throw to trigger the failed method
+            throw $e;
+        }
         
         Log::info('CloneVoice processing completed', [
             'voice_id' => $voice->id,
@@ -81,15 +93,16 @@ class CloneVoice implements ShouldQueue
      */
     public function failed(VoiceSampleAdded $event, \Throwable $exception): void
     {
+        $voice = $event->voice;
+        $voiceSample = $event->voiceSample;
+        
         Log::error('CloneVoice listener failed', [
-            'voice_id' => $event->voice->id,
-            'voice_sample_id' => $event->voiceSample->id,
+            'voice_id' => $voice->id,
+            'voice_sample_id' => $voiceSample->id,
+            'user_id' => $voice->user_id,
             'error' => $exception->getMessage(),
+            'exception_class' => get_class($exception),
+            'attempts' => $this->attempts(),
         ]);
-
-        // TODO: Handle failure logic
-        // - Mark voice as failed
-        // - Send notification to user
-        // - Create error logs
     }
 }
