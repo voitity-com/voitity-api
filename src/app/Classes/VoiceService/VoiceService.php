@@ -49,7 +49,6 @@ class VoiceService
             
         $clonedVoice = $this->voiceClient->cloneVoice($this->voice, $voiceSample);
 
-        // Set VoiceProviderRequest status to completed VoiceProviderRequest::STATUS_COMPLETED if it succesful
         if ($clonedVoice) {
             $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
             $voiceProviderRequest->save();
