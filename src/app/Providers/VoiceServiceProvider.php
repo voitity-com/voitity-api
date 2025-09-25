@@ -18,7 +18,7 @@ class VoiceServiceProvider extends ServiceProvider
         $this->app->singleton(VoiceManager::class, fn($app) => new VoiceManager($app));
         
         $this->app->bind(VoiceClient::class, function ($app) {
-            return $app->make(VoiceManager::class)->driver(); // según config('voice.default')
+            return $app->make(VoiceManager::class)->driver(); 
         });
     }
 
