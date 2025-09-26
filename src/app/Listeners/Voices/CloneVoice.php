@@ -27,11 +27,18 @@ class CloneVoice implements ShouldQueue
     public $timeout = 120;
 
     /**
+     * The VoiceService factory.
+     *
+     * @var callable
+     */
+    protected $voiceServiceFactory;
+
+    /**
      * Create the event listener.
      */
     public function __construct()
     {
-        //
+        $this->voiceServiceFactory = app(VoiceService::class);
     }
 
     /**
@@ -53,8 +60,8 @@ class CloneVoice implements ShouldQueue
         ]);
 
         try {
-            // Create VoiceService instance for this voice
-            $voiceService = new VoiceService($voice);
+            // Create VoiceService instance using the factory from service provider
+            $voiceService = ($this->voiceServiceFactory)($voice);
             
             // Clone the voice using the voice sample
             $clonedVoice = $voiceService->cloneVoice($voiceSample);
