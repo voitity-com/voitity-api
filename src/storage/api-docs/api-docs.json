@@ -488,6 +488,166 @@
                     }
                 ]
             }
+        },
+        "/api/v1/voice/{voice}/sample/{voice_sample}/process": {
+            "post": {
+                "tags": [
+                    "Voice Sample"
+                ],
+                "summary": "Process a voice sample for voice cloning",
+                "description": "Initiates the processing of a voice sample to clone or enhance a voice. This endpoint triggers the voice cloning workflow which includes audio analysis, voice profile creation, and integration with external voice providers like ElevenLabs.",
+                "operationId": "processVoiceSample",
+                "parameters": [
+                    {
+                        "name": "voice",
+                        "in": "path",
+                        "description": "The ID of the voice to process the sample for",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    },
+                    {
+                        "name": "voice_sample",
+                        "in": "path",
+                        "description": "The ID of the voice sample to process",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 5
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Voice sample processing initiated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Voice sample is processing successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 10
+                                                },
+                                                "voice_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "voice_sample_id": {
+                                                    "type": "integer",
+                                                    "example": 5
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "example": ""
+                                                },
+                                                "request_url": {
+                                                    "type": "string",
+                                                    "example": ""
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "pending"
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-09-26T15:30:00Z"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-09-26T15:30:00Z"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Voice sample already processed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Voice sample was already processed."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Voice or voice sample not found, or user not authorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Voice not found."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Internal server error occurred."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "voice:write"
+                        ]
+                    }
+                ]
+            }
         }
     },
     "tags": [

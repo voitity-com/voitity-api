@@ -97,6 +97,82 @@ class VoiceSampleController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/v1/voice/{voice}/sample/{voice_sample}/process",
+     *     tags={"Voice Sample"},
+     *     summary="Process a voice sample for voice cloning",
+     *     description="Initiates the processing of a voice sample to clone or enhance a voice. This endpoint triggers the voice cloning workflow which includes audio analysis, voice profile creation, and integration with external voice providers like ElevenLabs.",
+     *     operationId="processVoiceSample",
+     *     security={{"sanctum": {"voice:write"}}},
+     *     @OA\Parameter(
+     *         name="voice",
+     *         in="path",
+     *         required=true,
+     *         description="The ID of the voice to process the sample for",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="voice_sample",
+     *         in="path",
+     *         required=true,
+     *         description="The ID of the voice sample to process",
+     *         @OA\Schema(type="integer", example=5)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Voice sample processing initiated successfully",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Voice sample is processing successfully."),
+     *             @OA\Property(
+     *                 property="data", 
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=10),
+     *                 @OA\Property(property="voice_id", type="integer", example=1),
+     *                 @OA\Property(property="voice_sample_id", type="integer", example=5),
+     *                 @OA\Property(property="source", type="string", example=""),
+     *                 @OA\Property(property="request_url", type="string", example=""),
+     *                 @OA\Property(property="status", type="string", example="pending"),
+     *                 @OA\Property(property="created_at", type="string", format="date-time", example="2025-09-26T15:30:00Z"),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time", example="2025-09-26T15:30:00Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Voice sample already processed",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Voice sample was already processed.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Voice or voice sample not found, or user not authorized",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Voice not found.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthenticated",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Unauthenticated.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Internal server error",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Internal server error occurred.")
+     *         )
+     *     )
+     * )
+     */
     public function process(Request $request, Voice $voice, VoiceSample $voiceSample): JsonResponse
     {
         try {
