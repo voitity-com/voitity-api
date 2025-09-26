@@ -62,9 +62,13 @@ class VoiceSampleControllerTest extends TestAPI
 
     public function test_store_fails_with_invalid_fields()
     {
-        $voice = Voice::factory()->create(['user_id' => 1]);
+        // Get token and create user first
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), [
                 'file' => '', // empty
             ]);
@@ -119,12 +123,16 @@ class VoiceSampleControllerTest extends TestAPI
         // Bind the mock to the service container
         $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
 
-        $voice = Voice::factory()->create(['user_id' => 1]);
+        // Get token and create user first
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
         $data = [
             'file' => UploadedFile::fake()->create('sample.mp3', 100, 'audio/mpeg')
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), $data);
             
         $response->assertStatus(200);
@@ -147,7 +155,11 @@ class VoiceSampleControllerTest extends TestAPI
 
     public function test_user_can_not_process_a_voice_sample_if_it_was_processed_previously()
     {
-        $voice = Voice::factory()->create(['user_id' => 1]);
+        // Get token and create user first
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
 
         // Create a voice sample
         $voiceSample = VoiceSample::factory()->create([
@@ -164,7 +176,7 @@ class VoiceSampleControllerTest extends TestAPI
             'status' => 'processing',
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
 
         $response->assertStatus(400);
@@ -175,7 +187,11 @@ class VoiceSampleControllerTest extends TestAPI
     {
         Event::fake();
 
-        $voice = Voice::factory()->create(['user_id' => 1]);
+        // Get token and create user first
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
 
         // Create a voice sample and mark it as already processed
         $voiceSample = VoiceSample::factory()->create([
@@ -185,7 +201,7 @@ class VoiceSampleControllerTest extends TestAPI
             'active' => true
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
 
         $response->assertStatus(200);

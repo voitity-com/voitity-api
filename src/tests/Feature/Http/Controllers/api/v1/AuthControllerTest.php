@@ -20,8 +20,16 @@ class AuthControllerTest extends TestAPI
     #[Test]
     public function get_access_token_with_email_and_password(): void
     {
+        // Create the test user first
+        \App\Models\User::create([
+            'name' => 'Test Admin User',
+            'email' => 'voitity@gmail.com',
+            'password' => bcrypt('qwerty123'),
+            'role' => 'admin',
+        ]);
+
         $response = $this->json('post', self::ENDPOINT_AUTH . '/get-token', [
-            'email' => 'voitity@gmail.com', // matches UserSeeder
+            'email' => 'voitity@gmail.com',
             'password' => 'qwerty123',
         ], ['Accept' => 'application/json']);
 

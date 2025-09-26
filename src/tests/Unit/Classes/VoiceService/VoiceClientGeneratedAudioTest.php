@@ -4,14 +4,11 @@ namespace Tests\Unit\Classes\VoiceService;
 
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Models\Voice;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class VoiceClientGeneratedAudioTest extends TestCase
 {
-    use RefreshDatabase;
-
     private Voice $voice;
     private string $sampleText;
 
@@ -19,10 +16,13 @@ class VoiceClientGeneratedAudioTest extends TestCase
     {
         parent::setUp();
         
-        $this->voice = Voice::factory()->create([
-            'name' => 'Test Voice',
-            'source_voice_id' => 'test-voice-123',
-        ]);
+        $this->voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->name = 'Test Voice';
+                $this->source_voice_id = 'test-voice-123';
+            }
+        };
         
         $this->sampleText = 'Hello, this is a test audio generation.';
     }

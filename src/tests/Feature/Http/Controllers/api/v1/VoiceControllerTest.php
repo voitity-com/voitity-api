@@ -56,8 +56,12 @@ class VoiceControllerTest extends TestAPI
 
     public function test_user_can_not_store_voice_if_he_already_has_one()
     {
+        // Get token and create user first
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        
         $voice = Voice::create([
-            'user_id'       => 1,
+            'user_id'       => $user->id,
             'name'          => $this->faker->name,
             'description'   => $this->faker->text(200)
         ]);
@@ -67,7 +71,7 @@ class VoiceControllerTest extends TestAPI
             'description'   => $this->faker->text(200)
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson(self::ENDPOINT_VOICE, $voice_data);
 
         $response->assertJsonPath('message', 'User already has an active voice.');

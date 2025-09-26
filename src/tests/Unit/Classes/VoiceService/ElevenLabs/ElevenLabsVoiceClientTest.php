@@ -9,7 +9,6 @@ use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAddSample;
 use App\Models\Voice;
 use App\Models\VoiceSample;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +18,6 @@ use Tests\TestCase;
 
 class ElevenLabsVoiceClientTest extends TestCase
 {
-    use RefreshDatabase;
 
     public function setUp(): void
     {
@@ -71,15 +69,20 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_can_clone_voice_successfully(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'name' => 'Test Voice',
-            'description' => 'A test voice for cloning',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->name = 'Test Voice';
+                $this->description = 'A test voice for cloning';
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         // Create a fake audio file
         Storage::put($voiceSample->file, 'fake-audio-content');
@@ -116,11 +119,18 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_voice_sample_file_not_found(): void
     {
         // Arrange
-        $voice = Voice::factory()->create();
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/non-existent-file.mp3',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+            }
+        };
+        
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/non-existent-file.mp3';
+            }
+        };
 
         Log::shouldReceive('info')->once();
         Log::shouldReceive('error')->once();
@@ -138,11 +148,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_clone_voice_api_fails(): void
     {
         // Arrange
-        $voice = Voice::factory()->create();
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->name = 'Test Voice';
+            }
+        };
+        
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 
@@ -171,14 +189,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_can_add_voice_sample_successfully(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'source_voice_id' => 'existing-voice-id-123',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->source_voice_id = 'existing-voice-id-123';
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 
@@ -205,14 +228,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_voice_has_no_source_voice_id(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'source_voice_id' => null,
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->source_voice_id = null;
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 
@@ -232,14 +260,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_add_voice_sample_file_not_found(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'source_voice_id' => 'existing-voice-id-123',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->source_voice_id = 'existing-voice-id-123';
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/non-existent-file.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/non-existent-file.mp3';
+            }
+        };
 
         Log::shouldReceive('info')->once();
         Log::shouldReceive('error')->once();
@@ -257,14 +290,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_add_voice_api_fails(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'source_voice_id' => 'existing-voice-id-123',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->source_voice_id = 'existing-voice-id-123';
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 
@@ -290,11 +328,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_http_request_fails_for_clone_voice(): void
     {
         // Arrange
-        $voice = Voice::factory()->create();
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->name = 'Test Voice';
+            }
+        };
+        
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 
@@ -321,14 +367,19 @@ class ElevenLabsVoiceClientTest extends TestCase
     public function it_throws_exception_when_http_request_fails_for_add_voice(): void
     {
         // Arrange
-        $voice = Voice::factory()->create([
-            'source_voice_id' => 'existing-voice-id-123',
-        ]);
+        $voice = new class extends Voice {
+            public function __construct() {
+                $this->id = 1;
+                $this->source_voice_id = 'existing-voice-id-123';
+            }
+        };
         
-        $voiceSample = VoiceSample::factory()->create([
-            'voice_id' => $voice->id,
-            'file' => 'samples/test-audio.mp3',
-        ]);
+        $voiceSample = new class extends VoiceSample {
+            public function __construct() {
+                $this->id = 1;
+                $this->file = 'samples/test-audio.mp3';
+            }
+        };
 
         Storage::put($voiceSample->file, 'fake-audio-content');
 

@@ -7,14 +7,12 @@ use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceClient;
 use App\Models\Voice;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class VoiceServiceProviderTest extends TestCase
 {
-    use RefreshDatabase;
 
     public function setUp(): void
     {
@@ -53,8 +51,7 @@ class VoiceServiceProviderTest extends TestCase
     public function it_can_create_voice_service_via_factory(): void
     {
         // Arrange
-        $user = User::factory()->create();
-        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        $voice = $this->createMock(Voice::class);
 
         // Act
         $voiceServiceFactory = app(VoiceService::class);
@@ -70,8 +67,7 @@ class VoiceServiceProviderTest extends TestCase
     public function it_can_create_voice_service_with_custom_client(): void
     {
         // Arrange
-        $user = User::factory()->create();
-        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        $voice = $this->createMock(Voice::class);
         $customClient = app(VoiceClient::class);
 
         // Act
