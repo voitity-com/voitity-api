@@ -69,7 +69,18 @@ class VoiceService
      */
     public function addSample(VoiceSample $voiceSample): bool
     {
-        return $this->voiceClient->addVoice($this->voice, $voiceSample);
+        $voiceProviderRequest = VoiceProviderRequest::where('voice_id', $this->voice->id)
+            ->where('voice_sample_id', $voiceSample->id)
+            ->whereIn('status', [VoiceProviderRequest::STATUS_PENDING, VoiceProviderRequest::STATUS_FAILED])
+            ->first();
+
+        if ($voiceProviderRequest) {
+            $this->voiceClient->addVoice($this->voice, $voiceSample);
+            $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
+            $voiceProviderRequest->save();
+        }
+
+        return true;
     }
 
     /**
