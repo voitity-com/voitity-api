@@ -193,7 +193,8 @@ class ElevenLabsVoiceClientTest extends TestCase
         $voice = new class extends Voice {
             public function __construct() {
                 $this->id = 1;
-                $this->source_voice_id = 'existing-voice-id-123';
+                $this->name = 'Test Voice';
+                $this->source_voice_id = '21m00Tcm4TlvDq8ikWAM'; // Valid ElevenLabs voice ID format
             }
         };
         
@@ -208,8 +209,9 @@ class ElevenLabsVoiceClientTest extends TestCase
 
         // Mock successful API response
         Http::fake([
-            'api.elevenlabs.io/v1/voices/existing-voice-id-123/samples' => Http::response([
-                'sample_id' => 'sample-123'
+            'api.elevenlabs.io/v1/voices/21m00Tcm4TlvDq8ikWAM/edit' => Http::response([
+                'voice_id' => '21m00Tcm4TlvDq8ikWAM',
+                'name' => 'Test Voice'
             ], 200),
         ]);
 
@@ -225,8 +227,8 @@ class ElevenLabsVoiceClientTest extends TestCase
         $this->assertInstanceOf(VoiceClientAddedSample::class, $result);
         $this->assertEquals('elevenlabs', $result->source);
         $this->assertEquals('completed', $result->status);
-        $this->assertEquals('https://api.elevenlabs.io/v1/voices/existing-voice-id-123/samples', $result->requestUrl);
-        $this->assertEquals(['sample_id' => 'sample-123'], $result->response);
+        $this->assertEquals('https://api.elevenlabs.io/v1/voices/21m00Tcm4TlvDq8ikWAM/edit', $result->requestUrl);
+        $this->assertEquals(['voice_id' => '21m00Tcm4TlvDq8ikWAM', 'name' => 'Test Voice'], $result->response);
         $this->assertTrue($result->isSuccessful());
     }
 
