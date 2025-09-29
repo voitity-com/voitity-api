@@ -27,18 +27,11 @@ class AddSample implements ShouldQueue
     public $timeout = 120;
 
     /**
-     * The VoiceService factory.
-     *
-     * @var callable
-     */
-    protected $voiceServiceFactory;
-
-    /**
      * Create the event listener.
      */
     public function __construct()
     {
-        $this->voiceServiceFactory = app(VoiceService::class);
+        // VoiceService will automatically resolve VoiceClient from VoiceManager
     }
 
     /**
@@ -72,8 +65,8 @@ class AddSample implements ShouldQueue
         ]);
 
         try {
-            // Create VoiceService instance using the factory from service provider
-            $voiceService = ($this->voiceServiceFactory)($voice);
+            // Create VoiceService instance - it will resolve the VoiceClient from VoiceManager
+            $voiceService = new VoiceService($voice);
             
             // Add the voice sample to the voice
             $success = $voiceService->addSample($voiceSample);
