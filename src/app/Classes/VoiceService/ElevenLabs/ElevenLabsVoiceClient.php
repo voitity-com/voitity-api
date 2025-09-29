@@ -160,16 +160,19 @@ class ElevenLabsVoiceClient implements VoiceClient
 
             $audioContent = Storage::get($voiceSample->file);
 
+            $requestUrl = "{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/edit";
+
             // For ElevenLabs, use the correct samples endpoint with proper form data
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
             ])->attach(
-                'file',  // Changed from 'files' to 'file'
+                'files',
                 $audioContent,
                 basename($voiceSample->file)
-            )->post("{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/samples");
-
-            $requestUrl = "{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/samples";
+            )->post($requestUrl, [
+                'name' => $voice->name,
+                'remove_background_noise' => true
+            ]);
 
             if ($response->successful()) {
                 Log::info('ElevenLabs: Voice sample added successfully', [
