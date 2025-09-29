@@ -26,11 +26,18 @@ class VoiceClientClonedVoice
     public $status;
 
     /**
-     * Additional metadata from the cloning operation.
+     * The request URL used for the cloning operation.
      *
-     * @var array
+     * @var string|null
      */
-    public $metadata;
+    public $requestUrl;
+
+    /**
+     * The response data from the cloning operation.
+     *
+     * @var array|null
+     */
+    public $response;
 
     /**
      * Create a new VoiceClientClonedVoice instance.
@@ -38,18 +45,21 @@ class VoiceClientClonedVoice
      * @param string $source
      * @param string|null $providerVoiceId
      * @param string $status
-     * @param array $metadata
+     * @param array $response The response data
+     * @param string|null $requestUrl
      */
     public function __construct(
         string $source,
         ?string $providerVoiceId = null,
         string $status = 'pending',
-        array $metadata = []
+        array $response = [],
+        ?string $requestUrl = null
     ) {
         $this->source = $source;
         $this->providerVoiceId = $providerVoiceId;
         $this->status = $status;
-        $this->metadata = $metadata;
+        $this->requestUrl = $requestUrl;
+        $this->response = $response;
     }
 
     /**
@@ -105,6 +115,26 @@ class VoiceClientClonedVoice
     }
 
     /**
+     * Get the request URL.
+     *
+     * @return string|null
+     */
+    public function getRequestUrl(): ?string
+    {
+        return $this->requestUrl;
+    }
+
+    /**
+     * Get the response data.
+     *
+     * @return array|null
+     */
+    public function getResponse(): ?array
+    {
+        return $this->response;
+    }
+
+    /**
      * Convert to array representation.
      *
      * @return array
@@ -115,7 +145,8 @@ class VoiceClientClonedVoice
             'source' => $this->source,
             'provider_voice_id' => $this->providerVoiceId,
             'status' => $this->status,
-            'metadata' => $this->metadata,
+            'request_url' => $this->requestUrl,
+            'response' => $this->response,
         ];
     }
 }

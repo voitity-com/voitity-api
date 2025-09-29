@@ -51,6 +51,9 @@ class VoiceService
 
         if ($clonedVoice) {
             $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
+            $voiceProviderRequest->source = $clonedVoice->source;
+            $voiceProviderRequest->request_url = $clonedVoice->getRequestUrl();
+            $voiceProviderRequest->response = json_encode($clonedVoice->getResponse());
             $voiceProviderRequest->save();
 
             $this->voice->source = $clonedVoice->source;

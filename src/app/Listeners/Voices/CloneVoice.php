@@ -53,7 +53,7 @@ class CloneVoice implements ShouldQueue
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
 
-        if ($voice->source_voice_id) {
+        if (!empty($voice->source_voice_id)) {
             Log::info('Voice already cloned, skipping CloneVoice listener', [
                 'voice_id' => $voice->id,
                 'voice_name' => $voice->name,

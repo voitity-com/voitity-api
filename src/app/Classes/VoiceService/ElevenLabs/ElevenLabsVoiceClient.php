@@ -74,18 +74,19 @@ class ElevenLabsVoiceClient implements VoiceClient
 
             $audioContent = Storage::get($voiceSample->file);
 
+            $requestUrl = "{$this->baseUrl}/v1/voices/add";
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
             ])->attach(
                 'files',
                 $audioContent,
                 basename($voiceSample->file)
-            )->post("{$this->baseUrl}/v1/voices/add", [
+            )->post($requestUrl, [
                 'name' => $voice->name,
                 'description' => $voice->description ?? "Cloned voice for {$voice->name}",
                 'remove_background_noise' => true,
                 'labels' => json_encode([
-                    'voice_id' => $voice->id,
+                    'voice_id' => (string)$voice->id,
                     'source' => 'voitity_clone'
                 ]),
             ]);
@@ -103,7 +104,8 @@ class ElevenLabsVoiceClient implements VoiceClient
                     'elevenlabs',
                     $providerVoiceId,
                     'completed',
-                    $responseData
+                    $responseData,
+                    $requestUrl
                 );
             } else {
                 $json = $response->json();

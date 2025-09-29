@@ -19,7 +19,7 @@ class VoiceClientClonedVoiceTest extends TestCase
         $this->assertEquals('elevenlabs', $clonedVoice->source);
         $this->assertNull($clonedVoice->providerVoiceId);
         $this->assertEquals('pending', $clonedVoice->status);
-        $this->assertEquals([], $clonedVoice->metadata);
+        $this->assertEquals([], $clonedVoice->response);
     }
 
     #[Test]
@@ -29,21 +29,19 @@ class VoiceClientClonedVoiceTest extends TestCase
         $source = 'elevenlabs';
         $providerVoiceId = 'provider-voice-456';
         $status = 'completed';
-        $metadata = ['quality' => 'high', 'duration' => '10s'];
+        $response = ['quality' => 'high', 'duration' => '10s'];
+        $requestUrl = 'https://api.elevenlabs.io/v1/voice-generation/create-voice';
 
-        // Act
-        $clonedVoice = new VoiceClientClonedVoice(
-            $source,
-            $providerVoiceId,
-            $status,
-            $metadata
-        );
+                // Act
+        $clonedVoice = new VoiceClientClonedVoice($source, $providerVoiceId, $status, $response, $requestUrl);
 
         // Assert
+        $this->assertInstanceOf(VoiceClientClonedVoice::class, $clonedVoice);
         $this->assertEquals($source, $clonedVoice->source);
         $this->assertEquals($providerVoiceId, $clonedVoice->providerVoiceId);
         $this->assertEquals($status, $clonedVoice->status);
-        $this->assertEquals($metadata, $clonedVoice->metadata);
+        $this->assertEquals($response, $clonedVoice->response);
+        $this->assertEquals($requestUrl, $clonedVoice->requestUrl);
     }
 
     #[Test]
@@ -212,13 +210,13 @@ class VoiceClientClonedVoiceTest extends TestCase
         $source = 'elevenlabs';
         $providerVoiceId = 'provider-voice-456';
         $status = 'completed';
-        $metadata = ['quality' => 'high'];
+        $response = ['quality' => 'high'];
         
         $clonedVoice = new VoiceClientClonedVoice(
             $source,
             $providerVoiceId,
             $status,
-            $metadata
+            $response
         );
 
         // Act
@@ -229,7 +227,8 @@ class VoiceClientClonedVoiceTest extends TestCase
             'source' => $source,
             'provider_voice_id' => $providerVoiceId,
             'status' => $status,
-            'metadata' => $metadata,
+            'request_url' => null,
+            'response' => $response,
         ], $result);
     }
 
@@ -247,7 +246,8 @@ class VoiceClientClonedVoiceTest extends TestCase
             'source' => 'elevenlabs',
             'provider_voice_id' => null,
             'status' => 'pending',
-            'metadata' => [],
+            'request_url' => null,
+            'response' => [],
         ], $result);
     }
 
@@ -264,10 +264,10 @@ class VoiceClientClonedVoiceTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_complex_metadata(): void
+    public function it_handles_complex_response_data(): void
     {
         // Arrange
-        $complexMetadata = [
+        $complexResponse = [
             'quality' => 'high',
             'duration' => '30s',
             'sample_rate' => 48000,
@@ -277,13 +277,13 @@ class VoiceClientClonedVoiceTest extends TestCase
             ]
         ];
         
-        $clonedVoice = new VoiceClientClonedVoice('elevenlabs', 'test-id', 'completed', $complexMetadata);
+        $clonedVoice = new VoiceClientClonedVoice('elevenlabs', 'test-id', 'completed', $complexResponse);
 
         // Act
         $result = $clonedVoice->toArray();
 
         // Assert
-        $this->assertEquals($complexMetadata, $result['metadata']);
+        $this->assertEquals($complexResponse, $result['response']);
     }
 
     #[Test]
