@@ -54,6 +54,7 @@ class VoiceService
             $voiceProviderRequest->source = $clonedVoice->source;
             $voiceProviderRequest->request_url = $clonedVoice->getRequestUrl();
             $voiceProviderRequest->response = json_encode($clonedVoice->getResponse());
+            $voiceProviderRequest->processed_at = now();
             $voiceProviderRequest->save();
 
             $this->voice->source = $clonedVoice->source;
@@ -78,8 +79,11 @@ class VoiceService
             ->first();
 
         if ($voiceProviderRequest) {
-            $this->voiceClient->addVoice($this->voice, $voiceSample);
+            $addedSample = $this->voiceClient->addVoice($this->voice, $voiceSample);
             $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
+            $voiceProviderRequest->request_url = $addedSample->requestUrl;
+            $voiceProviderRequest->response = json_encode($addedSample->response);
+            $voiceProviderRequest->processed_at = now();
             $voiceProviderRequest->save();
         }
 

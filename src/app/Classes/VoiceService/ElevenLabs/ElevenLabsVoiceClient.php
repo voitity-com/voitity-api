@@ -3,6 +3,7 @@
 namespace App\Classes\VoiceService\ElevenLabs;
 
 use App\Classes\VoiceService\VoiceClient;
+use App\Classes\VoiceService\VoiceClientAddedSample;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAddSample;
@@ -134,9 +135,9 @@ class ElevenLabsVoiceClient implements VoiceClient
      *
      * @param Voice $voice The voice to add the sample to
      * @param VoiceSample $voiceSample The voice sample to add
-     * @return bool Indicate if the sample was added successfully
+     * @return VoiceClientAddedSample The result of the sample addition operation
      */
-    public function addVoice(Voice $voice, VoiceSample $voiceSample): bool
+    public function addVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientAddedSample
     {
         try {
             Log::info('ElevenLabs: Adding voice sample', [
@@ -159,20 +160,28 @@ class ElevenLabsVoiceClient implements VoiceClient
 
             $audioContent = Storage::get($voiceSample->file);
 
+            // For ElevenLabs, use the correct samples endpoint with proper form data
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
             ])->attach(
-                'files',
+                'file',  // Changed from 'files' to 'file'
                 $audioContent,
                 basename($voiceSample->file)
             )->post("{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/samples");
+
+            $requestUrl = "{$this->baseUrl}/v1/voices/{$voice->source_voice_id}/samples";
 
             if ($response->successful()) {
                 Log::info('ElevenLabs: Voice sample added successfully', [
                     'voice_id' => $voice->id,
                     'voice_sample_id' => $voiceSample->id,
                 ]);
-                return true;
+                return new VoiceClientAddedSample(
+                    'elevenlabs',
+                    'completed',
+                    $response->json() ?? [],
+                    $requestUrl
+                );
             } else {
                 Log::error('ElevenLabs: Failed to add voice sample', [
                     'voice_id' => $voice->id,

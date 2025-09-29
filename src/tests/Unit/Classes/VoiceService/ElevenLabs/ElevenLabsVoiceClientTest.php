@@ -3,6 +3,7 @@
 namespace Tests\Unit\Classes\VoiceService\ElevenLabs;
 
 use App\Classes\VoiceService\ElevenLabs\ElevenLabsVoiceClient;
+use App\Classes\VoiceService\VoiceClientAddedSample;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAuthenticate;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
@@ -221,7 +222,12 @@ class ElevenLabsVoiceClientTest extends TestCase
         $result = $client->addVoice($voice, $voiceSample);
         
         // Assert
-        $this->assertTrue($result);
+        $this->assertInstanceOf(VoiceClientAddedSample::class, $result);
+        $this->assertEquals('elevenlabs', $result->source);
+        $this->assertEquals('completed', $result->status);
+        $this->assertEquals('https://api.elevenlabs.io/v1/voices/existing-voice-id-123/samples', $result->requestUrl);
+        $this->assertEquals(['sample_id' => 'sample-123'], $result->response);
+        $this->assertTrue($result->isSuccessful());
     }
 
     #[Test]

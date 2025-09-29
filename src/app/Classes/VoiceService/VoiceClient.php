@@ -21,9 +21,9 @@ interface VoiceClient
      *
      * @param Voice $voice The voice to add the sample to
      * @param VoiceSample $voiceSample The voice sample to add
-     * @return bool Indicate if the sample was added successfully
+     * @return VoiceClientAddedSample The result of the sample addition operation
      */
-    public function addVoice(Voice $voice, VoiceSample $voiceSample): bool;
+    public function addVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientAddedSample;
 
     /**
      * Generate audio using a voice and text.
