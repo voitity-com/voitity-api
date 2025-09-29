@@ -3,6 +3,7 @@
 namespace App\Listeners\Voices;
 
 use App\Classes\VoiceService\VoiceService;
+use App\Classes\VoiceService\VoiceManager;
 use App\Events\Voices\VoiceSampleAdded;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -27,18 +28,18 @@ class CloneVoice implements ShouldQueue
     public $timeout = 120;
 
     /**
-     * The VoiceService factory.
+     * The VoiceManager instance.
      *
-     * @var callable
+     * @var VoiceManager
      */
-    protected $voiceServiceFactory;
+    protected VoiceManager $voiceManager;
 
     /**
      * Create the event listener.
      */
-    public function __construct()
+    public function __construct(VoiceManager $voiceManager)
     {
-        $this->voiceServiceFactory = app(VoiceService::class);
+        $this->voiceManager = $voiceManager;
     }
 
     /**
@@ -72,8 +73,9 @@ class CloneVoice implements ShouldQueue
         ]);
 
         try {
-            // Create VoiceService instance using the factory from service provider
-            $voiceService = ($this->voiceServiceFactory)($voice);
+            // Create VoiceService instance using VoiceManager
+            $voiceClient = $this->voiceManager->driver();
+            $voiceService = new VoiceService($voice, $voiceClient);
             
             // Clone the voice using the voice sample
             $clonedVoice = $voiceService->cloneVoice($voiceSample);

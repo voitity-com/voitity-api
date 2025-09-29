@@ -189,6 +189,7 @@ class VoiceSampleController extends Controller
             // Check if voice sample was already processed
             $existingRequest = \App\Models\VoiceProviderRequest::where('voice_id', $voice->id)
                 ->where('voice_sample_id', $voiceSample->id)
+                ->where('status', VoiceProviderRequest::STATUS_COMPLETED)
                 ->first();
 
             if ($existingRequest) {

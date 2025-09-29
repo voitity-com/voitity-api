@@ -19,12 +19,12 @@ class CloneVoiceAlternatives implements ShouldQueue
     public $tries = 3;
     public $timeout = 120;
 
-    // APPROACH 1: Constructor Injection with Factory (Current implementation)
-    protected $voiceServiceFactory;
+    // APPROACH 1: Constructor Injection with VoiceManager (Clean and proper)
+    protected VoiceManager $voiceManager;
     
-    public function __construct(VoiceService $voiceServiceFactory)
+    public function __construct(VoiceManager $voiceManager)
     {
-        $this->voiceServiceFactory = $voiceServiceFactory;
+        $this->voiceManager = $voiceManager;
     }
 
     public function handle(VoiceSampleAdded $event): void
@@ -32,8 +32,10 @@ class CloneVoiceAlternatives implements ShouldQueue
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
         
-        // Use the injected factory
-        $voiceService = ($this->voiceServiceFactory)($voice);
+        // Create VoiceService with the manager - clean and straightforward
+        $voiceClient = $this->voiceManager->driver();
+        $voiceService = new VoiceService($voice, $voiceClient);
+        
         $clonedVoice = $voiceService->cloneVoice($voiceSample);
         
         Log::info('Voice cloned successfully', [

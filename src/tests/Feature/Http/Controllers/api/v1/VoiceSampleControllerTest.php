@@ -173,11 +173,13 @@ class VoiceSampleControllerTest extends TestAPI
         VoiceProviderRequest::factory()->create([
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,
-            'status' => 'processing',
+            'status' => VoiceProviderRequest::STATUS_COMPLETED,
         ]);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        print_r($response->getContent());
 
         $response->assertStatus(400);
         $response->assertJsonPath('message', 'Voice sample was already processed.');

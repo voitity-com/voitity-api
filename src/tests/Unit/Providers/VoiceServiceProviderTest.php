@@ -48,14 +48,15 @@ class VoiceServiceProviderTest extends TestCase
     }
 
     #[Test]
-    public function it_can_create_voice_service_via_factory(): void
+    public function it_can_create_voice_service_via_manager(): void
     {
         // Arrange
         $voice = $this->createMock(Voice::class);
+        $voiceManager = app(VoiceManager::class);
 
         // Act
-        $voiceServiceFactory = app(VoiceService::class);
-        $voiceService = $voiceServiceFactory($voice);
+        $voiceClient = $voiceManager->driver();
+        $voiceService = new VoiceService($voice, $voiceClient);
 
         // Assert
         $this->assertInstanceOf(VoiceService::class, $voiceService);
@@ -71,8 +72,7 @@ class VoiceServiceProviderTest extends TestCase
         $customClient = app(VoiceClient::class);
 
         // Act
-        $voiceServiceFactory = app(VoiceService::class);
-        $voiceService = $voiceServiceFactory($voice, $customClient);
+        $voiceService = new VoiceService($voice, $customClient);
 
         // Assert
         $this->assertInstanceOf(VoiceService::class, $voiceService);
