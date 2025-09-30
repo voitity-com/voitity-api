@@ -12,6 +12,7 @@ class Voice extends Model
 
     protected $fillable = [
         'user_id',
+        'profile_id',
         'name',
         'description',
         'source_voice_id',
@@ -30,5 +31,10 @@ class Voice extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function profile()
+    {
+        return $this->belongsTo(Profile::class);
     }
 }

@@ -28,4 +28,9 @@ class Profile extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function voices()
+    {
+        return $this->hasMany(Voice::class);
+    }
 }

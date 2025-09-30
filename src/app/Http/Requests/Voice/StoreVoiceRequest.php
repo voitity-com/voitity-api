@@ -22,6 +22,19 @@ class StoreVoiceRequest extends FormRequest
         return [
             'name'          => ['required', 'string', 'max:100'],
             'description'   => ['nullable', 'string', 'max:500'],
+            'profile_id'    => [
+                'nullable', 
+                'integer', 
+                'exists:profiles,id',
+                function ($attribute, $value, $fail) {
+                    if ($value && $this->user()) {
+                        $profile = \App\Models\Profile::find($value);
+                        if (!$profile || $profile->user_id !== $this->user()->id) {
+                            $fail('The selected profile does not belong to the authenticated user.');
+                        }
+                    }
+                }
+            ],
         ];
     }
 }

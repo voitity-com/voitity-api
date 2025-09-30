@@ -19,7 +19,8 @@ class VoiceController extends Controller
      *         @OA\JsonContent(
      *             required={"name"},
      *             @OA\Property(property="name", type="string", maxLength=100, example="Sample Voice"),
-     *             @OA\Property(property="description", type="string", maxLength=500, example="Voice description")
+     *             @OA\Property(property="description", type="string", maxLength=500, example="Voice description"),
+     *             @OA\Property(property="profile_id", type="integer", example=1, description="Profile ID (optional, will use first active profile if not provided)")
      *         )
      *     ),
      *     @OA\Response(
@@ -30,7 +31,7 @@ class VoiceController extends Controller
      *             @OA\Property(property="data", type="object")
      *         )
      *     ),
-     *     @OA\Response(response=400, description="User already has an active voice."),
+     *     @OA\Response(response=400, description="User already has an active voice or no active profile found."),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="User not found"),
      *     @OA\Response(response=422, description="Validation error")
@@ -49,7 +50,21 @@ class VoiceController extends Controller
                 return response()->json(['message' => 'User already has an active voice.'], 400);
             }
 
-            $voice = $user->voices()->create($request->validated());
+            // Handle profile_id logic
+            $validatedData = $request->validated();
+            
+            if (!isset($validatedData['profile_id'])) {
+                // Get the first active profile for the user
+                $activeProfile = $user->profiles()->where('active', true)->first();
+                
+                if (!$activeProfile) {
+                    return response()->json(['message' => 'User has no active profile. Please create or activate a profile first.'], 400);
+                }
+                
+                $validatedData['profile_id'] = $activeProfile->id;
+            }
+
+            $voice = $user->voices()->create($validatedData);
 
             return response()->json(['message' => 'Voice created successfully.', 'data' => $voice], 200);
 
