@@ -358,6 +358,11 @@
                                         "type": "string",
                                         "maxLength": 500,
                                         "example": "Voice description"
+                                    },
+                                    "profile_id": {
+                                        "description": "Profile ID (optional, will use first active profile if not provided)",
+                                        "type": "integer",
+                                        "example": 1
                                     }
                                 },
                                 "type": "object"
@@ -386,7 +391,7 @@
                         }
                     },
                     "400": {
-                        "description": "User already has an active voice."
+                        "description": "User already has an active voice or no active profile found."
                     },
                     "401": {
                         "description": "Unauthenticated"
