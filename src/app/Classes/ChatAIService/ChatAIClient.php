@@ -18,9 +18,8 @@ interface ChatAIClient
     /**
      * Convert audio to text based on a profile and audio file path.
      *
-     * @param Profile $profile The user profile for context
      * @param string $audioPath The path to the audio file
      * @return ChatAITextFromAudio The text extracted from audio
      */
-    public function getTextFromAudio(Profile $profile, string $audioPath): ChatAITextFromAudio;
+    public function getTextFromAudio(string $audioPath): ChatAITextFromAudio;
 }
