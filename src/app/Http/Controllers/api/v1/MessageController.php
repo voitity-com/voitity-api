@@ -38,6 +38,7 @@ class MessageController extends Controller
                 'text' => $payload['message'],
                 'type' => 'question',
                 'source' => 'api',
+                'audio' => null,
                 'data' => [
                     'request' => [
                         'message' => $payload['message'],

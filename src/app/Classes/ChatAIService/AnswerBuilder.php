@@ -24,8 +24,10 @@ class AnswerBuilder
 
         $audio = $this->getAudio($profile, $chatAIAnswer->answer);
 
+        $audioUrl = $audio?->getAudioUrl();
+
         $audioPayload = $audio ? [
-            'audio_url' => $audio->getAudioUrl(),
+            'audio_url' => $audioUrl,
             'status' => $audio->status,
             'metadata' => $audio->metadata,
         ] : null;
@@ -36,6 +38,7 @@ class AnswerBuilder
             'text' => $chatAIAnswer->answer,
             'type' => 'answer',
             'source' => $chatAIAnswer->source,
+            'audio' => $audioUrl,
             'data' => [
                 'chat_ai' => $chatAIAnswer->toArray(),
                 'audio' => $audioPayload,

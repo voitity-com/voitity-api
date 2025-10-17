@@ -109,6 +109,7 @@ class MessageControllerTest extends TestAPI
             'type' => 'question',
             'text' => 'Hi there!',
             'source' => 'api',
+            'audio' => null,
         ]);
 
         $this->assertDatabaseHas('messages', [
@@ -117,6 +118,7 @@ class MessageControllerTest extends TestAPI
             'type' => 'answer',
             'text' => 'Hello from AI!',
             'source' => 'openai',
+            'audio' => null,
         ]);
 
         $this->assertSame(1, Message::where('chat_id', $chat->id)->where('type', 'answer')->count());
@@ -198,6 +200,7 @@ class MessageControllerTest extends TestAPI
             'profile_id' => $profile->id,
             'type' => 'question',
             'text' => 'Start conversation',
+            'audio' => null,
         ]);
 
         $this->assertDatabaseHas('messages', [
@@ -205,6 +208,7 @@ class MessageControllerTest extends TestAPI
             'profile_id' => $profile->id,
             'type' => 'answer',
             'text' => 'Here is your answer.',
+            'audio' => null,
         ]);
 
         $this->assertSame(1, Message::where('chat_id', $chatId)->where('type', 'answer')->count());

@@ -19,6 +19,7 @@ class Message extends Model
         'text',
         'type',
         'source',
+        'audio',
         'data',
     ];
 
