@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Listeners\Voices\CloneVoice;
 use App\Listeners\Voices\AddSample;
+use App\Events\MessageStored;
+use App\Listeners\ProcessStoredMessage;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
@@ -15,6 +17,9 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
+        MessageStored::class => [
+            ProcessStoredMessage::class,
+        ],
         VoiceSampleAdded::class => [
             CloneVoice::class,
             AddSample::class,
