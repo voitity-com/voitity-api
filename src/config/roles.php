@@ -17,14 +17,16 @@ return [
         'abilities' => [
             'test:test',
             'profile:write',
-            'voice:write'
+            'voice:write',
+            'messages:write'
         ]
     ],
     'profile' => [
         'abilities' => [
             'test:test',
             'profile:write',
-            'voice:write'
+            'voice:write',
+            'messages:write'
         ]
     ]
 ];
