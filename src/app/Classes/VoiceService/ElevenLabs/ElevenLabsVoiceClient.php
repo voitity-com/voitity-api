@@ -219,14 +219,14 @@ class ElevenLabsVoiceClient implements VoiceClient
             ]);
 
             // For ElevenLabs, we need the provider voice ID
-            if (!$voice->provider_voice_id) {
+            if (!$voice->source_voice_id) {
                 throw new \Exception("No provider voice ID found for voice {$voice->id}");
             }
 
             $response = Http::withHeaders([
                 'xi-api-key' => $this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post("{$this->baseUrl}/v1/text-to-speech/{$voice->provider_voice_id}", [
+            ])->post("{$this->baseUrl}/v1/text-to-speech/{$voice->source_voice_id}", [
                 'text' => $text,
                 'model_id' => config('voice.drivers.elevenlabs.model_id', 'eleven_monolingual_v1'),
                 'voice_settings' => $this->defaultVoiceSettings,
