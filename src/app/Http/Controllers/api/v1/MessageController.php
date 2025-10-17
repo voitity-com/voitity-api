@@ -9,7 +9,6 @@ use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 class MessageController extends Controller
 {
@@ -26,56 +25,52 @@ class MessageController extends Controller
                 }
             }
 
-            $response = DB::transaction(function () use ($payload, $profile) {
-                $chat = isset($payload['chat_id'])
-                    ? $profile->chats()->find($payload['chat_id'])
-                    : $profile->chats()->create();
+            $chat = isset($payload['chat_id'])
+                ? $profile->chats()->find($payload['chat_id'])
+                : $profile->chats()->create();
 
-                if (!$chat instanceof Chat) {
-                    throw new \RuntimeException('Unable to resolve chat for the provided profile.');
-                }
+            if (!$chat instanceof Chat) {
+                throw new \RuntimeException('Unable to resolve chat for the provided profile.');
+            }
 
-                $message = $chat->messages()->create([
-                    'profile_id' => $profile->id,
-                    'text' => $payload['message'],
-                    'type' => 'question',
-                    'source' => 'api',
-                    'data' => [
-                        'request' => [
-                            'message' => $payload['message'],
-                        ],
-                        'processing' => false,
+            $message = $chat->messages()->create([
+                'profile_id' => $profile->id,
+                'text' => $payload['message'],
+                'type' => 'question',
+                'source' => 'api',
+                'data' => [
+                    'request' => [
+                        'message' => $payload['message'],
                     ],
-                ]);
+                    'processing' => false,
+                ],
+            ]);
 
-                if (!$message instanceof Message) {
-                    throw new \RuntimeException('Unable to store message.');
-                }
+            if (!$message instanceof Message) {
+                throw new \RuntimeException('Unable to store message.');
+            }
 
-                $event = new MessageStored($message);
-                event($event);
+            $event = new MessageStored($message);
+            event($event);
 
-                $answer = $event->answer;
+            $answer = $event->answer;
 
-                if (!$answer) {
-                    return response()->json([
-                        'message' => 'Message stored, processing pending.',
-                        'data' => [
-                            'chat_id' => $chat->id,
-                            'message_id' => $message->id,
-                            'text' => null,
-                            'audio_url' => null,
-                        ],
-                    ], 202);
-                }
-
+            if (!$answer) {
                 return response()->json([
-                    'message' => 'Message processed successfully.',
-                    'data' => $answer->toArray(),
-                ]);
-            });
+                    'message' => 'Message stored, processing pending.',
+                    'data' => [
+                        'chat_id' => $chat->id,
+                        'message_id' => $message->id,
+                        'text' => null,
+                        'audio_url' => null,
+                    ],
+                ], 202);
+            }
 
-            return $response;
+            return response()->json([
+                'message' => 'Message processed successfully.',
+                'data' => $answer->toArray(),
+            ]);
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
