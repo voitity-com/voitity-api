@@ -12,6 +12,52 @@ use Illuminate\Http\JsonResponse;
 
 class MessageController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/profile/{profile}/messages",
+     *     summary="Send a message to a profile",
+     *     description="Stores a user message and triggers the AI workflow to generate a reply.",
+     *     tags={"Messages"},
+     *     security={{"sanctum": {}}},
+     *     @OA\Parameter(
+     *         name="profile",
+     *         in="path",
+     *         required=true,
+     *         description="Profile identifier",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"message"},
+     *             @OA\Property(property="message", type="string", example="Can you summarize my notes?"),
+     *             @OA\Property(property="chat_id", type="integer", nullable=true, example=12, description="Existing chat identifier")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Message processed successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Message processed successfully."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="chat_id", type="integer", example=42),
+     *                 @OA\Property(property="message_id", type="integer", example=1050),
+     *                 @OA\Property(property="text", type="string", example="Here is the information you requested."),
+     *                 @OA\Property(property="audio_url", type="string", nullable=true, example="https://cdn.example.com/audio/answer.mp3"),
+     *                 @OA\Property(property="source", type="string", example="openai"),
+     *                 @OA\Property(property="data", type="object")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=202, description="Message stored and processing pending"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=404, description="Profile or chat not found"),
+     *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=500, description="Unexpected error")
+     * )
+     */
     public function store(StoreMessageRequest $request, Profile $profile): JsonResponse
     {
         try {
