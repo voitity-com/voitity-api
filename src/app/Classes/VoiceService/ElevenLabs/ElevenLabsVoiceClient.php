@@ -298,8 +298,8 @@ class ElevenLabsVoiceClient implements VoiceClient
     {
         try {
             $filename = 'generated/' . $voice->id . '/' . uniqid() . '.mp3';
-            Storage::put($filename, $audioContent);
-            return Storage::url($filename);
+            Storage::disk('public')->put($filename, $audioContent);
+            return asset('storage/' . $filename);
         } catch (\Exception $e) {
             Log::error('Failed to store generated audio', [
                 'voice_id' => $voice->id,
