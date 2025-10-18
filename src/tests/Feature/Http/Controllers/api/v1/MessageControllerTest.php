@@ -116,7 +116,6 @@ class MessageControllerTest extends TestAPI
             'chat_id' => $chat->id,
             'profile_id' => $profile->id,
             'type' => 'answer',
-            'text' => 'Hello from AI!',
             'source' => 'openai',
             'audio' => null,
         ]);
@@ -207,7 +206,6 @@ class MessageControllerTest extends TestAPI
             'chat_id' => $chatId,
             'profile_id' => $profile->id,
             'type' => 'answer',
-            'text' => 'Here is your answer.',
             'audio' => null,
         ]);
 

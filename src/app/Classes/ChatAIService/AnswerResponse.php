@@ -15,13 +15,16 @@ class AnswerResponse
 
     public function toArray(): array
     {
+        $payload = $this->answerMessage->data ?? [];
+        $payload['chat_ai'] = $payload['chat_ai'] ?? $this->chatAIAnswer->toArray();
+
         return [
             'chat_id' => $this->answerMessage->chat_id,
             'message_id' => $this->answerMessage->id,
             'text' => $this->answerMessage->text,
             'audio_url' => $this->answerMessage->audio ?? ($this->audioPayload['audio_url'] ?? null),
             'source' => $this->answerMessage->source,
-            'data' => $this->answerMessage->data,
+            'data' => $payload,
         ];
     }
 }
