@@ -11,6 +11,7 @@ use App\Models\Chat;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Event;
 use Mockery;
 
 class MessageControllerTest extends TestAPI
@@ -210,5 +211,35 @@ class MessageControllerTest extends TestAPI
         ]);
 
         $this->assertSame(1, Message::where('chat_id', $chatId)->where('type', 'answer')->count());
+    }
+
+    public function test_store_returns_processing_pending_when_answer_not_ready(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        Event::fake([\App\Events\MessageStored::class]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+            ->postJson(self::ENDPOINT . '/' . $profile->id . '/messages', [
+                'message' => 'Queue this message',
+            ]);
+
+        $response->assertStatus(202);
+        $response->assertJsonPath('data.text', null);
+        $this->assertNotNull($response->json('data.chat_id'));
+        $this->assertDatabaseHas('messages', [
+            'profile_id' => $profile->id,
+            'chat_id' => $response->json('data.chat_id'),
+            'type' => 'question',
+            'text' => 'Queue this message',
+        ]);
+        Event::assertDispatched(\App\Events\MessageStored::class);
     }
 }
