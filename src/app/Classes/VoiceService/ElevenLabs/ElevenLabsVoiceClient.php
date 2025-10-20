@@ -228,7 +228,8 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'Content-Type' => 'application/json',
             ])->post("{$this->baseUrl}/v1/text-to-speech/{$voice->source_voice_id}", [
                 'text' => $text,
-                'model_id' => config('voice.drivers.elevenlabs.model_id', 'eleven_monolingual_v1'),
+                'model_id' => config('voice.drivers.elevenlabs.model_id'),
+                'language_code' => 'es',
                 'voice_settings' => $this->defaultVoiceSettings,
             ]);
 
