@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\GoogleOAuthRequest;
+use App\Services\GoogleOAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -79,6 +81,128 @@ class AuthController extends Controller
             return response()->json(['message' => 'Your email or password are incorrect.'], 403);
         } catch (\Throwable $e) {
             return response()->json(['message' => 'An error occurred while processing your request.'], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/auth/google",
+     *     summary="Authenticate with Google OAuth",
+     *     tags={"Auth"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"google_id","email","name","access_token"},
+     *             @OA\Property(property="google_id", type="string", example="123456789012345678901"),
+     *             @OA\Property(property="email", type="string", example="user@gmail.com"),
+     *             @OA\Property(property="name", type="string", example="John Doe"),
+     *             @OA\Property(property="avatar", type="string", nullable=true, example="https://lh3.googleusercontent.com/a/photo.jpg"),
+     *             @OA\Property(property="access_token", type="string", example="ya29.a0AfH6SMC...")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful Google authentication",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="access_token", type="string"),
+     *             @OA\Property(property="user", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="name", type="string"),
+     *                 @OA\Property(property="email", type="string"),
+     *                 @OA\Property(property="avatar", type="string", nullable=true),
+     *                 @OA\Property(property="provider", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Invalid Google token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Invalid Google access token.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error"
+     *     )
+     * )
+     */
+    public function googleAuth(GoogleOAuthRequest $request, GoogleOAuthService $googleService): JsonResponse
+    {
+        try {
+            $validatedData = $request->validated();
+
+            // Verify Google token and get user info
+            $googleUser = $googleService->verifyGoogleToken($validatedData['access_token']);
+
+            if (!$googleUser) {
+                return response()->json(['message' => 'Invalid Google access token.'], 401);
+            }
+
+            // Verify that the Google ID matches
+            if ($googleUser['id'] !== $validatedData['google_id']) {
+                return response()->json(['message' => 'Google ID mismatch.'], 401);
+            }
+
+            // Create or update user
+            $user = $googleService->createOrUpdateUser($googleUser);
+
+            // Generate access token
+            $accessToken = $googleService->generateAccessToken($user);
+
+            return response()->json([
+                'access_token' => $accessToken,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'avatar' => $user->avatar,
+                    'provider' => $user->provider,
+                ]
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'An error occurred while processing Google authentication.'], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/auth/logout",
+     *     summary="Logout user",
+     *     tags={"Auth"},
+     *     security={{"sanctum": {}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successfully logged out",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Successfully logged out.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthenticated"
+     *     )
+     * )
+     */
+    public function logout(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            
+            if ($user) {
+                // Revoke all tokens for the user
+                $user->tokens()->delete();
+            }
+
+            return response()->json(['message' => 'Successfully logged out.']);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'An error occurred while logging out.'], 500);
         }
     }
 }
