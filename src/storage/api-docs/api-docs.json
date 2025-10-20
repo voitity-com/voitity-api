@@ -472,6 +472,11 @@
                                         "maxLength": 500,
                                         "example": "Voice description"
                                     },
+                                    "language_code": {
+                                        "type": "string",
+                                        "maxLength": 10,
+                                        "example": "es"
+                                    },
                                     "profile_id": {
                                         "description": "Profile ID (optional, will use first active profile if not provided)",
                                         "type": "integer",
@@ -560,6 +565,12 @@
                                         "description": "Whether the sample is active",
                                         "type": "boolean",
                                         "example": true
+                                    },
+                                    "language_code": {
+                                        "description": "Override voice language for subsequent generations",
+                                        "type": "string",
+                                        "maxLength": 10,
+                                        "example": "en"
                                     }
                                 },
                                 "type": "object"

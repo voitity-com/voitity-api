@@ -44,6 +44,13 @@ class VoiceSampleController extends Controller
      *                     type="boolean",
      *                     description="Whether the sample is active",
      *                     example=true
+     *                 ),
+     *                 @OA\Property(
+     *                     property="language_code",
+     *                     type="string",
+     *                     maxLength=10,
+     *                     description="Override voice language for subsequent generations",
+     *                     example="en"
      *                 )
      *             )
      *         )
@@ -77,6 +84,12 @@ class VoiceSampleController extends Controller
 
             $validated = $request->validated();
             $validated['voice_id'] = $voice->id;
+
+            if (isset($validated['language_code'])) {
+                $voice->language_code = $validated['language_code'];
+                $voice->save();
+                unset($validated['language_code']);
+            }
             
             if ($fileManager->processSampleFile($request->file('file'))) {
                 $validated['file'] = $fileManager->getFileName();

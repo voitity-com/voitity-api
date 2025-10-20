@@ -22,7 +22,7 @@ class VoiceControllerTest extends TestAPI
                 'name' => '', // empty
             ]);
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['name']);
+        $response->assertJsonValidationErrors(['name', 'language_code']);
     }
 
     public function test_unauthorized_user_can_not_create_profile()
@@ -54,7 +54,8 @@ class VoiceControllerTest extends TestAPI
         // Now create the voice
         $voice_data = [
             'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200)
+            'description'   => $this->faker->text(200),
+            'language_code' => 'es'
         ];
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
@@ -68,6 +69,7 @@ class VoiceControllerTest extends TestAPI
         $new_voice = Voice::find($response_content->data->id);
         $this->assertEquals($voice_data['name'], $new_voice->name);
         $this->assertEquals($voice_data['description'], $new_voice->description);
+        $this->assertEquals($voice_data['language_code'], $new_voice->language_code);
         $this->assertTrue((boolean)$new_voice->active);
         
         // Verify the voice has the profile_id set
@@ -94,12 +96,14 @@ class VoiceControllerTest extends TestAPI
             'user_id'       => $user->id,
             'profile_id'    => $profile->id,
             'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200)
+            'description'   => $this->faker->text(200),
+            'language_code' => 'es'
         ]);
 
         $voice_data = [
             'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200)
+            'description'   => $this->faker->text(200),
+            'language_code' => 'es'
         ];
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)

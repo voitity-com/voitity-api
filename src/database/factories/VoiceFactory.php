@@ -20,6 +20,7 @@ class VoiceFactory extends Factory
             'user_id' => 1,
             'name' => $this->faker->words(2, true),
             'description' => $this->faker->sentence(),
+            'language_code' => 'es',
             'source_voice_id' => $this->faker->bothify('?#?#?#?#?#?#?#?#'),
             'source' => $this->faker->randomElement(['external', 'internal', 'upload']),
             'is_verified' => $this->faker->boolean(20),

@@ -14,7 +14,8 @@ class StoreVoiceSampleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimetypes:audio/mpeg,audio/wav,audio/mp3', 'max:10240']
+            'file' => ['required', 'file', 'mimetypes:audio/mpeg,audio/wav,audio/mp3', 'max:10240'],
+            'language_code' => ['nullable', 'string', 'max:10'],
         ];
     }
 }

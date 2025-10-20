@@ -229,7 +229,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             ])->post("{$this->baseUrl}/v1/text-to-speech/{$voice->source_voice_id}", [
                 'text' => $text,
                 'model_id' => config('voice.drivers.elevenlabs.model_id'),
-                'language_code' => 'es',
+                'language_code' => $voice->language_code,
                 'voice_settings' => $this->defaultVoiceSettings,
             ]);
 

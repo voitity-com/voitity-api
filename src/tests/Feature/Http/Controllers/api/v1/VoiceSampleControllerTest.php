@@ -144,6 +144,29 @@ class VoiceSampleControllerTest extends TestAPI
         $this->assertTrue((boolean)$new_sample->active);
     }
 
+    public function test_user_can_update_voice_language_when_creating_sample()
+    {
+        $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
+        $mockFileManager->shouldReceive('processSampleFile')->andReturn(true);
+        $mockFileManager->shouldReceive('getFileName')->andReturn('sample.mp3');
+        $mockFileManager->shouldReceive('getFileDuration')->andReturn(90);
+        $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
+
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $voice = Voice::factory()->create(['user_id' => $user->id, 'language_code' => 'es']);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), [
+                'file' => UploadedFile::fake()->create('sample.mp3', 80, 'audio/mpeg'),
+                'language_code' => 'en'
+            ]);
+
+        $response->assertStatus(200);
+        $voice->refresh();
+        $this->assertSame('en', $voice->language_code);
+    }
+
     public function test_unauthorized_user_can_not_process_a_voice_sample()
     {
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())

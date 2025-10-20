@@ -22,6 +22,7 @@ class StoreVoiceRequest extends FormRequest
         return [
             'name'          => ['required', 'string', 'max:100'],
             'description'   => ['nullable', 'string', 'max:500'],
+            'language_code' => ['required', 'string', 'max:10'],
             'profile_id'    => [
                 'nullable', 
                 'integer', 

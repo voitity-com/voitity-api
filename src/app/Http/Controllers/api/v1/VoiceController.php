@@ -20,6 +20,7 @@ class VoiceController extends Controller
      *             required={"name"},
      *             @OA\Property(property="name", type="string", maxLength=100, example="Sample Voice"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="Voice description"),
+     *             @OA\Property(property="language_code", type="string", maxLength=10, example="es"),
      *             @OA\Property(property="profile_id", type="integer", example=1, description="Profile ID (optional, will use first active profile if not provided)")
      *         )
      *     ),

@@ -15,6 +15,7 @@ class Voice extends Model
         'profile_id',
         'name',
         'description',
+        'language_code',
         'source_voice_id',
         'source',
         'is_verified',
