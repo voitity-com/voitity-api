@@ -1,12 +1,12 @@
 # Google OAuth Integration
 
-Este documento explica cómo usar la autenticación con Google en la API de Voitity.
+This document explains how to use Google authentication in the Voitity API.
 
-## 🚀 Endpoints Implementados
+## 🚀 Implemented Endpoints
 
-### 1. **POST /api/auth/google** - Autenticación con Google
+### 1. **POST /api/auth/google** - Google Authentication
 
-Autentica un usuario usando las credenciales de Google OAuth.
+Authenticates a user using Google OAuth credentials.
 
 **Request Body:**
 ```json
@@ -33,9 +33,9 @@ Autentica un usuario usando las credenciales de Google OAuth.
 }
 ```
 
-### 2. **POST /api/auth/logout** - Cerrar Sesión
+### 2. **POST /api/auth/logout** - Logout
 
-Revoca todos los tokens del usuario autenticado.
+Revokes all tokens for the authenticated user.
 
 **Headers:**
 ```
@@ -49,13 +49,13 @@ Authorization: Bearer {access_token}
 }
 ```
 
-### 3. **POST /api/auth/get-token** - Autenticación Email/Password
+### 3. **POST /api/auth/get-token** - Email/Password Authentication
 
-Endpoint existente para autenticación tradicional.
+Existing endpoint for traditional authentication.
 
-## 🛠️ Implementación en React
+## 🛠️ React Implementation
 
-### 1. **Configuración de Google OAuth**
+### 1. **Google OAuth Configuration**
 
 ```javascript
 // Install: npm install @google-oauth/google-auth-library
@@ -65,7 +65,7 @@ import { GoogleAuth } from '@google-cloud/auth-library';
 const GOOGLE_CLIENT_ID = 'your-google-client-id';
 ```
 
-### 2. **Componente de Login con Google**
+### 2. **Google Login Component**
 
 ```jsx
 import React from 'react';
@@ -120,10 +120,10 @@ function GoogleAuthButton() {
 }
 ```
 
-### 3. **Configuración del Provider**
+### 3. **Provider Configuration**
 
 ```jsx
-// En tu App.js o index.js
+// In your App.js or index.js
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 function App() {
@@ -135,7 +135,7 @@ function App() {
 }
 ```
 
-### 4. **Hook para Autenticación**
+### 4. **Authentication Hook**
 
 ```javascript
 // hooks/useAuth.js
@@ -178,47 +178,47 @@ export function useAuth() {
 }
 ```
 
-## 🗄️ Campos de Base de Datos
+## 🗄️ Database Fields
 
-Los siguientes campos fueron agregados a la tabla `users`:
+The following fields were added to the `users` table:
 
-- `google_id` - ID único de Google (string, unique, nullable)
-- `avatar` - URL del avatar del usuario (string, nullable)
-- `google_verified_at` - Timestamp de verificación con Google (timestamp, nullable)
-- `provider` - Proveedor de autenticación ('email' | 'google', default: 'email')
+- `google_id` - Unique Google ID (string, unique, nullable)
+- `avatar` - User avatar URL (string, nullable)
+- `google_verified_at` - Google verification timestamp (timestamp, nullable)
+- `provider` - Authentication provider ('email' | 'google', default: 'email')
 
-## 🔒 Seguridad
+## 🔒 Security
 
-1. **Verificación de Token**: Cada request valida el token de Google con la API de Google
-2. **Coincidencia de ID**: Verifica que el google_id del request coincida con el del token
-3. **Vinculación de Cuentas**: Si existe un usuario con el mismo email, vincula la cuenta de Google
-4. **Revocación de Tokens**: El logout revoca todos los tokens activos del usuario
+1. **Token Verification**: Each request validates the Google token with Google's API
+2. **ID Matching**: Verifies that the google_id in the request matches the token
+3. **Account Linking**: If a user exists with the same email, links the Google account
+4. **Token Revocation**: Logout revokes all active user tokens
 
 ## 🧪 Testing
 
-La implementación incluye tests para:
-- ✅ Crear nuevo usuario con Google OAuth
-- ✅ Vincular cuenta existente por email
-- ✅ Fallar con token inválido
-- ✅ Fallar con Google ID no coincidente
-- ✅ Validación de campos requeridos
-- ✅ Logout exitoso
+The implementation includes tests for:
+- ✅ Create new user with Google OAuth
+- ✅ Link existing account by email
+- ✅ Fail with invalid token
+- ✅ Fail with mismatched Google ID
+- ✅ Validation of required fields
+- ✅ Successful logout
 
-## 📚 Documentación API
+## 📚 API Documentation
 
-La documentación completa está disponible en:
+Complete documentation is available at:
 - **Swagger UI**: `http://your-domain/api/documentation`
 - **JSON Spec**: `http://your-domain/docs/api-docs.json`
 
-## 🎯 Flujo Completo
+## 🎯 Complete Flow
 
-1. Usuario hace clic en "Sign in with Google" en React
-2. Google OAuth devuelve credenciales
-3. React envía datos a `/api/auth/google`
-4. API verifica token con Google
-5. API crea/actualiza usuario en base de datos
-6. API devuelve access_token de Sanctum
-7. React guarda token y redirige al dashboard
-8. Todas las requests futuras usan el access_token en headers
+1. User clicks "Sign in with Google" in React
+2. Google OAuth returns credentials
+3. React sends data to `/api/auth/google`
+4. API verifies token with Google
+5. API creates/updates user in database
+6. API returns Sanctum access_token
+7. React stores token and redirects to dashboard
+8. All future requests use access_token in headers
 
-¡La integración está lista para usar! 🚀
+The integration is ready to use! 🚀
