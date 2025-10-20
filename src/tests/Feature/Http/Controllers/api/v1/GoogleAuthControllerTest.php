@@ -3,11 +3,9 @@
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Models\User;
-use App\Services\GoogleOAuthService;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 
-class GoogleAuthControllerTest extends TestCase
+class GoogleAuthControllerTest extends TestAPI
 {
 
     private const GOOGLE_USER_INFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
