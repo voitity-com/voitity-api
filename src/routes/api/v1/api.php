@@ -19,7 +19,8 @@ Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum
 
 Route::prefix('/auth')->group(function() {
     Route::post('/get-token', [AuthController::class, 'getToken']);
-    Route::post('/google', [AuthController::class, 'googleAuth']);
+    Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
+    Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);
 });
 

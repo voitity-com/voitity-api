@@ -46,12 +46,13 @@ class GoogleOAuthService
     }
 
     /**
-     * Create or update user from Google OAuth data.
+     * Sync user data from Google OAuth payload.
      *
      * @param array $googleUser
-     * @return User
+     * @param bool $createIfMissing
+     * @return User|null
      */
-    public function createOrUpdateUser(array $googleUser): User
+    public function syncUser(array $googleUser, bool $createIfMissing = true): ?User
     {
         $email = $googleUser['email'];
         $googleId = $googleUser['id'];
@@ -83,6 +84,10 @@ class GoogleOAuthService
                 'email_verified_at' => $googleUser['verified_email'] ? now() : $user->email_verified_at,
             ]);
             return $user;
+        }
+
+        if (!$createIfMissing) {
+            return null;
         }
 
         // Create new user

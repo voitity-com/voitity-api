@@ -86,8 +86,8 @@ class AuthController extends Controller
 
     /**
      * @OA\Post(
-     *     path="/api/auth/google",
-     *     summary="Authenticate with Google OAuth",
+     *     path="/api/auth/google/sign-in",
+     *     summary="Sign in with Google OAuth",
      *     tags={"Auth"},
      *     @OA\RequestBody(
      *         required=true,
@@ -102,7 +102,59 @@ class AuthController extends Controller
      *     ),
      *     @OA\Response(
      *         response=200,
-     *         description="Successful Google authentication",
+     *         description="Successful Google sign in",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="access_token", type="string"),
+     *             @OA\Property(property="user", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="name", type="string"),
+     *                 @OA\Property(property="email", type="string"),
+     *                 @OA\Property(property="avatar", type="string", nullable=true),
+     *                 @OA\Property(property="provider", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Invalid Google token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Invalid Google access token.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="User not found"
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error"
+     *     )
+     * )
+     */
+    public function googleSignIn(GoogleOAuthRequest $request, GoogleOAuthService $googleService): JsonResponse
+    {
+        return $this->handleGoogleOAuth($request, $googleService, false, 'User not found. Please sign up.');
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/auth/google/sign-up",
+     *     summary="Sign up with Google OAuth",
+     *     tags={"Auth"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"google_id","email","name","access_token"},
+     *             @OA\Property(property="google_id", type="string", example="123456789012345678901"),
+     *             @OA\Property(property="email", type="string", example="user@gmail.com"),
+     *             @OA\Property(property="name", type="string", example="John Doe"),
+     *             @OA\Property(property="avatar", type="string", nullable=true, example="https://lh3.googleusercontent.com/a/photo.jpg"),
+     *             @OA\Property(property="access_token", type="string", example="ya29.a0AfH6SMC...")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful Google sign up",
      *         @OA\JsonContent(
      *             @OA\Property(property="access_token", type="string"),
      *             @OA\Property(property="user", type="object",
@@ -127,8 +179,17 @@ class AuthController extends Controller
      *     )
      * )
      */
-    public function googleAuth(GoogleOAuthRequest $request, GoogleOAuthService $googleService): JsonResponse
+    public function googleSignUp(GoogleOAuthRequest $request, GoogleOAuthService $googleService): JsonResponse
     {
+        return $this->handleGoogleOAuth($request, $googleService, true);
+    }
+
+    private function handleGoogleOAuth(
+        GoogleOAuthRequest $request,
+        GoogleOAuthService $googleService,
+        bool $createIfMissing,
+        string $missingUserMessage = 'User not found.'
+    ): JsonResponse {
         try {
             $validatedData = $request->validated();
 
@@ -144,8 +205,12 @@ class AuthController extends Controller
                 return response()->json(['message' => 'Google ID mismatch.'], 401);
             }
 
-            // Create or update user
-            $user = $googleService->createOrUpdateUser($googleUser);
+            // Sync or create user depending on flow
+            $user = $googleService->syncUser($googleUser, $createIfMissing);
+
+            if (!$user) {
+                return response()->json(['message' => $missingUserMessage], 404);
+            }
 
             // Generate access token
             $accessToken = $googleService->generateAccessToken($user);
