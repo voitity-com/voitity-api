@@ -88,6 +88,8 @@
                                     "google_id",
                                     "email",
                                     "name",
+                                    "first_name",
+                                    "last_name",
                                     "access_token"
                                 ],
                                 "properties": {
@@ -102,6 +104,14 @@
                                     "name": {
                                         "type": "string",
                                         "example": "John Doe"
+                                    },
+                                    "first_name": {
+                                        "type": "string",
+                                        "example": "John"
+                                    },
+                                    "last_name": {
+                                        "type": "string",
+                                        "example": "Doe"
                                     },
                                     "avatar": {
                                         "type": "string",
@@ -137,6 +147,12 @@
                                                     "type": "string"
                                                 },
                                                 "email": {
+                                                    "type": "string"
+                                                },
+                                                "first_name": {
+                                                    "type": "string"
+                                                },
+                                                "last_name": {
                                                     "type": "string"
                                                 },
                                                 "avatar": {
@@ -196,6 +212,8 @@
                                     "google_id",
                                     "email",
                                     "name",
+                                    "first_name",
+                                    "last_name",
                                     "access_token"
                                 ],
                                 "properties": {
@@ -210,6 +228,14 @@
                                     "name": {
                                         "type": "string",
                                         "example": "John Doe"
+                                    },
+                                    "first_name": {
+                                        "type": "string",
+                                        "example": "John"
+                                    },
+                                    "last_name": {
+                                        "type": "string",
+                                        "example": "Doe"
                                     },
                                     "avatar": {
                                         "type": "string",
@@ -245,6 +271,12 @@
                                                     "type": "string"
                                                 },
                                                 "email": {
+                                                    "type": "string"
+                                                },
+                                                "first_name": {
+                                                    "type": "string"
+                                                },
+                                                "last_name": {
                                                     "type": "string"
                                                 },
                                                 "avatar": {

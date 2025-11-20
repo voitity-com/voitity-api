@@ -92,10 +92,12 @@ class AuthController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"google_id","email","name","access_token"},
+     *             required={"google_id","email","name","first_name","last_name","access_token"},
      *             @OA\Property(property="google_id", type="string", example="123456789012345678901"),
      *             @OA\Property(property="email", type="string", example="user@gmail.com"),
      *             @OA\Property(property="name", type="string", example="John Doe"),
+     *             @OA\Property(property="first_name", type="string", example="John"),
+     *             @OA\Property(property="last_name", type="string", example="Doe"),
      *             @OA\Property(property="avatar", type="string", nullable=true, example="https://lh3.googleusercontent.com/a/photo.jpg"),
      *             @OA\Property(property="access_token", type="string", example="ya29.a0AfH6SMC...")
      *         )
@@ -109,6 +111,8 @@ class AuthController extends Controller
      *                 @OA\Property(property="id", type="integer"),
      *                 @OA\Property(property="name", type="string"),
      *                 @OA\Property(property="email", type="string"),
+     *                 @OA\Property(property="first_name", type="string"),
+     *                 @OA\Property(property="last_name", type="string"),
      *                 @OA\Property(property="avatar", type="string", nullable=true),
      *                 @OA\Property(property="provider", type="string")
      *             )
@@ -144,10 +148,12 @@ class AuthController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"google_id","email","name","access_token"},
+     *             required={"google_id","email","name","first_name","last_name","access_token"},
      *             @OA\Property(property="google_id", type="string", example="123456789012345678901"),
      *             @OA\Property(property="email", type="string", example="user@gmail.com"),
      *             @OA\Property(property="name", type="string", example="John Doe"),
+     *             @OA\Property(property="first_name", type="string", example="John"),
+     *             @OA\Property(property="last_name", type="string", example="Doe"),
      *             @OA\Property(property="avatar", type="string", nullable=true, example="https://lh3.googleusercontent.com/a/photo.jpg"),
      *             @OA\Property(property="access_token", type="string", example="ya29.a0AfH6SMC...")
      *         )
@@ -161,6 +167,8 @@ class AuthController extends Controller
      *                 @OA\Property(property="id", type="integer"),
      *                 @OA\Property(property="name", type="string"),
      *                 @OA\Property(property="email", type="string"),
+     *                 @OA\Property(property="first_name", type="string"),
+     *                 @OA\Property(property="last_name", type="string"),
      *                 @OA\Property(property="avatar", type="string", nullable=true),
      *                 @OA\Property(property="provider", type="string")
      *             )
@@ -215,7 +223,7 @@ class AuthController extends Controller
             }
 
             // Sync or create user depending on flow
-            $user = $googleService->syncUser($googleUser, $createIfMissing);
+            $user = $googleService->syncUser($googleUser, $createIfMissing, $validatedData);
 
             if (!$user) {
                 return response()->json(['message' => $missingUserMessage], 404);
@@ -230,6 +238,8 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
                     'avatar' => $user->avatar,
                     'provider' => $user->provider,
                 ]

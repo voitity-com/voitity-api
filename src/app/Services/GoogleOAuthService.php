@@ -50,12 +50,16 @@ class GoogleOAuthService
      *
      * @param array $googleUser
      * @param bool $createIfMissing
+     * @param array $payload
      * @return User|null
      */
-    public function syncUser(array $googleUser, bool $createIfMissing = true): ?User
+    public function syncUser(array $googleUser, bool $createIfMissing = true, array $payload = []): ?User
     {
         $email = $googleUser['email'];
         $googleId = $googleUser['id'];
+        $firstName = $payload['first_name'] ?? ($googleUser['given_name'] ?? null);
+        $lastName = $payload['last_name'] ?? ($googleUser['family_name'] ?? null);
+        $displayName = $payload['name'] ?? ($googleUser['name'] ?? trim(($firstName ?? '') . ' ' . ($lastName ?? '')));
 
         // First, try to find user by Google ID
         $user = User::where('google_id', $googleId)->first();
@@ -63,7 +67,9 @@ class GoogleOAuthService
         if ($user) {
             // Update existing user with Google ID
             $user->update([
-                'name' => $googleUser['name'] ?? $user->name,
+                'name' => $displayName ?: $user->name,
+                'first_name' => $firstName ?? $user->first_name,
+                'last_name' => $lastName ?? $user->last_name,
                 'avatar' => $googleUser['picture'] ?? $user->avatar,
                 'google_verified_at' => now(),
             ]);
@@ -77,7 +83,9 @@ class GoogleOAuthService
             // Link existing user account with Google
             $user->update([
                 'google_id' => $googleId,
-                'name' => $googleUser['name'] ?? $user->name,
+                'name' => $displayName ?: $user->name,
+                'first_name' => $firstName ?? $user->first_name,
+                'last_name' => $lastName ?? $user->last_name,
                 'avatar' => $googleUser['picture'] ?? $user->avatar,
                 'provider' => 'google',
                 'google_verified_at' => now(),
@@ -92,7 +100,9 @@ class GoogleOAuthService
 
         // Create new user
         return User::create([
-            'name' => $googleUser['name'],
+            'name' => $displayName ?: ($googleUser['name'] ?? ''),
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'email' => $email,
             'google_id' => $googleId,
             'avatar' => $googleUser['picture'] ?? null,
