@@ -10,7 +10,7 @@ class GoogleAuthControllerTest extends TestAPI
 
     private const GOOGLE_USER_INFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
-    public function test_google_auth_creates_new_user_successfully()
+    public function test_google_sign_up_creates_new_user_successfully()
     {
         // Mock Google API response
         Http::fake([
@@ -23,7 +23,7 @@ class GoogleAuthControllerTest extends TestAPI
             ])
         ]);
 
-        $response = $this->postJson('/api/auth/google', [
+        $response = $this->postJson('/api/auth/google/sign-up', [
             'google_id' => '123456789012345678901',
             'email' => 'test@gmail.com',
             'name' => 'Test User',
@@ -50,7 +50,7 @@ class GoogleAuthControllerTest extends TestAPI
         ]);
     }
 
-    public function test_google_auth_links_existing_user_by_email()
+    public function test_google_sign_in_links_existing_user_by_email()
     {
         // Create existing user with same email
         $existingUser = User::create([
@@ -71,7 +71,7 @@ class GoogleAuthControllerTest extends TestAPI
             ])
         ]);
 
-        $response = $this->postJson('/api/auth/google', [
+        $response = $this->postJson('/api/auth/google/sign-in', [
             'google_id' => '123456789012345678901',
             'email' => 'test@gmail.com',
             'name' => 'Test User Google',
@@ -88,6 +88,31 @@ class GoogleAuthControllerTest extends TestAPI
         $this->assertNotNull($existingUser->google_verified_at);
     }
 
+    public function test_google_sign_in_fails_when_user_not_found()
+    {
+        // Mock Google API response with valid data but no user in DB
+        Http::fake([
+            self::GOOGLE_USER_INFO_URL => Http::response([
+                'id' => '123456789012345678901',
+                'email' => 'missing@gmail.com',
+                'name' => 'Missing User',
+                'verified_email' => true
+            ])
+        ]);
+
+        $response = $this->postJson('/api/auth/google/sign-in', [
+            'google_id' => '123456789012345678901',
+            'email' => 'missing@gmail.com',
+            'name' => 'Missing User',
+            'access_token' => 'mock_google_token'
+        ]);
+
+        $response->assertStatus(404)
+                ->assertJson([
+                    'message' => 'User not found. Please sign up.'
+                ]);
+    }
+
     public function test_google_auth_fails_with_invalid_token()
     {
         // Mock Google API failure
@@ -95,7 +120,7 @@ class GoogleAuthControllerTest extends TestAPI
             self::GOOGLE_USER_INFO_URL => Http::response([], 401)
         ]);
 
-        $response = $this->postJson('/api/auth/google', [
+        $response = $this->postJson('/api/auth/google/sign-up', [
             'google_id' => '123456789012345678901',
             'email' => 'test@gmail.com',
             'name' => 'Test User',
@@ -120,7 +145,7 @@ class GoogleAuthControllerTest extends TestAPI
             ])
         ]);
 
-        $response = $this->postJson('/api/auth/google', [
+        $response = $this->postJson('/api/auth/google/sign-up', [
             'google_id' => '123456789012345678901',
             'email' => 'test@gmail.com',
             'name' => 'Test User',
@@ -135,7 +160,7 @@ class GoogleAuthControllerTest extends TestAPI
 
     public function test_google_auth_validation_fails_with_missing_fields()
     {
-        $response = $this->postJson('/api/auth/google', [
+        $response = $this->postJson('/api/auth/google/sign-up', [
             'email' => 'test@gmail.com',
             // Missing required fields
         ]);

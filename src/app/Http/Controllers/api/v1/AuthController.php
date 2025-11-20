@@ -184,6 +184,15 @@ class AuthController extends Controller
         return $this->handleGoogleOAuth($request, $googleService, true);
     }
 
+    /**
+     * Do google oauth validation and create or sign in user.
+     *
+     * @param GoogleOAuthRequest $request
+     * @param GoogleOAuthService $googleService
+     * @param boolean $createIfMissing
+     * @param string $missingUserMessage
+     * @return JsonResponse
+     */
     private function handleGoogleOAuth(
         GoogleOAuthRequest $request,
         GoogleOAuthService $googleService,
