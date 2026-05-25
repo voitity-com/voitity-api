@@ -20,11 +20,16 @@ WORKDIR /var/www/html
 COPY src/ /var/www/html
 
 # Install Laravel dependencies
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader || true
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+
+# Add startup checks for bind-mounted development source
+COPY docker/entrypoint.sh /usr/local/bin/laravel-entrypoint
+RUN chmod +x /usr/local/bin/laravel-entrypoint
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html
 
 # Expose port 8000 and start Laravel
 EXPOSE 8000
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+ENTRYPOINT ["laravel-entrypoint"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]

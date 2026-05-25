@@ -1,97 +1,216 @@
-## API Documentation (Swagger)
+# voitity-api
 
-This project uses [L5-Swagger](https://github.com/DarkaOnLine/L5-Swagger) to generate OpenAPI (Swagger) documentation automatically from annotations in your controllers.
+Voitity API built with Laravel 12, Docker, PostgreSQL, and pgVector.
 
-### Generate Swagger Docs
+This README covers the local Docker workflow for running the API, database, migrations, Swagger docs, and tests.
 
-To generate or update the API documentation, run:
+## Requirements
+
+- Docker Desktop or a compatible Docker Engine
+- Docker Compose v2
+- Git
+
+## Services
+
+`docker-compose.yml` defines:
+
+- `app`: Laravel API container, exposed on `http://localhost:8000`
+- `db`: PostgreSQL with pgVector, exposed on `localhost:5432`
+- `pgdata`: named volume for PostgreSQL data
+- `vendor`: named volume mounted at `/var/www/html/vendor` so Composer dependencies are not hidden by the `./src` bind mount
+
+The app container runs `docker/entrypoint.sh` before starting Laravel. The entrypoint installs Composer dependencies if `vendor/autoload.php` is missing, creates `src/.env` from `src/.env.example` if needed, and generates `APP_KEY` when it is empty.
+
+## Start The App
+
+From the repository root:
+
+```sh
+docker compose up -d --build
+```
+
+Check container status:
+
+```sh
+docker compose ps
+```
+
+Expected services:
+
+- `voitity-laravel-app`
+- `voitity-pgvector-db`
+
+## Environment
+
+The Docker database settings are defined in `docker-compose.yml` and are passed into the app container:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=db
+DB_PORT=5432
+DB_DATABASE=voitity
+DB_USERNAME=voitity
+DB_PASSWORD=voitity
+```
+
+`src/.env.example` still defaults to SQLite because it is the Laravel starter default. When running through Docker, the Compose environment above is the source of truth for the app process.
+
+Add local API keys or provider configuration in `src/.env` when needed:
+
+```env
+OPENAI_API_KEY=
+VOICE_DRIVERS_ELEVENLABS_API_KEY=
+VOICE_DRIVERS_ELEVENLABS_BASE_URL=https://api.elevenlabs.io
+```
+
+## Database
+
+Run migrations:
+
+```sh
+docker compose exec app php artisan migrate
+```
+
+Check migration status:
+
+```sh
+docker compose exec app php artisan migrate:status
+```
+
+Open a PostgreSQL shell:
+
+```sh
+docker compose exec db psql -U voitity -d voitity
+```
+
+## Health Checks
+
+API health endpoint:
+
+```sh
+curl http://localhost:8000/api/health
+```
+
+Expected response:
+
+```json
+{"message":"ok"}
+```
+
+Laravel health endpoint:
+
+```sh
+curl http://localhost:8000/up
+```
+
+## Swagger Documentation
+
+Generate or refresh Swagger docs:
 
 ```sh
 docker compose exec app php artisan l5-swagger:generate
 ```
 
-### View the Documentation
+Open the docs:
 
-Once generated, you can view the interactive API docs at:
+- `http://localhost:8000/api/documentation`
 
-- [http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)
+## Tests
 
+Run all tests:
 
-# voitity-api
+```sh
+docker compose exec app php artisan test
+```
 
-Voitity API with Laravel 12, Docker, PostgreSQL (pgVector)
+Run only unit tests:
 
-## Getting Started
+```sh
+docker compose exec app php artisan test --testsuite=Unit
+```
 
-These steps will get your development environment up and running:
+Run only feature tests:
 
-### Prerequisites
+```sh
+docker compose exec app php artisan test --testsuite=Feature
+```
 
-- [Docker](https://www.docker.com/products/docker-desktop) installed
-- [Git](https://git-scm.com/)
+For CI or scripts, disable TTY:
 
-### Steps
+```sh
+docker compose exec -T app php artisan test
+```
 
-1. **Clone the repository:**
-	```sh
-	git clone <repo-url>
-	cd voitity-api
-	```
+The test environment uses `src/.env.testing`, which is configured for SQLite in-memory.
 
-2. **Build Docker containers:**
-	```sh
-	docker compose build
-	```
+## Useful Commands
 
-3. **Start the database (PostgreSQL with pgVector):**
-	```sh
-	docker compose up -d db
-	```
+Run any Artisan command:
 
+```sh
+docker compose exec app php artisan <command>
+```
 
-4. **Copy and configure the environment file:**
-	```sh
-	cp src/.env.example src/.env
-	# Edit src/.env if needed (default is set for Docker Postgres)
-	```
+Install Composer packages:
 
-5. **Start all services (Laravel app and database):**
-	```sh
-	docker compose up -d
-	```
+```sh
+docker compose exec app composer require <package>
+```
 
-6. **Install Composer dependencies (if needed):**
-	```sh
-	docker compose exec app composer install
-	```
+Open a shell in the app container:
 
-7. **Run Laravel migrations:**
-	```sh
-	docker compose exec app php artisan migrate
-	```
+```sh
+docker compose exec app sh
+```
 
-8. **Access the app:**
-	- Open [http://localhost:8000](http://localhost:8000) in your browser.
+View app logs:
 
----
+```sh
+docker compose logs -f app
+```
 
-**Default database credentials (see `docker-compose.yml` and `src/.env`):**
+Restart the app container:
 
-- DB_HOST=db
-- DB_PORT=5432
-- DB_DATABASE=voitity
-- DB_USERNAME=voitity
-- DB_PASSWORD=voitity
+```sh
+docker compose restart app
+```
 
----
+Rebuild the app image:
 
-**Useful commands:**
+```sh
+docker compose up -d --build app
+```
 
-- Run artisan commands:
-  ```sh
-  docker compose exec app php artisan <command>
-  ```
-- Install new Composer packages:
-  ```sh
-  docker compose exec app composer require <package>
-  ```
+Stop all services:
+
+```sh
+docker compose down
+```
+
+Reset containers and named volumes, including database data and Composer dependencies:
+
+```sh
+docker compose down -v
+```
+
+## Troubleshooting
+
+If the app container restarts with `vendor/autoload.php` missing, rebuild and restart the app:
+
+```sh
+docker compose up -d --build app
+```
+
+If Laravel cannot connect to the database, confirm both containers are running:
+
+```sh
+docker compose ps
+docker compose logs db
+docker compose logs app
+```
+
+If you changed environment variables, restart the app:
+
+```sh
+docker compose restart app
+```

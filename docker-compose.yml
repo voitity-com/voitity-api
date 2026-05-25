@@ -9,6 +9,7 @@ services:
     working_dir: /var/www/html
     volumes:
       - ./src:/var/www/html
+      - vendor:/var/www/html/vendor
     ports:
       - "8000:8000"
     depends_on:
@@ -36,3 +37,4 @@ services:
 
 volumes:
   pgdata:
+  vendor:

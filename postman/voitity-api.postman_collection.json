@@ -1,0 +1,700 @@
+{
+  "info": {
+    "_postman_id": "a3f09815-0f6f-4f8a-9ab3-2a79890d15c1",
+    "name": "Voitity API",
+    "description": "Postman collection for the local Docker Voitity API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health and Docs",
+      "item": [
+        {
+          "name": "API Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Public API health check. Expected response: {\"message\":\"ok\"}."
+          },
+          "response": []
+        },
+        {
+          "name": "Laravel Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/up",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "up"
+              ]
+            },
+            "description": "Laravel built-in health endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Swagger Documentation",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/documentation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documentation"
+              ]
+            },
+            "description": "Interactive Swagger UI. Generate docs first with: docker compose exec app php artisan l5-swagger:generate"
+          },
+          "response": []
+        },
+        {
+          "name": "Swagger JSON",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/docs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "docs"
+              ]
+            },
+            "description": "Generated OpenAPI JSON served by L5-Swagger."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Get Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.access_token) {",
+                  "  pm.environment.set('access_token', json.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/get-token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "get-token"
+              ]
+            },
+            "description": "Authenticates with email/password and stores access_token in the active environment."
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sign Up",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.access_token) {",
+                  "  pm.environment.set('access_token', json.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/google/sign-up",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google",
+                "sign-up"
+              ]
+            },
+            "description": "Creates or syncs a user through Google OAuth. Requires a real Google access token."
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sign In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.access_token) {",
+                  "  pm.environment.set('access_token', json.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/google/sign-in",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google",
+                "sign-in"
+              ]
+            },
+            "description": "Signs in an existing Google user. Requires a real Google access token."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revokes all tokens for the authenticated user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Protected Test",
+      "item": [
+        {
+          "name": "API Test",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/test",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "test"
+              ]
+            },
+            "description": "Protected smoke test endpoint. Requires token ability: test:test."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Create Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.id) {",
+                  "  pm.environment.set('profile_id', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{profile_name}}\",\n  \"description\": \"{{profile_description}}\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"{{profile_personality}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": "Creates a profile and stores profile_id from data.id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}"
+              ]
+            },
+            "description": "Updates the profile identified by profile_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Data",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": {\n    \"me\": {\n      \"bio\": \"Local Postman test profile\"\n    },\n    \"work\": {\n      \"company\": \"Voitity\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/data",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "data"
+              ]
+            },
+            "description": "Updates the profile data JSON field."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send Message - New Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  if (json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                  "  if (json.data.message_id) pm.environment.set('message_id', json.data.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"{{message_text}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messages"
+              ]
+            },
+            "description": "Creates a new chat for the profile when chat_id is omitted."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Message - Existing Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  if (json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                  "  if (json.data.message_id) pm.environment.set('message_id', json.data.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"{{message_text}}\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messages"
+              ]
+            },
+            "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Voice",
+      "item": [
+        {
+          "name": "Create Voice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.id) {",
+                  "  pm.environment.set('voice_id', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{voice_name}}\",\n  \"description\": \"{{voice_description}}\",\n  \"language_code\": \"{{language_code}}\",\n  \"profile_id\": {{profile_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/voice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "voice"
+              ]
+            },
+            "description": "Creates a voice and stores voice_id from data.id. A user can only have one active voice."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Voice Sample",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.id) {",
+                  "  pm.environment.set('voice_sample_id', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{voice_sample_file_path}}"
+                },
+                {
+                  "key": "language_code",
+                  "value": "{{language_code}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/voice/{{voice_id}}/sample",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "voice",
+                "{{voice_id}}",
+                "sample"
+              ]
+            },
+            "description": "Uploads an audio file for a voice. Set voice_sample_file_path in the environment to a local mp3 or wav path."
+          },
+          "response": []
+        },
+        {
+          "name": "Process Voice Sample",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/voice/{{voice_id}}/sample/{{voice_sample_id}}/process",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "voice",
+                "{{voice_id}}",
+                "sample",
+                "{{voice_sample_id}}",
+                "process"
+              ]
+            },
+            "description": "Starts processing a voice sample. This can call external voice provider code depending on configuration."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
