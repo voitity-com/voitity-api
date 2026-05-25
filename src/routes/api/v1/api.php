@@ -26,6 +26,7 @@ Route::prefix('/auth')->group(function() {
 
 Route::prefix('/profile')->group(function() {
     Route::post('', [ProfileController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/messages', [MessageController::class, 'store'])->middleware(['auth:sanctum', 'abilities:messages:write']);

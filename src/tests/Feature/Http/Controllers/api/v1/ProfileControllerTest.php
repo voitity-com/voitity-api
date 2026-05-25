@@ -61,6 +61,54 @@ class ProfileControllerTest extends TestAPI
         $this->assertTrue((boolean)$new_profile->active);
     }
 
+    public function test_unauthorized_user_can_not_show_a_profile()
+    {
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+            ->json('GET', self::ENDPOINT_PROFILE . '/100');
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_user_can_not_show_profile_if_he_is_not_owner()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id'       => $user->id,
+            'name'          => $this->faker->name,
+            'description'   => $this->faker->text(200),
+            'genre'         => 'male',
+            'personality'   => $this->faker->text(100)
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+            ->json('GET', self::ENDPOINT_PROFILE . '/' . $profile->id);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_user_can_show_profile()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id'       => $user->id,
+            'name'          => $this->faker->name,
+            'description'   => $this->faker->text(200),
+            'genre'         => 'male',
+            'personality'   => $this->faker->text(100)
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+            ->json('GET', self::ENDPOINT_PROFILE . '/' . $profile->id);
+
+        $response->assertJsonPath('message', 'Profile retrieved successfully.');
+        $response->assertJsonPath('data.id', $profile->id);
+        $response->assertJsonPath('data.name', $profile->name);
+        $response->assertJsonPath('data.description', $profile->description);
+        $response->assertStatus(200);
+    }
+
     public function test_unauthorized_user_can_not_update_a_profile()
     {
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())

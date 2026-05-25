@@ -548,6 +548,106 @@
                 ]
             }
         },
+        "/api/profile/{profile}": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Get a profile",
+                "operationId": "d2c75befee8ab4c0f45b2b9d08810f68",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "description": "Profile ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Profile retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "John Doe"
+                                                },
+                                                "description": {
+                                                    "type": "string",
+                                                    "example": "A short bio"
+                                                },
+                                                "genre": {
+                                                    "type": "string",
+                                                    "example": "male"
+                                                },
+                                                "personality": {
+                                                    "type": "string",
+                                                    "example": "friendly"
+                                                },
+                                                "active": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/profile/{id}": {
             "patch": {
                 "tags": [

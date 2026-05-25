@@ -17,6 +17,7 @@ return [
         'abilities' => [
             'test:test',
             'profile:write',
+            'profile:read',
             'voice:write',
             'messages:write'
         ]
@@ -25,6 +26,7 @@ return [
         'abilities' => [
             'test:test',
             'profile:write',
+            'profile:read',
             'voice:write',
             'messages:write'
         ]

@@ -387,6 +387,31 @@
           "response": []
         },
         {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}"
+              ]
+            },
+            "description": "Retrieves the profile identified by profile_id."
+          },
+          "response": []
+        },
+        {
           "name": "Update Profile",
           "request": {
             "method": "PATCH",
