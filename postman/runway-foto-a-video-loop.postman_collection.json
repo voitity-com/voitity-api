@@ -1,0 +1,258 @@
+{
+  "info": {
+    "_postman_id": "8e12b7ec-3089-410b-8a48-cbfb453689a8",
+    "name": "Runway API - Foto a Video Loop 5s",
+    "description": "Colección para generar un video de 5 segundos desde una foto usando Runway API. Usa promptImage como data URI o URL. Para mejorar el loop, envía la misma imagen como first y last frame. Docs: https://docs.dev.runwayml.com/guides/using-the-api/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{RUNWAY_API_KEY}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Variables requeridas:",
+          "// RUNWAY_API_KEY: tu API key de Runway",
+          "// promptImage: una URL pública de imagen o data URI base64. Ej:",
+          "// data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...",
+          "",
+          "if (!pm.collectionVariables.get('baseUrl')) {",
+          "  pm.collectionVariables.set('baseUrl', 'https://api.dev.runwayml.com');",
+          "}",
+          "if (!pm.collectionVariables.get('apiVersion')) {",
+          "  pm.collectionVariables.set('apiVersion', '2024-11-06');",
+          "}",
+          "if (!pm.collectionVariables.get('model')) {",
+          "  pm.collectionVariables.set('model', 'gen4.5');",
+          "}",
+          "if (!pm.collectionVariables.get('ratio')) {",
+          "  pm.collectionVariables.set('ratio', '1280:720');",
+          "}",
+          "if (!pm.collectionVariables.get('duration')) {",
+          "  pm.collectionVariables.set('duration', '5');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.dev.runwayml.com",
+      "type": "string"
+    },
+    {
+      "key": "apiVersion",
+      "value": "2024-11-06",
+      "type": "string"
+    },
+    {
+      "key": "RUNWAY_API_KEY",
+      "value": "REEMPLAZA_CON_TU_API_KEY",
+      "type": "secret"
+    },
+    {
+      "key": "model",
+      "value": "gen4.5",
+      "type": "string"
+    },
+    {
+      "key": "ratio",
+      "value": "1280:720",
+      "type": "string"
+    },
+    {
+      "key": "duration",
+      "value": "5",
+      "type": "string"
+    },
+    {
+      "key": "promptImage",
+      "value": "https://example.com/mi-foto.jpg",
+      "type": "string"
+    },
+    {
+      "key": "taskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "videoUrl",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Crear video 5s loop desde foto",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/image_to_video",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "image_to_video"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": [\n    {\n      \"uri\": \"{{promptImage}}\",\n      \"position\": \"first\"\n    },\n    {\n      \"uri\": \"{{promptImage}}\",\n      \"position\": \"last\"\n    }\n  ],\n  \"promptText\": \"Animate this portrait into a subtle, natural 5-second looping video. The person gently blinks, forms a soft smile, and makes a very small natural head movement. Keep identity, face shape, hair, clothing, background, and lighting consistent. Make the motion minimal and cyclic. The final frame should closely match the first frame so the video can loop seamlessly without a visible cut. No camera zoom, no scene change, no exaggerated expression, no talking, no teeth movement.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
+        },
+        "description": "Crea una tarea image-to-video. Para un loop más limpio, esta request usa la misma imagen como frame inicial y final. Puedes usar una URL pública o un data URI base64 en la variable promptImage."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200/201/202', function () {",
+              "  pm.expect([200, 201, 202]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "const taskId = json.id || json.taskId || json.uuid;",
+              "if (taskId) {",
+              "  pm.collectionVariables.set('taskId', taskId);",
+              "  console.log('taskId:', taskId);",
+              "} else {",
+              "  console.warn('No se encontró taskId/id en la respuesta:', json);",
+              "}",
+              "",
+              "pm.test('Guarda taskId', function () {",
+              "  pm.expect(pm.collectionVariables.get('taskId')).to.not.be.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Consultar estado de tarea",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "tasks",
+            "{{taskId}}"
+          ]
+        },
+        "description": "Ejecuta esta request varias veces hasta que el status sea SUCCEEDED/succeeded/completed. La URL del video se guarda en videoUrl si viene en output[0]."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "console.log('task:', json);",
+              "",
+              "const status = String(json.status || '').toLowerCase();",
+              "if (status === 'succeeded' || status === 'completed' || status === 'success') {",
+              "  let output = json.output;",
+              "  let url = '';",
+              "  if (Array.isArray(output)) {",
+              "    url = output[0];",
+              "  } else if (output && typeof output === 'object') {",
+              "    url = output.url || output.videoUrl || output.uri || '';",
+              "  }",
+              "  if (url) {",
+              "    pm.collectionVariables.set('videoUrl', url);",
+              "    console.log('videoUrl:', url);",
+              "  }",
+              "}",
+              "",
+              "if (status === 'failed' || status === 'error') {",
+              "  throw new Error('La generación falló: ' + JSON.stringify(json));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Descargar / reproducir video generado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{videoUrl}}",
+          "host": [
+            "{{videoUrl}}"
+          ]
+        },
+        "description": "Abre la URL del MP4 generado. En tu app úsalo como <video autoplay loop muted playsinline src=\"...\">."
+      }
+    },
+    {
+      "name": "Opcional. Crear video usando solo URL de imagen simple",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/image_to_video",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "image_to_video"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": \"{{promptImage}}\",\n  \"promptText\": \"A subtle natural portrait animation with blinking, a soft smile, and very small head movement. Keep identity consistent. Minimal cyclic motion, no camera movement.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
+        },
+        "description": "Versión más simple. Usa una sola imagen como input."
+      }
+    }
+  ]
+}
