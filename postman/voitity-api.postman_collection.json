@@ -369,6 +369,30 @@
       "name": "Profile",
       "item": [
         {
+          "name": "List Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile"
+              ]
+            },
+            "description": "Lists profiles that belong to the authenticated user. Requires token ability: profile:read."
+          },
+          "response": []
+        },
+        {
           "name": "Create Profile",
           "event": [
             {

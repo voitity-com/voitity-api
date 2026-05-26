@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreProfileDataRequest;
 use App\Http\Requests\Profile\StoreProfileRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Http\Responses\Profile\ProfileListResponse;
+use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +15,73 @@ use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/api/profile",
+     *     summary="List authenticated user profiles",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profiles retrieved successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Profiles retrieved successfully."),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="total", type="integer", example=2),
+     *                 @OA\Property(
+     *                     property="profiles",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         type="object",
+     *                         @OA\Property(property="id", type="integer", example=1),
+     *                         @OA\Property(property="user_id", type="integer", example=1),
+     *                         @OA\Property(property="name", type="string", example="John Doe"),
+     *                         @OA\Property(property="description", type="string", example="A short bio"),
+     *                         @OA\Property(property="genre", type="string", example="male"),
+     *                         @OA\Property(property="personality", type="string", example="friendly"),
+     *                         @OA\Property(property="active", type="boolean", example=true),
+     *                         @OA\Property(property="data", type="object", nullable=true),
+     *                         @OA\Property(property="created_at", type="string", format="date-time", nullable=true),
+     *                         @OA\Property(property="updated_at", type="string", format="date-time", nullable=true)
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="User not found"),
+     *     @OA\Response(response=500, description="Unexpected error")
+     * )
+     */
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            $profiles = $user->profiles()
+                ->orderByDesc('created_at')
+                ->get();
+
+            return response()->json([
+                'message' => 'Profiles retrieved successfully.',
+                'data' => (new ProfileListResponse($profiles))->toArray(),
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Error listing profiles.', [
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * @OA\Post(
      *     path="/api/profile",
@@ -53,7 +122,10 @@ class ProfileController extends Controller
 
             $profile = $user->profiles()->create($request->validated());
 
-            return response()->json(['message' => 'Profile created successfully.', 'data' => $profile], 200);
+            return response()->json([
+                'message' => 'Profile created successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
 
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
@@ -111,7 +183,10 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            return response()->json(['message' => 'Profile retrieved successfully.', 'data' => $profile], 200);
+            return response()->json([
+                'message' => 'Profile retrieved successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
 
         } catch (\Throwable $e) {
             Log::error('Error retrieving profile.', [
@@ -176,7 +251,10 @@ class ProfileController extends Controller
 
             $profile->update($request->validated());
 
-            return response()->json(['message' => 'Profile updated successfully.', 'data' => $profile], 200);
+            return response()->json([
+                'message' => 'Profile updated successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
 
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
@@ -232,7 +310,10 @@ class ProfileController extends Controller
 
             $profile->update($request->validated());
 
-            return response()->json(['message' => 'Profile updated successfully.', 'data' => $profile], 200);
+            return response()->json([
+                'message' => 'Profile updated successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
 
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
