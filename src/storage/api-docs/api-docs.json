@@ -826,6 +826,111 @@
                 ]
             }
         },
+        "/api/user": {
+            "get": {
+                "tags": [
+                    "User"
+                ],
+                "summary": "Get authenticated user",
+                "operationId": "94c0a6ace3934af2028edb016317f3f9",
+                "responses": {
+                    "200": {
+                        "description": "User retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "User retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Abel Moreno"
+                                                },
+                                                "first_name": {
+                                                    "type": "string",
+                                                    "example": "Abel",
+                                                    "nullable": true
+                                                },
+                                                "last_name": {
+                                                    "type": "string",
+                                                    "example": "Moreno",
+                                                    "nullable": true
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "moreno.abel@gmail.com"
+                                                },
+                                                "role": {
+                                                    "type": "string",
+                                                    "example": "admin"
+                                                },
+                                                "avatar": {
+                                                    "type": "string",
+                                                    "example": "https://example.com/avatar.jpg",
+                                                    "nullable": true
+                                                },
+                                                "provider": {
+                                                    "type": "string",
+                                                    "example": "email",
+                                                    "nullable": true
+                                                },
+                                                "email_verified_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "google_verified_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing user:read ability"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/voice": {
             "post": {
                 "tags": [
@@ -1171,6 +1276,10 @@
         {
             "name": "Profile",
             "description": "Profile"
+        },
+        {
+            "name": "User",
+            "description": "User"
         },
         {
             "name": "Voice",

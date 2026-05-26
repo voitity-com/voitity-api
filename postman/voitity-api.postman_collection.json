@@ -308,6 +308,35 @@
       ]
     },
     {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Logged User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user"
+              ]
+            },
+            "description": "Returns the authenticated user. Requires token ability: user:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Protected Test",
       "item": [
         {

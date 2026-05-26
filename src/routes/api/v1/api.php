@@ -7,6 +7,7 @@ use App\Http\Controllers\api\v1\TestController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\MessageController;
+use App\Http\Controllers\api\v1\UserController;
 use App\Http\Controllers\api\v1\VoiceController;
 use App\Http\Controllers\api\v1\VoiceSampleController;
 
@@ -15,6 +16,7 @@ Route::get('health', function() {
 });
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
+Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
 
 
 Route::prefix('/auth')->group(function() {
