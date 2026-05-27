@@ -24,6 +24,17 @@ return [
             'user:read'
         ]
     ],
+    'user' => [
+        'abilities' => [
+            'test:test',
+            'profile:write',
+            'profile:read',
+            'voice:write',
+            'messages:write',
+            'user:write',
+            'user:read'
+        ]
+    ],
     'profile' => [
         'abilities' => [
             'test:test',
