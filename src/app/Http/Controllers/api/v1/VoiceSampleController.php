@@ -162,10 +162,18 @@ class VoiceSampleController extends Controller
      *     ),
      *     @OA\Response(
      *         response=404,
-     *         description="Voice or voice sample not found, or user not authorized",
+     *         description="Voice or voice sample not found",
      *         @OA\JsonContent(
      *             type="object",
      *             @OA\Property(property="message", type="string", example="Voice not found.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Only admin users can process voice samples",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="message", type="string", example="Only admin users can process voice samples.")
      *         )
      *     ),
      *     @OA\Response(
@@ -195,8 +203,8 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$voice || $voice->user_id !== $user->id) {
-                return response()->json(['message' => 'Voice not found.'], 404);
+            if ($user->role !== 'admin') {
+                return response()->json(['message' => 'Only admin users can process voice samples.'], 403);
             }
 
             // Check if voice sample was already processed

@@ -10,6 +10,7 @@ use App\Models\Voice;
 use App\Models\VoiceSample;
 use App\Models\VoiceProviderRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
@@ -176,11 +177,32 @@ class VoiceSampleControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Unauthenticated.');
     }
 
+    public function test_non_admin_user_can_not_process_a_voice_sample()
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'test-uuid-123.mp3',
+            'duration' => 120,
+            'active' => true
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertStatus(403);
+        $response->assertJsonPath('message', 'Only admin users can process voice samples.');
+    }
+
     public function test_user_can_not_process_a_voice_sample_if_it_was_processed_previously()
     {
         // Get token and create user first
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::factory()->create();
         
         $voice = Voice::factory()->create(['user_id' => $user->id]);
 
@@ -202,8 +224,6 @@ class VoiceSampleControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
 
-        print_r($response->getContent());
-
         $response->assertStatus(400);
         $response->assertJsonPath('message', 'Voice sample was already processed.');
     }
@@ -214,7 +234,7 @@ class VoiceSampleControllerTest extends TestAPI
 
         // Get token and create user first
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::factory()->create();
         
         $voice = Voice::factory()->create(['user_id' => $user->id]);
 

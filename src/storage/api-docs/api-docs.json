@@ -1307,7 +1307,7 @@
                         }
                     },
                     "404": {
-                        "description": "Voice or voice sample not found, or user not authorized",
+                        "description": "Voice or voice sample not found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1315,6 +1315,22 @@
                                         "message": {
                                             "type": "string",
                                             "example": "Voice not found."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Only admin users can process voice samples",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Only admin users can process voice samples."
                                         }
                                     },
                                     "type": "object"
