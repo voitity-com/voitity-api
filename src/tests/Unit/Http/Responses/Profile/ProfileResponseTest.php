@@ -5,6 +5,7 @@ namespace Tests\Unit\Http\Responses\Profile;
 use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
+use App\Models\Voice;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
@@ -35,9 +36,64 @@ class ProfileResponseTest extends TestCase
         $this->assertSame('neutral', $payload['genre']);
         $this->assertSame('friendly', $payload['personality']);
         $this->assertTrue($payload['active']);
+        $this->assertFalse($payload['voice']);
         $this->assertSame(['me' => ['bio' => 'test']], $payload['data']);
         $this->assertSame('2026-05-26T10:00:00.000000Z', $payload['created_at']);
         $this->assertSame('2026-05-26T11:00:00.000000Z', $payload['updated_at']);
+    }
+
+    public function test_profile_response_returns_true_when_profile_has_configured_voice(): void
+    {
+        $profile = new Profile();
+        $profile->setRawAttributes([
+            'id' => 10,
+            'user_id' => 20,
+            'name' => 'Demo Profile',
+            'description' => 'Profile used for tests.',
+            'genre' => 'neutral',
+            'personality' => 'friendly',
+            'active' => true,
+            'data' => null,
+        ], true);
+
+        $voice = new Voice();
+        $voice->setRawAttributes([
+            'source_voice_id' => 'provider-voice-id',
+            'source' => 'elevenlabs',
+        ], true);
+
+        $profile->setRelation('voices', collect([$voice]));
+
+        $payload = (new ProfileResponse($profile))->toArray();
+
+        $this->assertTrue($payload['voice']);
+    }
+
+    public function test_profile_response_returns_false_when_voice_source_fields_are_empty(): void
+    {
+        $profile = new Profile();
+        $profile->setRawAttributes([
+            'id' => 10,
+            'user_id' => 20,
+            'name' => 'Demo Profile',
+            'description' => 'Profile used for tests.',
+            'genre' => 'neutral',
+            'personality' => 'friendly',
+            'active' => true,
+            'data' => null,
+        ], true);
+
+        $voice = new Voice();
+        $voice->setRawAttributes([
+            'source_voice_id' => 'provider-voice-id',
+            'source' => '',
+        ], true);
+
+        $profile->setRelation('voices', collect([$voice]));
+
+        $payload = (new ProfileResponse($profile))->toArray();
+
+        $this->assertFalse($payload['voice']);
     }
 
     public function test_profile_list_response_returns_profiles_and_total(): void
@@ -73,5 +129,6 @@ class ProfileResponseTest extends TestCase
         $this->assertSame(10, $payload['profiles'][0]['id']);
         $this->assertSame(11, $payload['profiles'][1]['id']);
         $this->assertFalse($payload['profiles'][1]['active']);
+        $this->assertFalse($payload['profiles'][0]['voice']);
     }
 }

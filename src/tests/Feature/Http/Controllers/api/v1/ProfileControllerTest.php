@@ -6,6 +6,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Models\Profile;
 use App\Models\User;
+use App\Models\Voice;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
@@ -107,6 +108,18 @@ class ProfileControllerTest extends TestAPI
             'genre'         => 'male',
             'personality'   => $this->faker->text(100)
         ]);
+        Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profileA->id,
+            'source_voice_id' => 'provider-voice-id',
+            'source' => 'elevenlabs',
+        ]);
+        Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profileB->id,
+            'source_voice_id' => '',
+            'source' => '',
+        ]);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
             ->json('GET', self::ENDPOINT_PROFILE);
@@ -123,6 +136,10 @@ class ProfileControllerTest extends TestAPI
         $this->assertContains($profileB->id, $profileIds);
         $this->assertNotContains($otherProfile->id, $profileIds);
         $this->assertEquals([$user->id], $profileUserIds);
+
+        $profilesById = collect($response->json('data.profiles'))->keyBy('id');
+        $this->assertTrue($profilesById[$profileA->id]['voice']);
+        $this->assertFalse($profilesById[$profileB->id]['voice']);
     }
 
     public function test_unauthorized_user_can_not_show_a_profile()
@@ -162,6 +179,12 @@ class ProfileControllerTest extends TestAPI
             'genre'         => 'male',
             'personality'   => $this->faker->text(100)
         ]);
+        Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_voice_id' => 'provider-voice-id',
+            'source' => 'elevenlabs',
+        ]);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
             ->json('GET', self::ENDPOINT_PROFILE . '/' . $profile->id);
@@ -170,6 +193,7 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.id', $profile->id);
         $response->assertJsonPath('data.name', $profile->name);
         $response->assertJsonPath('data.description', $profile->description);
+        $response->assertJsonPath('data.voice', true);
         $response->assertStatus(200);
     }
 

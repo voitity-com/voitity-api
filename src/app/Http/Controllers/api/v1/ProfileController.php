@@ -40,6 +40,7 @@ class ProfileController extends Controller
      *                         @OA\Property(property="genre", type="string", example="male"),
      *                         @OA\Property(property="personality", type="string", example="friendly"),
      *                         @OA\Property(property="active", type="boolean", example=true),
+     *                         @OA\Property(property="voice", type="boolean", example=true),
      *                         @OA\Property(property="data", type="object", nullable=true),
      *                         @OA\Property(property="created_at", type="string", format="date-time", nullable=true),
      *                         @OA\Property(property="updated_at", type="string", format="date-time", nullable=true)
@@ -64,6 +65,7 @@ class ProfileController extends Controller
             }
 
             $profiles = $user->profiles()
+                ->with('voices:id,profile_id,source_voice_id,source')
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -158,6 +160,7 @@ class ProfileController extends Controller
      *                 @OA\Property(property="genre", type="string", example="male"),
      *                 @OA\Property(property="personality", type="string", example="friendly"),
      *                 @OA\Property(property="active", type="boolean", example=true),
+     *                 @OA\Property(property="voice", type="boolean", example=true),
      *                 @OA\Property(property="data", type="object", nullable=true),
      *                 @OA\Property(property="created_at", type="string", format="date-time"),
      *                 @OA\Property(property="updated_at", type="string", format="date-time")
@@ -182,6 +185,8 @@ class ProfileController extends Controller
             if (!$profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
+
+            $profile->loadMissing('voices:id,profile_id,source_voice_id,source');
 
             return response()->json([
                 'message' => 'Profile retrieved successfully.',

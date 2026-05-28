@@ -20,9 +20,30 @@ class ProfileResponse
             'genre' => $this->profile->genre,
             'personality' => $this->profile->personality,
             'active' => (bool) $this->profile->active,
+            'voice' => $this->hasConfiguredVoice(),
             'data' => $this->profile->data,
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];
+    }
+
+    private function hasConfiguredVoice(): bool
+    {
+        if ($this->profile->relationLoaded('voices')) {
+            return $this->profile->voices->contains(
+                fn ($voice) => filled($voice->source_voice_id) && filled($voice->source)
+            );
+        }
+
+        if (!$this->profile->exists) {
+            return false;
+        }
+
+        return $this->profile->voices()
+            ->whereNotNull('source_voice_id')
+            ->where('source_voice_id', '!=', '')
+            ->whereNotNull('source')
+            ->where('source', '!=', '')
+            ->exists();
     }
 }
