@@ -145,6 +145,34 @@ class VoiceSampleControllerTest extends TestAPI
         $this->assertTrue((boolean)$new_sample->active);
     }
 
+    public function test_user_can_create_large_voice_sample()
+    {
+        $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
+        $mockFileManager->shouldReceive('processSampleFile')
+            ->once()
+            ->andReturn(true);
+        $mockFileManager->shouldReceive('getFileName')
+            ->once()
+            ->andReturn('large-sample.mp3');
+        $mockFileManager->shouldReceive('getFileDuration')
+            ->once()
+            ->andReturn(180);
+
+        $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
+
+        $token = $this->getToken();
+        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), [
+                'file' => UploadedFile::fake()->create('sample.mp3', 12288, 'audio/mpeg'),
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice sample created successfully.');
+    }
+
     public function test_user_can_update_voice_language_when_creating_sample()
     {
         $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);

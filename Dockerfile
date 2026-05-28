@@ -24,6 +24,7 @@ RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
 # Add startup checks for bind-mounted development source
 COPY docker/entrypoint.sh /usr/local/bin/laravel-entrypoint
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 RUN chmod +x /usr/local/bin/laravel-entrypoint
 
 # Set permissions
