@@ -771,6 +771,51 @@
             "description": "Starts processing a voice sample. This can call external voice provider code depending on configuration."
           },
           "response": []
+        },
+        {
+          "name": "Test Voice",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const voiceTestText = pm.environment.get('voice_test_text') || '';",
+                  "pm.variables.set('voice_test_text_json', JSON.stringify(voiceTestText));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_id\": \"{{profile_id}}\",\n  \"text\": {{voice_test_text_json}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/voice/test",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "voice",
+                "test"
+              ]
+            },
+            "description": "Generates test audio using the active voice for the selected profile. Requires voice:use ability."
+          },
+          "response": []
         }
       ]
     }

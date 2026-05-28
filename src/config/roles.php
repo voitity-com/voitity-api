@@ -19,6 +19,7 @@ return [
             'profile:write',
             'profile:read',
             'voice:write',
+            'voice:use',
             'messages:write',
             'user:write',
             'user:read'
@@ -30,6 +31,7 @@ return [
             'profile:write',
             'profile:read',
             'voice:write',
+            'voice:use',
             'messages:write',
             'user:write',
             'user:read'
@@ -41,6 +43,7 @@ return [
             'profile:write',
             'profile:read',
             'voice:write',
+            'voice:use',
             'messages:write',
             'user:write',
             'user:read'

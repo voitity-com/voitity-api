@@ -37,6 +37,7 @@ Route::prefix('/profile')->group(function() {
 
 Route::prefix('/voice')->group(function() {
     Route::post('', [VoiceController::class, 'store'])->middleware(['auth:sanctum', 'abilities:voice:write']);
+    Route::post('/test', [VoiceController::class, 'test'])->middleware(['auth:sanctum', 'abilities:voice:use']);
     Route::post('/{voice}/sample', [VoiceSampleController::class, 'store'])->middleware(['auth:sanctum', 'abilities:voice:write']);
     Route::post('/{voice}/sample/{voice_sample}/process', [VoiceSampleController::class, 'process'])->middleware(['auth:sanctum', 'abilities:voice:write']);
 });
