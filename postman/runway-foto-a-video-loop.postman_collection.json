@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8e12b7ec-3089-410b-8a48-cbfb453689a8",
     "name": "Runway API - Foto a Video Loop 5s",
-    "description": "Colección para generar un video de 5 segundos desde una foto usando Runway API. Usa promptImage como data URI o URL. Para mejorar el loop, envía la misma imagen como first y last frame. Docs: https://docs.dev.runwayml.com/guides/using-the-api/",
+    "description": "Colección para generar imágenes desde una imagen base y videos de 5 segundos desde una foto usando Runway API. Usa promptImage como data URI o URL pública directa. Docs: https://docs.dev.runwayml.com/guides/using-the-api/",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -23,8 +23,9 @@
         "exec": [
           "// Variables requeridas:",
           "// RUNWAY_API_KEY: tu API key de Runway",
-          "// promptImage: una URL pública de imagen o data URI base64. Ej:",
+          "// promptImage: una URL pública directa de imagen o data URI base64. Ej:",
           "// data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...",
+          "// No uses URLs de vista previa como https://drive.google.com/file/d/..., porque devuelven HTML.",
           "",
           "if (!pm.collectionVariables.get('baseUrl')) {",
           "  pm.collectionVariables.set('baseUrl', 'https://api.dev.runwayml.com');",
@@ -40,6 +41,18 @@
           "}",
           "if (!pm.collectionVariables.get('duration')) {",
           "  pm.collectionVariables.set('duration', '5');",
+          "}",
+          "if (!pm.collectionVariables.get('textToImageModel')) {",
+          "  pm.collectionVariables.set('textToImageModel', 'gen4_image');",
+          "}",
+          "if (!pm.collectionVariables.get('textToImageRatio')) {",
+          "  pm.collectionVariables.set('textToImageRatio', '1360:768');",
+          "}",
+          "if (!pm.collectionVariables.get('referenceImageTag')) {",
+          "  pm.collectionVariables.set('referenceImageTag', 'base_image');",
+          "}",
+          "if (!pm.collectionVariables.get('textToImagePrompt')) {",
+          "  pm.collectionVariables.set('textToImagePrompt', 'EDITABLE PROMPT: Using the reference image tagged base_image, create a Pixar-like but hyperrealistic high-end 3D animated portrait. Preserve the original person identity, facial structure, skin tone, hair, eyes, expression, pose, clothing, proportions, and overall appearance as much as possible. Apply a subtle Instagram-style beauty retouch filter: reduce facial blemishes, acne, redness, shine, and under-eye shadows while keeping natural skin texture. Use a completely pure white seamless studio background (#FFFFFF). Add soft flattering studio lighting, realistic eyes, detailed hair, natural face shape, and polished cinematic 3D character rendering. Do not change age, ethnicity, face geometry, hairstyle, clothing colors, body shape, or add accessories. Avoid distorted features, heavy makeup, plastic skin, and exaggerated cartoon proportions.');",
           "}"
         ]
       }
@@ -58,7 +71,7 @@
     },
     {
       "key": "RUNWAY_API_KEY",
-      "value": "REEMPLAZA_CON_TU_API_KEY",
+      "value": "key_928d7d7b0b32f44b0d50651afdd54147294593c7761748f78a8e3755f4e0496bbd3decc63e02e00b145ddf4db949e9f3d8fe3ff617b78e9537c0a73c4fbe2aa5",
       "type": "secret"
     },
     {
@@ -78,11 +91,36 @@
     },
     {
       "key": "promptImage",
-      "value": "https://example.com/mi-foto.jpg",
+      "value": "https://drive.google.com/uc?export=download&id=1Olwvws6Zf8DfBxRqJqutV5nPo1n9Li3N",
+      "type": "string"
+    },
+    {
+      "key": "textToImageModel",
+      "value": "gen4_image",
+      "type": "string"
+    },
+    {
+      "key": "textToImageRatio",
+      "value": "1360:768",
+      "type": "string"
+    },
+    {
+      "key": "textToImagePrompt",
+      "value": "EDITABLE PROMPT: Using the reference image tagged base_image, create a Pixar-like but hyperrealistic high-end 3D animated portrait. Preserve the original person identity, facial structure, skin tone, hair, eyes, expression, pose, clothing, proportions, and overall appearance as much as possible. Apply a subtle Instagram-style beauty retouch filter: reduce facial blemishes, acne, redness, shine, and under-eye shadows while keeping natural skin texture. Use a completely pure white seamless studio background (#FFFFFF). Add soft flattering studio lighting, realistic eyes, detailed hair, natural face shape, and polished cinematic 3D character rendering. Do not change age, ethnicity, face geometry, hairstyle, clothing colors, body shape, or add accessories. Avoid distorted features, heavy makeup, plastic skin, and exaggerated cartoon proportions.",
+      "type": "string"
+    },
+    {
+      "key": "referenceImageTag",
+      "value": "base_image",
       "type": "string"
     },
     {
       "key": "taskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "imageUrl",
       "value": "",
       "type": "string"
     },
@@ -94,36 +132,23 @@
   ],
   "item": [
     {
-      "name": "1. Crear video 5s loop desde foto",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "X-Runway-Version",
-            "value": "{{apiVersion}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/v1/image_to_video",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "v1",
-            "image_to_video"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": [\n    {\n      \"uri\": \"{{promptImage}}\",\n      \"position\": \"first\"\n    },\n    {\n      \"uri\": \"{{promptImage}}\",\n      \"position\": \"last\"\n    }\n  ],\n  \"promptText\": \"Animate this portrait into a subtle, natural 5-second looping video. The person gently blinks, forms a soft smile, and makes a very small natural head movement. Keep identity, face shape, hair, clothing, background, and lighting consistent. Make the motion minimal and cyclic. The final frame should closely match the first frame so the video can loop seamlessly without a visible cut. No camera zoom, no scene change, no exaggerated expression, no talking, no teeth movement.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
-        },
-        "description": "Crea una tarea image-to-video. Para un loop más limpio, esta request usa la misma imagen como frame inicial y final. Puedes usar una URL pública o un data URI base64 en la variable promptImage."
-      },
+      "name": "0. Crear imagen desde imagen base - prompt editable",
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let promptImage = pm.collectionVariables.get('promptImage') || '';",
+              "const driveFileMatch = promptImage.match(/drive\\.google\\.com\\/file\\/d\\/([^/]+)/);",
+              "if (driveFileMatch) {",
+              "  promptImage = `https://drive.google.com/uc?export=download&id=${driveFileMatch[1]}`;",
+              "  console.warn('Converted Google Drive preview URL to direct download URL. The file must be public and return an image Content-Type.');",
+              "}",
+              "pm.variables.set('promptImageJson', JSON.stringify(promptImage));"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
@@ -148,83 +173,77 @@
             ]
           }
         }
-      ]
-    },
-    {
-      "name": "2. Consultar estado de tarea",
+      ],
       "request": {
-        "method": "GET",
+        "method": "POST",
         "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
           {
             "key": "X-Runway-Version",
             "value": "{{apiVersion}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/v1/tasks/{{taskId}}",
+          "raw": "{{baseUrl}}/v1/text_to_image",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "v1",
-            "tasks",
-            "{{taskId}}"
+            "text_to_image"
           ]
         },
-        "description": "Ejecuta esta request varias veces hasta que el status sea SUCCEEDED/succeeded/completed. La URL del video se guarda en videoUrl si viene en output[0]."
-      },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{textToImageModel}}\",\n  \"promptText\": \"EDITABLE PROMPT: Using the reference image tagged base_image, create a Pixar-like but hyperrealistic high-end 3D animated portrait. Preserve the original person identity, facial structure, skin tone, hair, eyes, expression, pose, clothing, proportions, and overall appearance as much as possible. Apply a subtle Instagram-style beauty retouch filter: reduce facial blemishes, acne, redness, shine, and under-eye shadows while keeping natural skin texture. Use a completely pure white seamless studio background (#FFFFFF). Add soft flattering studio lighting, realistic eyes, detailed hair, natural face shape, and polished cinematic 3D character rendering. Do not change age, ethnicity, face geometry, hairstyle, clothing colors, body shape, or add accessories. Avoid distorted features, heavy makeup, plastic skin, and exaggerated cartoon proportions.\",\n  \"referenceImages\": [\n    {\n      \"uri\": {{promptImageJson}},\n      \"tag\": \"{{referenceImageTag}}\"\n    }\n  ],\n  \"ratio\": \"{{textToImageRatio}}\"\n}"
+        },
+        "description": "Crea una tarea text-to-image usando promptImage como imagen base en referenceImages. El prompt queda visible y editable directamente en promptText dentro del body. La URL debe ser pública directa y devolver image/jpeg, image/png o image/webp. Luego ejecuta '3. Ver imagen por taskId' hasta que termine y muestre la imagen."
+      }
+    },
+    {
+      "name": "1. Crear video 5s desde imagen generada - loop suave",
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const generatedImageUrl = pm.collectionVariables.get('imageUrl') || '';",
+              "if (!generatedImageUrl) {",
+              "  throw new Error('imageUrl está vacío. Primero ejecuta \"0. Crear imagen desde imagen base - prompt editable\" y luego \"3. Ver imagen por taskId\" hasta que la imagen esté lista.');",
+              "}",
+              "pm.variables.set('promptImageJson', JSON.stringify(generatedImageUrl));"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status 200', function () {",
-              "  pm.response.to.have.status(200);",
+              "pm.test('Status 200/201/202', function () {",
+              "  pm.expect([200, 201, 202]).to.include(pm.response.code);",
               "});",
               "",
               "const json = pm.response.json();",
-              "console.log('task:', json);",
-              "",
-              "const status = String(json.status || '').toLowerCase();",
-              "if (status === 'succeeded' || status === 'completed' || status === 'success') {",
-              "  let output = json.output;",
-              "  let url = '';",
-              "  if (Array.isArray(output)) {",
-              "    url = output[0];",
-              "  } else if (output && typeof output === 'object') {",
-              "    url = output.url || output.videoUrl || output.uri || '';",
-              "  }",
-              "  if (url) {",
-              "    pm.collectionVariables.set('videoUrl', url);",
-              "    console.log('videoUrl:', url);",
-              "  }",
+              "const taskId = json.id || json.taskId || json.uuid;",
+              "if (taskId) {",
+              "  pm.collectionVariables.set('taskId', taskId);",
+              "  console.log('taskId:', taskId);",
+              "} else {",
+              "  console.warn('No se encontró taskId/id en la respuesta:', json);",
               "}",
               "",
-              "if (status === 'failed' || status === 'error') {",
-              "  throw new Error('La generación falló: ' + JSON.stringify(json));",
-              "}"
+              "pm.test('Guarda taskId', function () {",
+              "  pm.expect(pm.collectionVariables.get('taskId')).to.not.be.empty;",
+              "});"
             ]
           }
         }
-      ]
-    },
-    {
-      "name": "3. Descargar / reproducir video generado",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{videoUrl}}",
-          "host": [
-            "{{videoUrl}}"
-          ]
-        },
-        "description": "Abre la URL del MP4 generado. En tu app úsalo como <video autoplay loop muted playsinline src=\"...\">."
-      }
-    },
-    {
-      "name": "Opcional. Crear video usando solo URL de imagen simple",
+      ],
       "request": {
         "method": "POST",
         "header": [
@@ -249,9 +268,264 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": \"{{promptImage}}\",\n  \"promptText\": \"A subtle natural portrait animation with blinking, a soft smile, and very small head movement. Keep identity consistent. Minimal cyclic motion, no camera movement.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
+          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": {{promptImageJson}},\n  \"promptText\": \"Create a seamless 5-second loop from this generated portrait. The first frame and final frame must match the same pose, expression, eye direction, head position, background, lighting, and camera framing so the replay loop has no visible cut. Keep identity, face, hair, clothing, and pure white background locked. Add only very subtle natural motion: slow gentle eye movement, one soft blink if needed, and a faint closed-mouth smile that slowly appears and returns to the starting neutral expression before the final frame. Lips must stay closed at all times. Do not open the mouth, do not show teeth, do not speak, do not look like talking, no head movement, no body movement, no camera movement, no zoom, no scene change, no exaggerated expression. Smooth minimal motion only.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
         },
-        "description": "Versión más simple. Usa una sola imagen como input."
+        "description": "Crea una tarea image-to-video usando imageUrl, la imagen generada por '0. Crear imagen desde imagen base - prompt editable'. Primero ejecuta '3. Ver imagen por taskId' hasta que imageUrl tenga valor. El prompt busca un loop suave: mismo inicio/final, ojos lentos, sonrisa tenue, labios cerrados y sin efecto de habla."
+      }
+    },
+    {
+      "name": "2. Consultar estado de tarea",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "tasks",
+            "{{taskId}}"
+          ]
+        },
+        "description": "Ejecuta esta request varias veces hasta que el status sea SUCCEEDED/succeeded/completed. La URL generada se guarda en imageUrl o videoUrl si viene en output[0]."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "console.log('task:', json);",
+              "",
+              "const status = String(json.status || '').toLowerCase();",
+              "if (status === 'succeeded' || status === 'completed' || status === 'success') {",
+              "  let output = json.output;",
+              "  let url = '';",
+              "  if (Array.isArray(output)) {",
+              "    url = output[0];",
+              "  } else if (output && typeof output === 'object') {",
+              "    url = output.url || output.videoUrl || output.uri || '';",
+              "  }",
+              "  if (url) {",
+              "    const lowerUrl = String(url).toLowerCase();",
+              "    if (lowerUrl.match(/\\.(png|jpg|jpeg|webp)(\\?|$)/)) {",
+              "      pm.collectionVariables.set('imageUrl', url);",
+              "      console.log('imageUrl:', url);",
+              "    } else {",
+              "      pm.collectionVariables.set('videoUrl', url);",
+              "      console.log('videoUrl:', url);",
+              "    }",
+              "  }",
+              "}",
+              "",
+              "if (status === 'failed' || status === 'error') {",
+              "  throw new Error('La generación falló: ' + JSON.stringify(json));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Ver imagen por taskId",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const taskId = pm.collectionVariables.get('taskId');",
+              "if (!taskId) {",
+              "  throw new Error('taskId está vacío. Ejecuta primero \"0. Crear imagen desde imagen base - prompt editable\" o pega el id en la variable taskId.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "const status = String(json.status || '').toLowerCase();",
+              "let output = json.output;",
+              "let url = '';",
+              "",
+              "if (Array.isArray(output)) {",
+              "  url = output.find(item => typeof item === 'string' && item.match(/\\.(png|jpg|jpeg|webp)(\\?|$)/i)) || output[0] || '';",
+              "} else if (output && typeof output === 'object') {",
+              "  url = output.url || output.imageUrl || output.uri || '';",
+              "}",
+              "",
+              "if (url && String(url).match(/\\.(png|jpg|jpeg|webp)(\\?|$)/i)) {",
+              "  pm.collectionVariables.set('imageUrl', url);",
+              "  console.log('imageUrl:', url);",
+              "}",
+              "",
+              "const template = `",
+              "<html>",
+              "<body style='font-family: Arial, sans-serif; padding: 16px; background: #111; color: #eee;'>",
+              "  <h3>Runway task {{taskId}}</h3>",
+              "  <p>Status: <strong>{{status}}</strong></p>",
+              "  {{#if imageUrl}}",
+              "    <p><a href='{{imageUrl}}' target='_blank' style='color:#8ab4ff;'>Abrir imagen en otra pestaña</a></p>",
+              "    <img src='{{imageUrl}}' style='max-width:100%; height:auto; border:1px solid #333;' />",
+              "  {{else}}",
+              "    <p>La imagen todavía no está lista. Ejecuta este request de nuevo en unos segundos.</p>",
+              "    <pre style='white-space: pre-wrap;'>{{responseJson}}</pre>",
+              "  {{/if}}",
+              "</body>",
+              "</html>`;",
+              "",
+              "pm.visualizer.set(template, {",
+              "  taskId: pm.collectionVariables.get('taskId'),",
+              "  status: json.status || 'unknown',",
+              "  imageUrl: pm.collectionVariables.get('imageUrl') || '',",
+              "  responseJson: JSON.stringify(json, null, 2)",
+              "});",
+              "",
+              "if (status === 'failed' || status === 'error') {",
+              "  throw new Error('La generación falló: ' + JSON.stringify(json));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "tasks",
+            "{{taskId}}"
+          ]
+        },
+        "description": "Consulta el id de tarea devuelto por /v1/text_to_image. Cuando la tarea termina, guarda imageUrl y muestra la imagen en la pestaña Visualize de Postman."
+      }
+    },
+    {
+      "name": "4. Abrir imagen generada por URL",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{imageUrl}}"
+        },
+        "description": "Abre directamente la URL de la imagen generada por /v1/text_to_image. Primero ejecuta '3. Ver imagen por taskId' hasta que imageUrl tenga valor."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const imageUrl = pm.collectionVariables.get('imageUrl');",
+              "if (!imageUrl) {",
+              "  throw new Error('imageUrl está vacío. Primero ejecuta \"3. Ver imagen por taskId\" hasta que la tarea termine.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Descargar / reproducir video generado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{videoUrl}}"
+        },
+        "description": "Abre la URL del MP4 generado. Esta URL viene del campo output[0] de GET /v1/tasks/{{taskId}} y se guarda automáticamente en videoUrl cuando la tarea termina. En tu app úsalo como <video autoplay loop muted playsinline src=\"...\">."
+      }
+      ,
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const videoUrl = pm.collectionVariables.get('videoUrl');",
+              "if (!videoUrl) {",
+              "  throw new Error('videoUrl está vacío. Primero ejecuta \"2. Consultar estado de tarea\" hasta que la tarea termine.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Opcional. Crear video usando solo URL de imagen simple",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let promptImage = pm.collectionVariables.get('promptImage') || '';",
+              "const driveFileMatch = promptImage.match(/drive\\.google\\.com\\/file\\/d\\/([^/]+)/);",
+              "if (driveFileMatch) {",
+              "  promptImage = `https://drive.google.com/uc?export=download&id=${driveFileMatch[1]}`;",
+              "  console.warn('Converted Google Drive preview URL to direct download URL. The file must be public and return an image Content-Type.');",
+              "}",
+              "pm.variables.set('promptImageJson', JSON.stringify(promptImage));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Runway-Version",
+            "value": "{{apiVersion}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/image_to_video",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "image_to_video"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{model}}\",\n  \"promptImage\": {{promptImageJson}},\n  \"promptText\": \"A subtle natural portrait animation with blinking, a soft smile, and very small head movement. Keep identity consistent. Minimal cyclic motion, no camera movement.\",\n  \"ratio\": \"{{ratio}}\",\n  \"duration\": 5\n}"
+        },
+        "description": "Versión más simple. Usa una sola imagen como input. La URL debe ser una imagen directa y pública; una URL de vista previa de Google Drive normalmente devuelve HTML y falla."
       }
     }
   ]
