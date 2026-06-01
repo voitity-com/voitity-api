@@ -16,6 +16,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Default Video AI Prompts
+    |--------------------------------------------------------------------------
+    |
+    | These prompts mirror the Runway Postman collection and are used by the
+    | queued avatar generation workflow when callers do not provide prompts.
+    |
+    */
+
+    'prompts' => [
+        'image' => 'EDITABLE PROMPT: Using the reference image tagged base_image, create a Pixar-like but hyperrealistic high-end 3D animated portrait. Preserve the original person identity, facial structure, skin tone, hair, eyes, expression, pose, clothing, proportions, and overall appearance as much as possible. Apply a subtle Instagram-style beauty retouch filter: reduce facial blemishes, acne, redness, shine, and under-eye shadows while keeping natural skin texture. Use a completely pure white seamless studio background (#FFFFFF). Add soft flattering studio lighting, realistic eyes, detailed hair, natural face shape, and polished cinematic 3D character rendering. Do not change age, ethnicity, face geometry, hairstyle, clothing colors, body shape, or add accessories. Avoid distorted features, heavy makeup, plastic skin, and exaggerated cartoon proportions.',
+        'video' => 'Create a seamless 5-second loop from this generated portrait. The first frame and final frame must match the same pose, expression, eye direction, head position, background, lighting, and camera framing so the replay loop has no visible cut. Keep identity, face, hair, clothing, and pure white background locked. Add only very subtle natural motion: slow gentle eye movement, one soft blink if needed, and a faint closed-mouth smile that slowly appears and returns to the starting neutral expression before the final frame. Lips must stay closed at all times. Do not open the mouth, do not show teeth, do not speak, do not look like talking, no head movement, no body movement, no camera movement, no zoom, no scene change, no exaggerated expression. Smooth minimal motion only.',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Video AI Service Drivers
     |--------------------------------------------------------------------------
     |

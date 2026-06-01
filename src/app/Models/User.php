@@ -97,4 +97,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(AiImage::class);
     }
+
+    /**
+     * Get the profile avatars for the user.
+     */
+    public function profileAvatars()
+    {
+        return $this->hasMany(ProfileAvatar::class);
+    }
 }

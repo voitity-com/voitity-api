@@ -14,7 +14,7 @@ return new class extends Migration {
             $table->string('source_id', 100);
             $table->string('source', 100);
             $table->string('status', 50)->default('pending');
-            $table->string('file', 255);
+            $table->string('file', 255)->nullable();
             $table->softDeletes();
             $table->timestamps();
 

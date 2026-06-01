@@ -54,4 +54,9 @@ class Profile extends Model
     {
         return $this->hasMany(AiImage::class);
     }
+
+    public function avatars(): HasMany
+    {
+        return $this->hasMany(ProfileAvatar::class);
+    }
 }
