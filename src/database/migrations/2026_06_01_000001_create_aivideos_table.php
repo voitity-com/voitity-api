@@ -7,12 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('video_ais', function (Blueprint $table) {
+        Schema::create('aivideos', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('profile_id')->nullable()->constrained()->onDelete('set null');
             $table->string('source_id', 100);
             $table->string('source', 100);
+            $table->string('status', 50)->default('pending');
             $table->string('file', 255);
             $table->softDeletes();
             $table->timestamps();
@@ -23,6 +24,6 @@ return new class extends Migration {
 
     public function down(): void
     {
-        Schema::dropIfExists('video_ais');
+        Schema::dropIfExists('aivideos');
     }
 };

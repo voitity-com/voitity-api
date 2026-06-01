@@ -3,9 +3,9 @@
 namespace Tests\Unit\Classes\VideoAIService;
 
 use App\Classes\VideoAIService\VideoAIClient;
-use App\Classes\VideoAIService\VideoAIImage;
+use App\Classes\VideoAIService\AiImage;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Classes\VideoAIService\VideoAIVideo;
+use App\Classes\VideoAIService\AiVideo;
 use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -22,7 +22,7 @@ class VideoAIServiceTest extends TestCase
     public function it_delegates_create_image_to_client(): void
     {
         $client = Mockery::mock(VideoAIClient::class);
-        $image = new VideoAIImage(id: 'image-task-id');
+        $image = new AiImage(id: 'image-task-id');
 
         $client->shouldReceive('createImage')
             ->once()
@@ -38,7 +38,7 @@ class VideoAIServiceTest extends TestCase
     public function it_delegates_create_video_to_client(): void
     {
         $client = Mockery::mock(VideoAIClient::class);
-        $video = new VideoAIVideo(id: 'video-task-id');
+        $video = new AiVideo(id: 'video-task-id');
 
         $client->shouldReceive('createVideo')
             ->once()
@@ -54,8 +54,8 @@ class VideoAIServiceTest extends TestCase
     public function it_delegates_get_methods_to_client(): void
     {
         $client = Mockery::mock(VideoAIClient::class);
-        $image = new VideoAIImage(id: 'image-task-id');
-        $video = new VideoAIVideo(id: 'video-task-id');
+        $image = new AiImage(id: 'image-task-id');
+        $video = new AiVideo(id: 'video-task-id');
 
         $client->shouldReceive('getImage')->once()->with('image-task-id')->andReturn($image);
         $client->shouldReceive('getVideo')->once()->with('video-task-id')->andReturn($video);

@@ -4,24 +4,25 @@ namespace Tests\Unit\Models;
 
 use App\Models\Profile;
 use App\Models\User;
-use App\Models\VideoAI;
+use App\Models\AiVideo;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-class VideoAITest extends TestCase
+class AiVideoTest extends TestCase
 {
     #[Test]
-    public function video_ais_table_has_expected_columns(): void
+    public function aivideos_table_has_expected_columns(): void
     {
-        $this->assertTrue(Schema::hasTable('video_ais'));
+        $this->assertTrue(Schema::hasTable('aivideos'));
 
-        $this->assertTrue(Schema::hasColumns('video_ais', [
+        $this->assertTrue(Schema::hasColumns('aivideos', [
             'id',
             'user_id',
             'profile_id',
             'source_id',
             'source',
+            'status',
             'file',
             'deleted_at',
             'created_at',
@@ -30,7 +31,7 @@ class VideoAITest extends TestCase
     }
 
     #[Test]
-    public function video_ai_belongs_to_user_and_optional_profile(): void
+    public function ai_video_belongs_to_user_and_optional_profile(): void
     {
         $user = User::factory()->create();
         $profile = Profile::create([
@@ -42,34 +43,38 @@ class VideoAITest extends TestCase
             'active' => true,
         ]);
 
-        $videoAI = VideoAI::create([
+        $aiVideo = AiVideo::create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
             'source_id' => 'runway-task-id',
             'source' => 'runway',
+            'status' => 'succeeded',
             'file' => 'videos/runway-task-id.mp4',
         ]);
 
-        $this->assertTrue($videoAI->user->is($user));
-        $this->assertTrue($videoAI->profile->is($profile));
-        $this->assertTrue($user->videoAIs()->first()->is($videoAI));
-        $this->assertTrue($profile->videoAIs()->first()->is($videoAI));
+        $this->assertSame('succeeded', $aiVideo->status);
+        $this->assertTrue($aiVideo->user->is($user));
+        $this->assertTrue($aiVideo->profile->is($profile));
+        $this->assertTrue($user->aiVideos()->first()->is($aiVideo));
+        $this->assertTrue($profile->aiVideos()->first()->is($aiVideo));
     }
 
     #[Test]
-    public function video_ai_can_be_created_without_profile(): void
+    public function ai_video_can_be_created_without_profile(): void
     {
         $user = User::factory()->create();
 
-        $videoAI = VideoAI::create([
+        $aiVideo = AiVideo::create([
             'user_id' => $user->id,
             'profile_id' => null,
             'source_id' => 'runway-task-id',
             'source' => 'runway',
             'file' => 'videos/runway-task-id.mp4',
         ]);
+        $aiVideo->refresh();
 
-        $this->assertNull($videoAI->profile_id);
-        $this->assertNull($videoAI->profile);
+        $this->assertSame('pending', $aiVideo->status);
+        $this->assertNull($aiVideo->profile_id);
+        $this->assertNull($aiVideo->profile);
     }
 }

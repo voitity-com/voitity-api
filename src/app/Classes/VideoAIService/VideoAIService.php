@@ -11,22 +11,22 @@ class VideoAIService
         $this->videoAIClient = $videoAIClient ?: app(VideoAIManager::class)->driver();
     }
 
-    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): VideoAIImage
+    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): AiImage
     {
         return $this->videoAIClient->createImage($sourceImage, $prompt, $ratio);
     }
 
-    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): VideoAIVideo
+    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): AiVideo
     {
         return $this->videoAIClient->createVideo($sourceImage, $prompt, $ratio, $duration);
     }
 
-    public function getImage(string $sourceId): VideoAIImage
+    public function getImage(string $sourceId): AiImage
     {
         return $this->videoAIClient->getImage($sourceId);
     }
 
-    public function getVideo(string $sourceId): VideoAIVideo
+    public function getVideo(string $sourceId): AiVideo
     {
         return $this->videoAIClient->getVideo($sourceId);
     }

@@ -2,7 +2,7 @@
 
 namespace App\Classes\VideoAIService;
 
-class VideoAIVideo
+class AiImage
 {
     public function __construct(
         public ?string $id = null,

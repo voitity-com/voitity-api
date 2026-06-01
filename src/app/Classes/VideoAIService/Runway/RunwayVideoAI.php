@@ -3,8 +3,8 @@
 namespace App\Classes\VideoAIService\Runway;
 
 use App\Classes\VideoAIService\VideoAIClient;
-use App\Classes\VideoAIService\VideoAIImage;
-use App\Classes\VideoAIService\VideoAIVideo;
+use App\Classes\VideoAIService\AiImage;
+use App\Classes\VideoAIService\AiVideo;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -48,7 +48,7 @@ class RunwayVideoAI implements VideoAIClient
         }
     }
 
-    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): VideoAIImage
+    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): AiImage
     {
         $requestUrl = "{$this->baseUrl}/v1/text_to_image";
         $ratio = $ratio ?: $this->defaultImageRatio;
@@ -83,7 +83,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIImage(
+            return new AiImage(
                 status: 'failed',
                 response: $responseData,
                 requestUrl: $requestUrl
@@ -94,7 +94,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIImage(
+            return new AiImage(
                 status: 'error',
                 response: ['error' => $e->getMessage()],
                 requestUrl: $requestUrl
@@ -102,7 +102,7 @@ class RunwayVideoAI implements VideoAIClient
         }
     }
 
-    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): VideoAIVideo
+    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): AiVideo
     {
         $requestUrl = "{$this->baseUrl}/v1/image_to_video";
         $ratio = $ratio ?: $this->defaultVideoRatio;
@@ -135,7 +135,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIVideo(
+            return new AiVideo(
                 status: 'failed',
                 response: $responseData,
                 requestUrl: $requestUrl
@@ -146,7 +146,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIVideo(
+            return new AiVideo(
                 status: 'error',
                 response: ['error' => $e->getMessage()],
                 requestUrl: $requestUrl
@@ -154,7 +154,7 @@ class RunwayVideoAI implements VideoAIClient
         }
     }
 
-    public function getImage(string $sourceId): VideoAIImage
+    public function getImage(string $sourceId): AiImage
     {
         $requestUrl = "{$this->baseUrl}/v1/tasks/{$sourceId}";
 
@@ -173,7 +173,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIImage(
+            return new AiImage(
                 id: $sourceId,
                 status: 'failed',
                 response: $responseData,
@@ -186,7 +186,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIImage(
+            return new AiImage(
                 id: $sourceId,
                 status: 'error',
                 response: ['error' => $e->getMessage()],
@@ -195,7 +195,7 @@ class RunwayVideoAI implements VideoAIClient
         }
     }
 
-    public function getVideo(string $sourceId): VideoAIVideo
+    public function getVideo(string $sourceId): AiVideo
     {
         $requestUrl = "{$this->baseUrl}/v1/tasks/{$sourceId}";
 
@@ -214,7 +214,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIVideo(
+            return new AiVideo(
                 id: $sourceId,
                 status: 'failed',
                 response: $responseData,
@@ -227,7 +227,7 @@ class RunwayVideoAI implements VideoAIClient
                 'request_url' => $requestUrl,
             ]);
 
-            return new VideoAIVideo(
+            return new AiVideo(
                 id: $sourceId,
                 status: 'error',
                 response: ['error' => $e->getMessage()],
@@ -248,9 +248,9 @@ class RunwayVideoAI implements VideoAIClient
         ];
     }
 
-    protected function toImage(array $data, ?string $requestUrl = null, string $defaultStatus = 'pending'): VideoAIImage
+    protected function toImage(array $data, ?string $requestUrl = null, string $defaultStatus = 'pending'): AiImage
     {
-        return new VideoAIImage(
+        return new AiImage(
             id: $this->extractId($data),
             createdAt: $this->extractCreatedAt($data),
             status: $this->extractStatus($data, $defaultStatus),
@@ -260,9 +260,9 @@ class RunwayVideoAI implements VideoAIClient
         );
     }
 
-    protected function toVideo(array $data, ?string $requestUrl = null, string $defaultStatus = 'pending'): VideoAIVideo
+    protected function toVideo(array $data, ?string $requestUrl = null, string $defaultStatus = 'pending'): AiVideo
     {
-        return new VideoAIVideo(
+        return new AiVideo(
             id: $this->extractId($data),
             createdAt: $this->extractCreatedAt($data),
             status: $this->extractStatus($data, $defaultStatus),

@@ -3,8 +3,8 @@
 namespace Tests\Unit\Classes\VideoAIService\Runway;
 
 use App\Classes\VideoAIService\Runway\RunwayVideoAI;
-use App\Classes\VideoAIService\VideoAIImage;
-use App\Classes\VideoAIService\VideoAIVideo;
+use App\Classes\VideoAIService\AiImage;
+use App\Classes\VideoAIService\AiVideo;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -26,7 +26,7 @@ class RunwayVideoAITest extends TestCase
         $client = $this->client();
         $result = $client->createImage('https://example.com/source.png', 'Generate a clean portrait', '1360:768');
 
-        $this->assertInstanceOf(VideoAIImage::class, $result);
+        $this->assertInstanceOf(AiImage::class, $result);
         $this->assertSame('image-task-id', $result->id);
         $this->assertSame('PENDING', $result->status);
         $this->assertSame([], $result->output);
@@ -58,7 +58,7 @@ class RunwayVideoAITest extends TestCase
         $client = $this->client();
         $result = $client->createVideo('https://example.com/generated.png', 'Subtle loop motion', '1280:720');
 
-        $this->assertInstanceOf(VideoAIVideo::class, $result);
+        $this->assertInstanceOf(AiVideo::class, $result);
         $this->assertSame('video-task-id', $result->id);
         $this->assertSame('PENDING', $result->status);
 
@@ -125,7 +125,7 @@ class RunwayVideoAITest extends TestCase
 
         $result = $this->client()->getImage('image-task-id');
 
-        $this->assertInstanceOf(VideoAIImage::class, $result);
+        $this->assertInstanceOf(AiImage::class, $result);
         $this->assertSame('image-task-id', $result->id);
         $this->assertSame('2026-05-29T16:41:47.983Z', $result->createdAt);
         $this->assertSame('SUCCEEDED', $result->status);
@@ -147,7 +147,7 @@ class RunwayVideoAITest extends TestCase
 
         $result = $this->client()->getVideo('video-task-id');
 
-        $this->assertInstanceOf(VideoAIVideo::class, $result);
+        $this->assertInstanceOf(AiVideo::class, $result);
         $this->assertSame('video-task-id', $result->id);
         $this->assertSame('2026-05-29T16:41:47.983Z', $result->createdAt);
         $this->assertSame('SUCCEEDED', $result->status);
@@ -166,7 +166,7 @@ class RunwayVideoAITest extends TestCase
 
         $result = $this->client()->createImage('bad-url', 'prompt', '1360:768');
 
-        $this->assertInstanceOf(VideoAIImage::class, $result);
+        $this->assertInstanceOf(AiImage::class, $result);
         $this->assertSame('failed', $result->status);
         $this->assertSame(['error' => 'Validation of body failed'], $result->response);
         $this->assertTrue($result->isFailed());

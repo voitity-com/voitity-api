@@ -6,17 +6,18 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class VideoAI extends Model
+class AiVideo extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'video_ais';
+    protected $table = 'aivideos';
 
     protected $fillable = [
         'user_id',
         'profile_id',
         'source_id',
         'source',
+        'status',
         'file',
     ];
 

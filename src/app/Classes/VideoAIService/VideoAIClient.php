@@ -7,20 +7,20 @@ interface VideoAIClient
     /**
      * Create an image from a source image and prompt.
      */
-    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): VideoAIImage;
+    public function createImage(string $sourceImage, string $prompt, string $ratio = ''): AiImage;
 
     /**
      * Create a video from a source image and prompt.
      */
-    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): VideoAIVideo;
+    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): AiVideo;
 
     /**
      * Get an image generation task by provider source ID.
      */
-    public function getImage(string $sourceId): VideoAIImage;
+    public function getImage(string $sourceId): AiImage;
 
     /**
      * Get a video generation task by provider source ID.
      */
-    public function getVideo(string $sourceId): VideoAIVideo;
+    public function getVideo(string $sourceId): AiVideo;
 }
