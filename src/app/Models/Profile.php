@@ -49,4 +49,9 @@ class Profile extends Model
     {
         return $this->hasMany(AiVideo::class);
     }
+
+    public function aiImages(): HasMany
+    {
+        return $this->hasMany(AiImage::class);
+    }
 }

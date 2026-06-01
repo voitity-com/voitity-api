@@ -89,4 +89,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(AiVideo::class);
     }
+
+    /**
+     * Get the AI images for the user.
+     */
+    public function aiImages()
+    {
+        return $this->hasMany(AiImage::class);
+    }
 }
