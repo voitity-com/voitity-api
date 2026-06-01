@@ -37,7 +37,7 @@
           "  pm.collectionVariables.set('model', 'gen4.5');",
           "}",
           "if (!pm.collectionVariables.get('ratio')) {",
-          "  pm.collectionVariables.set('ratio', '1280:720');",
+          "  pm.collectionVariables.set('ratio', '960:960');",
           "}",
           "if (!pm.collectionVariables.get('duration')) {",
           "  pm.collectionVariables.set('duration', '5');",
@@ -46,7 +46,7 @@
           "  pm.collectionVariables.set('textToImageModel', 'gen4_image');",
           "}",
           "if (!pm.collectionVariables.get('textToImageRatio')) {",
-          "  pm.collectionVariables.set('textToImageRatio', '1360:768');",
+          "  pm.collectionVariables.set('textToImageRatio', '1024:1024');",
           "}",
           "if (!pm.collectionVariables.get('referenceImageTag')) {",
           "  pm.collectionVariables.set('referenceImageTag', 'base_image');",
@@ -81,7 +81,7 @@
     },
     {
       "key": "ratio",
-      "value": "1280:720",
+      "value": "960:960",
       "type": "string"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "key": "textToImageRatio",
-      "value": "1360:768",
+      "value": "1024:1024",
       "type": "string"
     },
     {

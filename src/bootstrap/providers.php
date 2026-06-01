@@ -6,4 +6,5 @@ return [
     App\Providers\ChatAIServiceProvider::class,
     App\Providers\VoiceSampleServiceProvider::class,
     App\Providers\VoiceServiceProvider::class,
+    App\Providers\VideoAIServiceProvider::class,
 ];
