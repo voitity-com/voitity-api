@@ -44,4 +44,9 @@ class Profile extends Model
     {
         return $this->hasMany(Message::class);
     }
+
+    public function videoAIs(): HasMany
+    {
+        return $this->hasMany(VideoAI::class);
+    }
 }

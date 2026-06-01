@@ -81,4 +81,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Voice::class);
     }
+
+    /**
+     * Get the AI videos for the user.
+     */
+    public function videoAIs()
+    {
+        return $this->hasMany(VideoAI::class);
+    }
 }
