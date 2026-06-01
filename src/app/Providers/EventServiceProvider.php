@@ -7,12 +7,12 @@ use App\Listeners\Voices\CloneVoice;
 use App\Listeners\Voices\AddSample;
 use App\Events\MessageStored;
 use App\Listeners\ProcessStoredMessage;
-use App\Events\AI\Images\AiImageCreated;
-use App\Events\AI\Images\AiImageGenerated;
-use App\Events\AI\Videos\AiVideoCreated;
-use App\Listeners\AI\Images\GetAIImage;
-use App\Listeners\AI\Videos\CreateAiVideo;
-use App\Listeners\AI\Videos\GetAIVideo;
+use App\Events\AI\Images\AiImageForAvatarCreated;
+use App\Events\AI\Images\AiImageForAvatarGenerated;
+use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Listeners\AI\Images\GetAIImageForAvatar;
+use App\Listeners\AI\Videos\CreateAiVideoForAvatar;
+use App\Listeners\AI\Videos\GetAIVideoForAvatar;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
@@ -30,14 +30,14 @@ class EventServiceProvider extends ServiceProvider
             CloneVoice::class,
             AddSample::class,
         ],
-        AiImageCreated::class => [
-            GetAIImage::class,
+        AiImageForAvatarCreated::class => [
+            GetAIImageForAvatar::class,
         ],
-        AiImageGenerated::class => [
-            CreateAiVideo::class,
+        AiImageForAvatarGenerated::class => [
+            CreateAiVideoForAvatar::class,
         ],
-        AiVideoCreated::class => [
-            GetAIVideo::class,
+        AiVideoForAvatarCreated::class => [
+            GetAIVideoForAvatar::class,
         ],
     ];
 

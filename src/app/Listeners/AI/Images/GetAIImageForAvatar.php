@@ -4,14 +4,14 @@ namespace App\Listeners\AI\Images;
 
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Images\AiImageCreated;
-use App\Events\AI\Images\AiImageGenerated;
+use App\Events\AI\Images\AiImageForAvatarCreated;
+use App\Events\AI\Images\AiImageForAvatarGenerated;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class GetAIImage implements ShouldQueue
+class GetAIImageForAvatar implements ShouldQueue
 {
     use InteractsWithQueue;
 
@@ -25,17 +25,17 @@ class GetAIImage implements ShouldQueue
     ) {
     }
 
-    public function handle(AiImageCreated $event): void
+    public function handle(AiImageForAvatarCreated $event): void
     {
         $aiImage = $event->aiImage->fresh();
 
         if (!$aiImage) {
-            Log::warning('GetAIImage skipped because AiImage no longer exists.');
+            Log::warning('GetAIImageForAvatar skipped because AiImage no longer exists.');
             return;
         }
 
         try {
-            Log::info('GetAIImage listener triggered', [
+            Log::info('GetAIImageForAvatar listener triggered', [
                 'aiimage_id' => $aiImage->id,
                 'source_id' => $aiImage->source_id,
                 'attempt' => $this->attempts(),
@@ -57,7 +57,7 @@ class GetAIImage implements ShouldQueue
                     'file' => $file,
                 ]);
 
-                event(new AiImageGenerated($aiImage->fresh(), $image->getOutputUrl()));
+                event(new AiImageForAvatarGenerated($aiImage->fresh(), $image->getOutputUrl()));
                 return;
             }
 
@@ -76,7 +76,7 @@ class GetAIImage implements ShouldQueue
             $aiImage->save();
             $this->releaseOrMarkFailed($aiImage);
         } catch (Throwable $e) {
-            Log::error('GetAIImage listener failed during processing', [
+            Log::error('GetAIImageForAvatar listener failed during processing', [
                 'aiimage_id' => $aiImage->id,
                 'source_id' => $aiImage->source_id,
                 'error' => $e->getMessage(),
@@ -87,7 +87,7 @@ class GetAIImage implements ShouldQueue
         }
     }
 
-    public function failed(AiImageCreated $event, Throwable $exception): void
+    public function failed(AiImageForAvatarCreated $event, Throwable $exception): void
     {
         $aiImage = $event->aiImage->fresh();
 
@@ -96,7 +96,7 @@ class GetAIImage implements ShouldQueue
             $aiImage->save();
         }
 
-        Log::error('GetAIImage listener failed', [
+        Log::error('GetAIImageForAvatar listener failed', [
             'aiimage_id' => $event->aiImage->id,
             'source_id' => $event->aiImage->source_id,
             'error' => $exception->getMessage(),

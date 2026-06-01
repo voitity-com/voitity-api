@@ -9,21 +9,21 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class AiImageGenerated
+class AiImageForAvatarGenerated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(public AiImage $aiImage, public string $sourceImageUrl)
     {
         try {
-            Log::info('AiImageGenerated event instantiated', [
+            Log::info('AiImageForAvatarGenerated event instantiated', [
                 'aiimage_id' => $aiImage->id,
                 'source_id' => $aiImage->source_id,
                 'file' => $aiImage->file,
                 'source_image_url' => $sourceImageUrl,
             ]);
         } catch (Throwable $e) {
-            Log::error('AiImageGenerated event log failed', [
+            Log::error('AiImageForAvatarGenerated event log failed', [
                 'error' => $e->getMessage(),
             ]);
         }

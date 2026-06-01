@@ -5,8 +5,8 @@ namespace Tests\Unit\Listeners\AI\Videos;
 use App\Classes\VideoAIService\AiVideo as AiVideoResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Videos\AiVideoCreated;
-use App\Listeners\AI\Videos\GetAIVideo;
+use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Listeners\AI\Videos\GetAIVideoForAvatar;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
@@ -18,7 +18,7 @@ use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-class GetAIVideoTest extends TestCase
+class GetAIVideoForAvatarTest extends TestCase
 {
     protected function tearDown(): void
     {
@@ -47,8 +47,8 @@ class GetAIVideoTest extends TestCase
                 output: ['https://example.com/generated-video.mp4']
             ));
 
-        $listener = new GetAIVideo($service, new VideoAIArtifactStorage());
-        $listener->handle(new AiVideoCreated($aiVideo, $aiImage));
+        $listener = new GetAIVideoForAvatar($service, new VideoAIArtifactStorage());
+        $listener->handle(new AiVideoForAvatarCreated($aiVideo, $aiImage));
 
         $aiVideo->refresh();
         $avatar = ProfileAvatar::where('profile_id', $aiVideo->profile_id)->first();
@@ -101,8 +101,8 @@ class GetAIVideoTest extends TestCase
                 output: ['https://example.com/generated-video.mp4']
             ));
 
-        $listener = new GetAIVideo($service, new VideoAIArtifactStorage());
-        $listener->handle(new AiVideoCreated($aiVideo, $aiImage));
+        $listener = new GetAIVideoForAvatar($service, new VideoAIArtifactStorage());
+        $listener->handle(new AiVideoForAvatarCreated($aiVideo, $aiImage));
 
         $avatar->refresh();
         $aiVideo->refresh();

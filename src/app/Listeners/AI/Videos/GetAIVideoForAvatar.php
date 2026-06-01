@@ -4,14 +4,14 @@ namespace App\Listeners\AI\Videos;
 
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Videos\AiVideoCreated;
+use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\ProfileAvatar;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class GetAIVideo implements ShouldQueue
+class GetAIVideoForAvatar implements ShouldQueue
 {
     use InteractsWithQueue;
 
@@ -25,17 +25,17 @@ class GetAIVideo implements ShouldQueue
     ) {
     }
 
-    public function handle(AiVideoCreated $event): void
+    public function handle(AiVideoForAvatarCreated $event): void
     {
         $aiVideo = $event->aiVideo->fresh();
 
         if (!$aiVideo) {
-            Log::warning('GetAIVideo skipped because AiVideo no longer exists.');
+            Log::warning('GetAIVideoForAvatar skipped because AiVideo no longer exists.');
             return;
         }
 
         try {
-            Log::info('GetAIVideo listener triggered', [
+            Log::info('GetAIVideoForAvatar listener triggered', [
                 'aivideo_id' => $aiVideo->id,
                 'source_id' => $aiVideo->source_id,
                 'attempt' => $this->attempts(),
@@ -76,7 +76,7 @@ class GetAIVideo implements ShouldQueue
             $aiVideo->save();
             $this->releaseOrMarkFailed($aiVideo);
         } catch (Throwable $e) {
-            Log::error('GetAIVideo listener failed during processing', [
+            Log::error('GetAIVideoForAvatar listener failed during processing', [
                 'aivideo_id' => $aiVideo->id,
                 'source_id' => $aiVideo->source_id,
                 'error' => $e->getMessage(),
@@ -87,7 +87,7 @@ class GetAIVideo implements ShouldQueue
         }
     }
 
-    public function failed(AiVideoCreated $event, Throwable $exception): void
+    public function failed(AiVideoForAvatarCreated $event, Throwable $exception): void
     {
         $aiVideo = $event->aiVideo->fresh();
 
@@ -96,7 +96,7 @@ class GetAIVideo implements ShouldQueue
             $aiVideo->save();
         }
 
-        Log::error('GetAIVideo listener failed', [
+        Log::error('GetAIVideoForAvatar listener failed', [
             'aivideo_id' => $event->aiVideo->id,
             'source_id' => $event->aiVideo->source_id,
             'error' => $exception->getMessage(),
@@ -105,7 +105,7 @@ class GetAIVideo implements ShouldQueue
         ]);
     }
 
-    private function updateProfileAvatar(AiVideoCreated $event, $aiVideo): void
+    private function updateProfileAvatar(AiVideoForAvatarCreated $event, $aiVideo): void
     {
         if (!$aiVideo->profile_id) {
             return;

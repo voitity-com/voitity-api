@@ -4,9 +4,9 @@ namespace Tests\Unit\Listeners\AI\Videos;
 
 use App\Classes\VideoAIService\AiVideo as AiVideoResult;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Images\AiImageGenerated;
-use App\Events\AI\Videos\AiVideoCreated;
-use App\Listeners\AI\Videos\CreateAiVideo;
+use App\Events\AI\Images\AiImageForAvatarGenerated;
+use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Listeners\AI\Videos\CreateAiVideoForAvatar;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
@@ -16,7 +16,7 @@ use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-class CreateAiVideoTest extends TestCase
+class CreateAiVideoForAvatarTest extends TestCase
 {
     protected function tearDown(): void
     {
@@ -27,7 +27,7 @@ class CreateAiVideoTest extends TestCase
     #[Test]
     public function it_creates_ai_video_record_and_dispatches_event(): void
     {
-        Event::fake([AiVideoCreated::class]);
+        Event::fake([AiVideoForAvatarCreated::class]);
 
         $aiImage = $this->aiImage();
         $service = Mockery::mock(VideoAIService::class);
@@ -36,8 +36,8 @@ class CreateAiVideoTest extends TestCase
             ->with('https://example.com/generated-image.png', config('videoai.prompts.video'))
             ->andReturn(new AiVideoResult(id: 'video-source-id', status: 'PENDING'));
 
-        $listener = new CreateAiVideo($service);
-        $listener->handle(new AiImageGenerated($aiImage, 'https://example.com/generated-image.png'));
+        $listener = new CreateAiVideoForAvatar($service);
+        $listener->handle(new AiImageForAvatarGenerated($aiImage, 'https://example.com/generated-image.png'));
 
         $aiVideo = AiVideo::where('source_id', 'video-source-id')->first();
 
@@ -47,7 +47,7 @@ class CreateAiVideoTest extends TestCase
         $this->assertSame('pending', $aiVideo->status);
         $this->assertNull($aiVideo->file);
 
-        Event::assertDispatched(AiVideoCreated::class, function ($event) use ($aiVideo, $aiImage) {
+        Event::assertDispatched(AiVideoForAvatarCreated::class, function ($event) use ($aiVideo, $aiImage) {
             return $event->aiVideo->is($aiVideo)
                 && $event->aiImage->is($aiImage);
         });

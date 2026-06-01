@@ -2,7 +2,6 @@
 
 namespace App\Classes\VideoAIService;
 
-use App\Events\AI\Images\AiImageCreated;
 use App\Models\AiImage as AiImageModel;
 use App\Models\Profile;
 use App\Models\User;
@@ -47,8 +46,6 @@ class VideoAIService
             'status' => $this->normalizeStatus($result->status),
             'file' => null,
         ]);
-
-        event(new AiImageCreated($aiImage));
 
         return $aiImage;
     }

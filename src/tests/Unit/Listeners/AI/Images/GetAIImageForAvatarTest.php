@@ -5,9 +5,9 @@ namespace Tests\Unit\Listeners\AI\Images;
 use App\Classes\VideoAIService\AiImage as AiImageResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Images\AiImageCreated;
-use App\Events\AI\Images\AiImageGenerated;
-use App\Listeners\AI\Images\GetAIImage;
+use App\Events\AI\Images\AiImageForAvatarCreated;
+use App\Events\AI\Images\AiImageForAvatarGenerated;
+use App\Listeners\AI\Images\GetAIImageForAvatar;
 use App\Models\AiImage;
 use App\Models\Profile;
 use App\Models\User;
@@ -18,7 +18,7 @@ use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-class GetAIImageTest extends TestCase
+class GetAIImageForAvatarTest extends TestCase
 {
     protected function tearDown(): void
     {
@@ -29,7 +29,7 @@ class GetAIImageTest extends TestCase
     #[Test]
     public function it_stores_generated_image_updates_record_and_dispatches_generated_event(): void
     {
-        Event::fake([AiImageGenerated::class]);
+        Event::fake([AiImageForAvatarGenerated::class]);
         Storage::fake('public');
         Http::fake([
             'https://example.com/generated-image.png' => Http::response('image-bytes', 200, [
@@ -48,15 +48,15 @@ class GetAIImageTest extends TestCase
                 output: ['https://example.com/generated-image.png']
             ));
 
-        $listener = new GetAIImage($service, new VideoAIArtifactStorage());
-        $listener->handle(new AiImageCreated($aiImage));
+        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage());
+        $listener->handle(new AiImageForAvatarCreated($aiImage));
 
         $aiImage->refresh();
 
         $this->assertSame('succeeded', $aiImage->status);
         $this->assertSame("aiimages/{$aiImage->id}.png", $aiImage->file);
         Storage::disk('public')->assertExists($aiImage->file);
-        Event::assertDispatched(AiImageGenerated::class, function ($event) use ($aiImage) {
+        Event::assertDispatched(AiImageForAvatarGenerated::class, function ($event) use ($aiImage) {
             return $event->aiImage->is($aiImage)
                 && $event->sourceImageUrl === 'https://example.com/generated-image.png';
         });

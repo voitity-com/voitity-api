@@ -8,6 +8,7 @@ use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\MessageController;
 use App\Http\Controllers\api\v1\UserController;
+use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\VoiceController;
 use App\Http\Controllers\api\v1\VoiceSampleController;
 
@@ -40,4 +41,9 @@ Route::prefix('/voice')->group(function() {
     Route::post('/test', [VoiceController::class, 'test'])->middleware(['auth:sanctum', 'abilities:voice:use']);
     Route::post('/{voice}/sample', [VoiceSampleController::class, 'store'])->middleware(['auth:sanctum', 'abilities:voice:write']);
     Route::post('/{voice}/sample/{voice_sample}/process', [VoiceSampleController::class, 'process'])->middleware(['auth:sanctum', 'abilities:voice:write']);
+});
+
+Route::prefix('/avatar')->group(function() {
+    Route::post('/generate', [AvatarController::class, 'generateAvatar'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
+    Route::get('/{profile}', [AvatarController::class, 'show'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
 });

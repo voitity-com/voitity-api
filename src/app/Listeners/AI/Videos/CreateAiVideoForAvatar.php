@@ -3,8 +3,8 @@
 namespace App\Listeners\AI\Videos;
 
 use App\Classes\VideoAIService\VideoAIService;
-use App\Events\AI\Images\AiImageGenerated;
-use App\Events\AI\Videos\AiVideoCreated;
+use App\Events\AI\Images\AiImageForAvatarGenerated;
+use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\AiVideo as AiVideoModel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
-class CreateAiVideo implements ShouldQueue
+class CreateAiVideoForAvatar implements ShouldQueue
 {
     use InteractsWithQueue;
 
@@ -23,17 +23,17 @@ class CreateAiVideo implements ShouldQueue
     {
     }
 
-    public function handle(AiImageGenerated $event): void
+    public function handle(AiImageForAvatarGenerated $event): void
     {
         $aiImage = $event->aiImage->fresh();
 
         if (!$aiImage) {
-            Log::warning('CreateAiVideo skipped because AiImage no longer exists.');
+            Log::warning('CreateAiVideoForAvatar skipped because AiImage no longer exists.');
             return;
         }
 
         try {
-            Log::info('CreateAiVideo listener triggered', [
+            Log::info('CreateAiVideoForAvatar listener triggered', [
                 'aiimage_id' => $aiImage->id,
                 'source_image_url' => $event->sourceImageUrl,
             ]);
@@ -62,9 +62,9 @@ class CreateAiVideo implements ShouldQueue
                 'source_id' => $aiVideo->source_id,
             ]);
 
-            event(new AiVideoCreated($aiVideo, $aiImage));
+            event(new AiVideoForAvatarCreated($aiVideo, $aiImage));
         } catch (Throwable $e) {
-            Log::error('CreateAiVideo listener failed during processing', [
+            Log::error('CreateAiVideoForAvatar listener failed during processing', [
                 'aiimage_id' => $aiImage->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -74,9 +74,9 @@ class CreateAiVideo implements ShouldQueue
         }
     }
 
-    public function failed(AiImageGenerated $event, Throwable $exception): void
+    public function failed(AiImageForAvatarGenerated $event, Throwable $exception): void
     {
-        Log::error('CreateAiVideo listener failed', [
+        Log::error('CreateAiVideoForAvatar listener failed', [
             'aiimage_id' => $event->aiImage->id,
             'error' => $exception->getMessage(),
             'exception_class' => get_class($exception),

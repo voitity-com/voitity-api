@@ -10,14 +10,14 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class AiVideoCreated
+class AiVideoForAvatarCreated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(public AiVideo $aiVideo, public ?AiImage $aiImage = null)
     {
         try {
-            Log::info('AiVideoCreated event instantiated', [
+            Log::info('AiVideoForAvatarCreated event instantiated', [
                 'aivideo_id' => $aiVideo->id,
                 'source_id' => $aiVideo->source_id,
                 'user_id' => $aiVideo->user_id,
@@ -25,7 +25,7 @@ class AiVideoCreated
                 'aiimage_id' => $aiImage?->id,
             ]);
         } catch (Throwable $e) {
-            Log::error('AiVideoCreated event log failed', [
+            Log::error('AiVideoForAvatarCreated event log failed', [
                 'error' => $e->getMessage(),
             ]);
         }

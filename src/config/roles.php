@@ -22,7 +22,9 @@ return [
             'voice:use',
             'messages:write',
             'user:write',
-            'user:read'
+            'user:read',
+            'avatar:write',
+            'avatar:read'
         ]
     ],
     'user' => [
@@ -34,7 +36,9 @@ return [
             'voice:use',
             'messages:write',
             'user:write',
-            'user:read'
+            'user:read',
+            'avatar:write',
+            'avatar:read'
         ]
     ],
     'profile' => [
@@ -46,7 +50,9 @@ return [
             'voice:use',
             'messages:write',
             'user:write',
-            'user:read'
+            'user:read',
+            'avatar:write',
+            'avatar:read'
         ]
     ]
 ];

@@ -6,7 +6,7 @@ use App\Classes\VideoAIService\VideoAIClient;
 use App\Classes\VideoAIService\AiImage;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Classes\VideoAIService\AiVideo;
-use App\Events\AI\Images\AiImageCreated;
+use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Models\Profile;
 use App\Models\User;
 use Illuminate\Support\Facades\Event;
@@ -71,10 +71,8 @@ class VideoAIServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_generates_image_record_and_dispatches_event(): void
+    public function it_generates_image_record_without_dispatching_avatar_event(): void
     {
-        Event::fake([AiImageCreated::class]);
-
         $user = User::factory()->create();
         $profile = Profile::create([
             'user_id' => $user->id,
@@ -84,6 +82,8 @@ class VideoAIServiceTest extends TestCase
             'personality' => 'friendly',
             'active' => true,
         ]);
+        Event::fake([AiImageForAvatarCreated::class]);
+
         $client = Mockery::mock(VideoAIClient::class);
         $client->shouldReceive('createImage')
             ->once()
@@ -99,6 +99,6 @@ class VideoAIServiceTest extends TestCase
         $this->assertSame('pending', $aiImage->status);
         $this->assertNull($aiImage->file);
 
-        Event::assertDispatched(AiImageCreated::class, fn ($event) => $event->aiImage->is($aiImage));
+        Event::assertNotDispatched(AiImageForAvatarCreated::class);
     }
 }
