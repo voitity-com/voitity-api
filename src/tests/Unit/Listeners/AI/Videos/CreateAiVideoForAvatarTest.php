@@ -44,6 +44,7 @@ class CreateAiVideoForAvatarTest extends TestCase
         $this->assertNotNull($aiVideo);
         $this->assertSame($aiImage->user_id, $aiVideo->user_id);
         $this->assertSame($aiImage->profile_id, $aiVideo->profile_id);
+        $this->assertSame($aiImage->id, $aiVideo->aiimage_id);
         $this->assertSame('pending', $aiVideo->status);
         $this->assertNull($aiVideo->file);
 
@@ -51,6 +52,32 @@ class CreateAiVideoForAvatarTest extends TestCase
             return $event->aiVideo->is($aiVideo)
                 && $event->aiImage->is($aiImage);
         });
+    }
+
+    #[Test]
+    public function it_does_not_create_duplicate_video_when_aiimage_already_has_one(): void
+    {
+        Event::fake([AiVideoForAvatarCreated::class]);
+
+        $aiImage = $this->aiImage();
+        $existingAiVideo = AiVideo::create([
+            'user_id' => $aiImage->user_id,
+            'profile_id' => $aiImage->profile_id,
+            'aiimage_id' => $aiImage->id,
+            'source_id' => 'existing-video-source-id',
+            'source' => 'runway',
+            'status' => 'running',
+            'file' => null,
+        ]);
+        $service = Mockery::mock(VideoAIService::class);
+        $service->shouldNotReceive('createVideo');
+
+        $listener = new CreateAiVideoForAvatar($service);
+        $listener->handle(new AiImageForAvatarGenerated($aiImage, 'https://example.com/generated-image.png'));
+
+        $this->assertSame(1, AiVideo::where('aiimage_id', $aiImage->id)->count());
+        $this->assertTrue($existingAiVideo->fresh()->is(AiVideo::where('aiimage_id', $aiImage->id)->first()));
+        Event::assertNotDispatched(AiVideoForAvatarCreated::class);
     }
 
     private function aiImage(): AiImage

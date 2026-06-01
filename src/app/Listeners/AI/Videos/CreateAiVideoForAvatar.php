@@ -7,8 +7,10 @@ use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\AiVideo as AiVideoModel;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\QueryException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -33,10 +35,50 @@ class CreateAiVideoForAvatar implements ShouldQueue
         }
 
         try {
+            $existingAiVideo = AiVideoModel::where('aiimage_id', $aiImage->id)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existingAiVideo) {
+                Log::info('CreateAiVideoForAvatar skipped because AiVideo already exists for AiImage.', [
+                    'aiimage_id' => $aiImage->id,
+                    'aivideo_id' => $existingAiVideo->id,
+                    'source_id' => $existingAiVideo->source_id,
+                    'status' => $existingAiVideo->status,
+                ]);
+                return;
+            }
+
             Log::info('CreateAiVideoForAvatar listener triggered', [
                 'aiimage_id' => $aiImage->id,
                 'source_image_url' => $event->sourceImageUrl,
             ]);
+
+            try {
+                $aiVideo = AiVideoModel::create([
+                    'user_id' => $aiImage->user_id,
+                    'profile_id' => $aiImage->profile_id,
+                    'aiimage_id' => $aiImage->id,
+                    'source_id' => 'creating-' . Str::uuid()->toString(),
+                    'source' => config('videoai.default', 'runway'),
+                    'status' => 'creating',
+                    'file' => null,
+                ]);
+            } catch (QueryException $e) {
+                $existingAiVideo = AiVideoModel::where('aiimage_id', $aiImage->id)->first();
+
+                if ($existingAiVideo) {
+                    Log::info('CreateAiVideoForAvatar skipped because another job already created AiVideo.', [
+                        'aiimage_id' => $aiImage->id,
+                        'aivideo_id' => $existingAiVideo->id,
+                        'source_id' => $existingAiVideo->source_id,
+                        'status' => $existingAiVideo->status,
+                    ]);
+                    return;
+                }
+
+                throw $e;
+            }
 
             $video = $this->videoAIService->createVideo(
                 $event->sourceImageUrl,
@@ -44,17 +86,14 @@ class CreateAiVideoForAvatar implements ShouldQueue
             );
 
             if (!$video->id) {
+                $aiVideo->status = 'failed';
+                $aiVideo->save();
                 throw new RuntimeException('Video AI video generation did not return a source id.');
             }
 
-            $aiVideo = AiVideoModel::create([
-                'user_id' => $aiImage->user_id,
-                'profile_id' => $aiImage->profile_id,
-                'source_id' => $video->id,
-                'source' => config('videoai.default', 'runway'),
-                'status' => $this->normalizeStatus($video->status),
-                'file' => null,
-            ]);
+            $aiVideo->source_id = $video->id;
+            $aiVideo->status = $this->normalizeStatus($video->status);
+            $aiVideo->save();
 
             Log::info('AI video record created', [
                 'aivideo_id' => $aiVideo->id,

@@ -62,7 +62,25 @@ class GetAIImageForAvatarTest extends TestCase
         });
     }
 
-    private function aiImage(): AiImage
+    #[Test]
+    public function it_does_not_dispatch_generated_event_when_image_is_already_stored(): void
+    {
+        Event::fake([AiImageForAvatarGenerated::class]);
+
+        $aiImage = $this->aiImage([
+            'status' => 'succeeded',
+            'file' => 'aiimages/1.png',
+        ]);
+        $service = Mockery::mock(VideoAIService::class);
+        $service->shouldNotReceive('getImage');
+
+        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage());
+        $listener->handle(new AiImageForAvatarCreated($aiImage));
+
+        Event::assertNotDispatched(AiImageForAvatarGenerated::class);
+    }
+
+    private function aiImage(array $overrides = []): AiImage
     {
         $user = User::factory()->create();
         $profile = Profile::create([
@@ -74,13 +92,13 @@ class GetAIImageForAvatarTest extends TestCase
             'active' => true,
         ]);
 
-        return AiImage::create([
+        return AiImage::create(array_merge([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
             'source_id' => 'image-source-id',
             'source' => 'runway',
             'status' => 'pending',
             'file' => null,
-        ]);
+        ], $overrides));
     }
 }

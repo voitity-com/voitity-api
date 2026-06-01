@@ -27,7 +27,7 @@ class AiImage
 
     public function isPending(): bool
     {
-        return in_array(strtolower($this->status), ['pending', 'processing', 'running', 'queued'], true);
+        return in_array(strtolower($this->status), ['creating', 'pending', 'processing', 'running', 'queued', 'throttled'], true);
     }
 
     public function getOutputUrl(): ?string

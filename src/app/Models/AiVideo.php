@@ -15,6 +15,7 @@ class AiVideo extends Model
     protected $fillable = [
         'user_id',
         'profile_id',
+        'aiimage_id',
         'source_id',
         'source',
         'status',
@@ -29,5 +30,10 @@ class AiVideo extends Model
     public function profile()
     {
         return $this->belongsTo(Profile::class);
+    }
+
+    public function aiImage()
+    {
+        return $this->belongsTo(AiImage::class, 'aiimage_id');
     }
 }

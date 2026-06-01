@@ -34,6 +34,15 @@ class GetAIImageForAvatar implements ShouldQueue
             return;
         }
 
+        if ($aiImage->status === 'succeeded' && $aiImage->file) {
+            Log::info('GetAIImageForAvatar skipped because AiImage is already stored.', [
+                'aiimage_id' => $aiImage->id,
+                'source_id' => $aiImage->source_id,
+                'file' => $aiImage->file,
+            ]);
+            return;
+        }
+
         try {
             Log::info('GetAIImageForAvatar listener triggered', [
                 'aiimage_id' => $aiImage->id,

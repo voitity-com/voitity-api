@@ -30,4 +30,9 @@ class AiImage extends Model
     {
         return $this->belongsTo(Profile::class);
     }
+
+    public function aiVideos()
+    {
+        return $this->hasMany(AiVideo::class, 'aiimage_id');
+    }
 }

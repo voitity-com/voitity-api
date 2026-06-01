@@ -4,6 +4,7 @@ namespace Tests\Unit\Models;
 
 use App\Models\Profile;
 use App\Models\User;
+use App\Models\AiImage;
 use App\Models\AiVideo;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
@@ -20,6 +21,7 @@ class AiVideoTest extends TestCase
             'id',
             'user_id',
             'profile_id',
+            'aiimage_id',
             'source_id',
             'source',
             'status',
@@ -42,10 +44,19 @@ class AiVideoTest extends TestCase
             'personality' => 'friendly',
             'active' => true,
         ]);
+        $aiImage = AiImage::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'runway-image-task-id',
+            'source' => 'runway',
+            'status' => 'succeeded',
+            'file' => 'images/runway-image-task-id.png',
+        ]);
 
         $aiVideo = AiVideo::create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
             'source_id' => 'runway-task-id',
             'source' => 'runway',
             'status' => 'succeeded',
@@ -55,8 +66,10 @@ class AiVideoTest extends TestCase
         $this->assertSame('succeeded', $aiVideo->status);
         $this->assertTrue($aiVideo->user->is($user));
         $this->assertTrue($aiVideo->profile->is($profile));
+        $this->assertTrue($aiVideo->aiImage->is($aiImage));
         $this->assertTrue($user->aiVideos()->first()->is($aiVideo));
         $this->assertTrue($profile->aiVideos()->first()->is($aiVideo));
+        $this->assertTrue($aiImage->aiVideos()->first()->is($aiVideo));
     }
 
     #[Test]

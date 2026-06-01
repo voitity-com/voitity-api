@@ -818,6 +818,94 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Avatar",
+      "item": [
+        {
+          "name": "Generate Avatar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.id) {",
+                  "  pm.environment.set('aiimage_id', json.data.id);",
+                  "}",
+                  "if (json.data && json.data.source_id) {",
+                  "  pm.environment.set('aiimage_source_id', json.data.source_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "profile_id",
+                  "value": "{{profile_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{avatar_image_file_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/avatar/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "avatar",
+                "generate"
+              ]
+            },
+            "description": "Uploads a source image and starts avatar generation for the selected profile. Requires avatar:write. Non-admin users can only generate avatars for their own profiles; admins can generate for any profile. Set avatar_image_file_path to a local jpg, png, or webp image."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Avatar",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/avatar/{{profile_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "avatar",
+                "{{profile_id}}"
+              ]
+            },
+            "description": "Gets the active avatar for profile_id. Requires avatar:read."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

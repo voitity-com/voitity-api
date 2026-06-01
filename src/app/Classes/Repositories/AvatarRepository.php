@@ -36,7 +36,7 @@ class AvatarRepository
                 throw new RuntimeException('Avatar source image could not be stored.');
             }
 
-            $sourceImageUrl = Storage::disk('public')->url($path);
+            $sourceImageUri = $this->sourceImageToDataUri($path, $sourceImage);
             $owner = $profile->user ?: $actor;
 
             Log::info('Avatar image generation started.', [
@@ -46,7 +46,7 @@ class AvatarRepository
                 'source_image_path' => $path,
             ]);
 
-            $aiImage = $this->videoAIService()->generateImage($owner, $sourceImageUrl, $profile);
+            $aiImage = $this->videoAIService()->generateImage($owner, $sourceImageUri, $profile);
 
             event(new AiImageForAvatarCreated($aiImage));
 
@@ -87,5 +87,13 @@ class AvatarRepository
         }
 
         return $this->videoAIService;
+    }
+
+    private function sourceImageToDataUri(string $path, UploadedFile $sourceImage): string
+    {
+        $content = Storage::disk('public')->get($path);
+        $mimeType = $sourceImage->getMimeType() ?: 'image/png';
+
+        return "data:{$mimeType};base64," . base64_encode($content);
     }
 }

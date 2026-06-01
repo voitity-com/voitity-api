@@ -37,7 +37,7 @@ class AvatarRepositoryTest extends TestCase
             ->once()
             ->with(
                 Mockery::on(fn (User $owner) => $owner->is($user)),
-                Mockery::on(fn (string $url) => str_contains($url, '/storage/avatar-sources/')),
+                Mockery::on(fn (string $url) => str_starts_with($url, 'data:image/png;base64,')),
                 Mockery::on(fn (Profile $receivedProfile) => $receivedProfile->is($profile))
             )
             ->andReturnUsing(function (User $owner, string $sourceImageUrl, Profile $receivedProfile): AiImageModel {

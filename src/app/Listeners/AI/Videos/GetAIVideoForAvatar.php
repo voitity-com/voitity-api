@@ -15,7 +15,7 @@ class GetAIVideoForAvatar implements ShouldQueue
 {
     use InteractsWithQueue;
 
-    public int $tries = 5;
+    public int $tries = 20;
     public int $backoff = 30;
     public int $timeout = 120;
 
@@ -31,6 +31,17 @@ class GetAIVideoForAvatar implements ShouldQueue
 
         if (!$aiVideo) {
             Log::warning('GetAIVideoForAvatar skipped because AiVideo no longer exists.');
+            return;
+        }
+
+        if ($aiVideo->status === 'succeeded' && $aiVideo->file) {
+            $this->updateProfileAvatar($event, $aiVideo);
+
+            Log::info('GetAIVideoForAvatar skipped because AiVideo is already stored.', [
+                'aivideo_id' => $aiVideo->id,
+                'source_id' => $aiVideo->source_id,
+                'file' => $aiVideo->file,
+            ]);
             return;
         }
 

@@ -134,6 +134,7 @@ class GetAIVideoForAvatarTest extends TestCase
         $aiVideo = AiVideo::create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
             'source_id' => 'video-source-id',
             'source' => 'runway',
             'status' => 'pending',
