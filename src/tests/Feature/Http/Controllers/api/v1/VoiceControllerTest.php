@@ -253,6 +253,75 @@ class VoiceControllerTest extends TestAPI
         $response->assertJsonPath('data.audio_url', 'http://localhost/storage/generated/admin-test.mp3');
     }
 
+    public function test_api_user_can_test_voice_for_profile_he_does_not_own()
+    {
+        $apiUser = User::factory()->create(['role' => 'api']);
+        $owner = User::factory()->create();
+        $profile = $this->createProfileForUser($owner);
+        $voice = Voice::factory()->create([
+            'user_id' => $owner->id,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+            'source_voice_id' => 'provider-voice-id',
+            'active' => true,
+        ]);
+
+        $voiceClient = new class($voice) implements VoiceClient {
+            public function __construct(private readonly Voice $voice)
+            {
+            }
+
+            public function cloneVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientClonedVoice
+            {
+                throw new \RuntimeException('Not used in this test.');
+            }
+
+            public function addVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientAddedSample
+            {
+                throw new \RuntimeException('Not used in this test.');
+            }
+
+            public function generateAudio(Voice $voice, string $text): VoiceClientGeneratedAudio
+            {
+                if ($voice->id !== $this->voice->id) {
+                    throw new \RuntimeException('Unexpected voice generation input.');
+                }
+
+                return new VoiceClientGeneratedAudio(
+                    $voice,
+                    $text,
+                    'http://localhost/storage/generated/api-test.mp3',
+                    'base64-audio',
+                    'mp3',
+                    2.4,
+                    'completed',
+                    ['provider' => 'fake']
+                );
+            }
+        };
+
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')
+            ->once()
+            ->with('elevenlabs')
+            ->andReturn($voiceClient);
+        $this->app->instance(VoiceManager::class, $voiceManager);
+
+        $token = $apiUser->createToken('test-token', ['voice:use'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson(self::ENDPOINT_VOICE_TEST, [
+                'profile_id' => $profile->id,
+                'text' => 'Hola mundo',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice audio generated successfully.');
+        $response->assertJsonPath('data.voice_id', $voice->id);
+        $response->assertJsonPath('data.profile_id', $profile->id);
+        $response->assertJsonPath('data.audio_url', 'http://localhost/storage/generated/api-test.mp3');
+    }
+
     public function test_user_can_not_test_voice_when_profile_has_no_active_voice()
     {
         $user = User::factory()->create([

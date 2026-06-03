@@ -135,7 +135,7 @@ class VoiceController extends Controller
 
             $profileQuery = Profile::where('id', $payload['profile_id']);
 
-            if ($user->role !== 'admin') {
+            if (!$this->canUseAnyProfileVoice($user->role)) {
                 $profileQuery->where('user_id', $user->id);
             }
 
@@ -148,7 +148,7 @@ class VoiceController extends Controller
 
             $voiceQuery = $profile->voices()->where('active', true);
 
-            if ($user->role !== 'admin') {
+            if (!$this->canUseAnyProfileVoice($user->role)) {
                 $voiceQuery->where('user_id', $user->id);
             }
 
@@ -206,5 +206,10 @@ class VoiceController extends Controller
 
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    private function canUseAnyProfileVoice(string $role): bool
+    {
+        return in_array($role, ['admin', 'api'], true);
     }
 }
