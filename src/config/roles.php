@@ -54,5 +54,14 @@ return [
             'avatar:write',
             'avatar:read'
         ]
+    ],
+    'api' => [
+        'abilities' => [
+            'profile:read',
+            'voice:use',
+            'messages:write',
+            'user:read',
+            'avatar:read'
+        ]
     ]
 ];
