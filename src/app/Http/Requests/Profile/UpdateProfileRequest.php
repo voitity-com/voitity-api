@@ -15,6 +15,7 @@ class UpdateProfileRequest extends FormRequest
     {
         return [
             'name' => 'sometimes|string|max:100',
+            'alias' => 'sometimes|nullable|string|max:100',
             'description' => 'sometimes|string|max:500',
             'genre' => 'sometimes|string|max:10',
             'personality' => 'sometimes|string|max:200',

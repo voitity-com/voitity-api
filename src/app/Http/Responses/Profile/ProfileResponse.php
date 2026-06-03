@@ -15,6 +15,7 @@ class ProfileResponse
         return [
             'id' => $this->profile->id,
             'user_id' => $this->profile->user_id,
+            'alias' => $this->profile->alias,
             'name' => $this->profile->name,
             'description' => $this->profile->description,
             'genre' => $this->profile->genre,

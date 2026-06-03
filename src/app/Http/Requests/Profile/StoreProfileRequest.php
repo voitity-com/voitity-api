@@ -15,6 +15,7 @@ class StoreProfileRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:100',
+            'alias' => 'nullable|string|max:100',
             'description' => 'required|string|max:500',
             'genre' => 'required|string|max:10',
             'personality' => 'required|string|max:200',

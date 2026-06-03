@@ -35,6 +35,7 @@ class ProfileController extends Controller
      *                         type="object",
      *                         @OA\Property(property="id", type="integer", example=1),
      *                         @OA\Property(property="user_id", type="integer", example=1),
+     *                         @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *                         @OA\Property(property="name", type="string", example="John Doe"),
      *                         @OA\Property(property="description", type="string", example="A short bio"),
      *                         @OA\Property(property="genre", type="string", example="male"),
@@ -95,6 +96,7 @@ class ProfileController extends Controller
      *         @OA\JsonContent(
      *             required={"name","description","genre","personality"},
      *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
+     *             @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
      *             @OA\Property(property="genre", type="string", maxLength=10, example="male"),
      *             @OA\Property(property="personality", type="string", maxLength=200, example="friendly"),
@@ -155,6 +157,7 @@ class ProfileController extends Controller
      *             @OA\Property(property="data", type="object",
      *                 @OA\Property(property="id", type="integer", example=1),
      *                 @OA\Property(property="user_id", type="integer", example=1),
+     *                 @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *                 @OA\Property(property="name", type="string", example="John Doe"),
      *                 @OA\Property(property="description", type="string", example="A short bio"),
      *                 @OA\Property(property="genre", type="string", example="male"),
@@ -221,6 +224,7 @@ class ProfileController extends Controller
      *         required=false,
      *         @OA\JsonContent(
      *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
+     *             @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
      *             @OA\Property(property="genre", type="string", maxLength=10, example="male"),
      *             @OA\Property(property="personality", type="string", maxLength=200, example="friendly"),

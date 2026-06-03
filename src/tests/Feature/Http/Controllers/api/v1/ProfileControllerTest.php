@@ -22,12 +22,13 @@ class ProfileControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
             ->postJson(self::ENDPOINT_PROFILE, [
                 'name' => '', // empty
+                'alias' => str_repeat('a', 101),
                 // 'description' => missing
                 'genre' => 'toolongforgenre', // too long
                 // 'personality' => missing
             ]);
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['name', 'description', 'genre', 'personality']);
+        $response->assertJsonValidationErrors(['name', 'alias', 'description', 'genre', 'personality']);
     }
 
     public function test_unauthorized_user_can_not_create_profile()
@@ -43,6 +44,7 @@ class ProfileControllerTest extends TestAPI
     {
         $profile_data = [
             'name'          => $this->faker->name,
+            'alias'         => 'Demo Alias',
             'description'   => $this->faker->text(200),
             'genre'         => 'male',
             'personality'   => $this->faker->text(100)
@@ -58,8 +60,10 @@ class ProfileControllerTest extends TestAPI
 
         $new_profile = Profile::find($response_content->data->id);
         $this->assertEquals($profile_data['name'], $new_profile->name);
+        $this->assertEquals($profile_data['alias'], $new_profile->alias);
         $this->assertEquals($profile_data['description'], $new_profile->description);
         $this->assertTrue((boolean)$new_profile->active);
+        $response->assertJsonPath('data.alias', $profile_data['alias']);
     }
 
     public function test_unauthorized_user_can_not_list_profiles()
@@ -89,6 +93,7 @@ class ProfileControllerTest extends TestAPI
 
         $profileA = Profile::create([
             'user_id'       => $user->id,
+            'alias'         => 'Profile A',
             'name'          => $this->faker->name,
             'description'   => $this->faker->text(200),
             'genre'         => 'male',
@@ -96,6 +101,7 @@ class ProfileControllerTest extends TestAPI
         ]);
         $profileB = Profile::create([
             'user_id'       => $user->id,
+            'alias'         => 'Profile B',
             'name'          => $this->faker->name,
             'description'   => $this->faker->text(200),
             'genre'         => 'female',
@@ -138,6 +144,8 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals([$user->id], $profileUserIds);
 
         $profilesById = collect($response->json('data.profiles'))->keyBy('id');
+        $this->assertSame('Profile A', $profilesById[$profileA->id]['alias']);
+        $this->assertSame('Profile B', $profilesById[$profileB->id]['alias']);
         $this->assertTrue($profilesById[$profileA->id]['voice']);
         $this->assertFalse($profilesById[$profileB->id]['voice']);
     }
@@ -174,6 +182,7 @@ class ProfileControllerTest extends TestAPI
         $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
         $profile = Profile::create([
             'user_id'       => $user->id,
+            'alias'         => 'Show Alias',
             'name'          => $this->faker->name,
             'description'   => $this->faker->text(200),
             'genre'         => 'male',
@@ -192,6 +201,7 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Profile retrieved successfully.');
         $response->assertJsonPath('data.id', $profile->id);
         $response->assertJsonPath('data.name', $profile->name);
+        $response->assertJsonPath('data.alias', $profile->alias);
         $response->assertJsonPath('data.description', $profile->description);
         $response->assertJsonPath('data.voice', true);
         $response->assertStatus(200);
@@ -239,6 +249,7 @@ class ProfileControllerTest extends TestAPI
 
         $new_data = [
             'name'          => $this->faker->name,
+            'alias'         => 'Updated Alias',
             'description'   => $this->faker->text(200),
             'genre'         => 'female',
             'active'        => false
@@ -252,9 +263,11 @@ class ProfileControllerTest extends TestAPI
 
         $new_profile = Profile::find($profile->id);
         $this->assertEquals($new_data['name'], $new_profile->name);
+        $this->assertEquals($new_data['alias'], $new_profile->alias);
         $this->assertEquals($new_data['description'], $new_profile->description);
         $this->assertEquals($new_data['genre'], $new_profile->genre);
         $this->assertFalse((boolean)$new_profile->active);
+        $response->assertJsonPath('data.alias', $new_data['alias']);
     }
 
     public function test_unauthorized_user_can_not_update_a_profile_data()

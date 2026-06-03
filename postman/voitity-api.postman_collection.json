@@ -423,7 +423,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}}\",\n  \"description\": \"{{profile_description}}\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"{{profile_personality}}\"\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}}\",\n  \"alias\": \"{{profile_alias}}\",\n  \"description\": \"{{profile_description}}\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"{{profile_personality}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile",
@@ -480,7 +480,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile/{{profile_id}}",

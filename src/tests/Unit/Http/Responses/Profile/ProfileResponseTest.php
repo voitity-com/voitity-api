@@ -17,6 +17,7 @@ class ProfileResponseTest extends TestCase
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
+            'alias' => 'Demo Alias',
             'name' => 'Demo Profile',
             'description' => 'Profile used for tests.',
             'genre' => 'neutral',
@@ -31,6 +32,7 @@ class ProfileResponseTest extends TestCase
 
         $this->assertSame(10, $payload['id']);
         $this->assertSame(20, $payload['user_id']);
+        $this->assertSame('Demo Alias', $payload['alias']);
         $this->assertSame('Demo Profile', $payload['name']);
         $this->assertSame('Profile used for tests.', $payload['description']);
         $this->assertSame('neutral', $payload['genre']);
@@ -48,6 +50,7 @@ class ProfileResponseTest extends TestCase
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
+            'alias' => null,
             'name' => 'Demo Profile',
             'description' => 'Profile used for tests.',
             'genre' => 'neutral',
@@ -75,6 +78,7 @@ class ProfileResponseTest extends TestCase
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
+            'alias' => null,
             'name' => 'Demo Profile',
             'description' => 'Profile used for tests.',
             'genre' => 'neutral',
@@ -102,6 +106,7 @@ class ProfileResponseTest extends TestCase
         $firstProfile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
+            'alias' => 'First Alias',
             'name' => 'First Profile',
             'description' => 'First profile description.',
             'genre' => 'neutral',
@@ -114,6 +119,7 @@ class ProfileResponseTest extends TestCase
         $secondProfile->setRawAttributes([
             'id' => 11,
             'user_id' => 20,
+            'alias' => 'Second Alias',
             'name' => 'Second Profile',
             'description' => 'Second profile description.',
             'genre' => 'neutral',
@@ -128,6 +134,8 @@ class ProfileResponseTest extends TestCase
         $this->assertCount(2, $payload['profiles']);
         $this->assertSame(10, $payload['profiles'][0]['id']);
         $this->assertSame(11, $payload['profiles'][1]['id']);
+        $this->assertSame('First Alias', $payload['profiles'][0]['alias']);
+        $this->assertSame('Second Alias', $payload['profiles'][1]['alias']);
         $this->assertFalse($payload['profiles'][1]['active']);
         $this->assertFalse($payload['profiles'][0]['voice']);
     }
