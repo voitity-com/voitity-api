@@ -208,6 +208,73 @@ class ProfileController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/api/profile/alias/{alias}",
+     *     summary="Get a profile by alias",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(
+     *         name="alias",
+     *         in="path",
+     *         required=true,
+     *         description="Profile alias",
+     *         @OA\Schema(type="string", maxLength=100)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile retrieved successfully.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Profile retrieved successfully."),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="user_id", type="integer", example=1),
+     *                 @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
+     *                 @OA\Property(property="name", type="string", example="John Doe"),
+     *                 @OA\Property(property="description", type="string", example="A short bio"),
+     *                 @OA\Property(property="genre", type="string", example="male"),
+     *                 @OA\Property(property="personality", type="string", example="friendly"),
+     *                 @OA\Property(property="active", type="boolean", example=true),
+     *                 @OA\Property(property="voice", type="boolean", example=true),
+     *                 @OA\Property(property="data", type="object", nullable=true),
+     *                 @OA\Property(property="created_at", type="string", format="date-time"),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=500, description="Unexpected error")
+     * )
+     */
+    public function getProfileByAlias(Request $request, string $alias): JsonResponse
+    {
+        try {
+            $profile = Profile::where('alias', $alias)
+                ->with('voices:id,profile_id,source_voice_id,source')
+                ->first();
+
+            if (!$profile) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            return response()->json([
+                'message' => 'Profile retrieved successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Error retrieving profile by alias.', [
+                'alias' => $alias,
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * @OA\Patch(
      *     path="/api/profile/{id}",
      *     summary="Update a profile",

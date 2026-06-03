@@ -465,6 +465,32 @@
           "response": []
         },
         {
+          "name": "Get Profile By Alias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/alias/{{profile_alias}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "alias",
+                "{{profile_alias}}"
+              ]
+            },
+            "description": "Retrieves a profile by alias. Requires profile:read and does not validate profile ownership."
+          },
+          "response": []
+        },
+        {
           "name": "Update Profile",
           "request": {
             "method": "PATCH",
