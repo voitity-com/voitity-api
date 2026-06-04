@@ -20,7 +20,12 @@ class AnswerBuilder
 
     public function getAnswer(Profile $profile, Message $question): AnswerResponse
     {
-        $chatAIAnswer = $this->chatAIClient->getAnswer($profile, $question->text);
+        $chatAIAnswer = $this->chatAIClient->getAnswer(
+            $profile,
+            $question->text,
+            $question->chat_id,
+            $question->id
+        );
 
         $audio = $this->getAudio($profile, $chatAIAnswer->answer);
 

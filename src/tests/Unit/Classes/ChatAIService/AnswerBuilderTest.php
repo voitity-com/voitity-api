@@ -68,7 +68,7 @@ class AnswerBuilderTest extends TestCase
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getAnswer')
             ->once()
-            ->with($profile, 'How are you?')
+            ->with($profile, 'How are you?', $question->chat_id, $question->id)
             ->andReturn($chatAiAnswer);
 
         /** @var MockInterface&VoiceClient $voiceClient */
@@ -140,7 +140,7 @@ class AnswerBuilderTest extends TestCase
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getAnswer')
             ->once()
-            ->with($profile, 'Any updates?')
+            ->with($profile, 'Any updates?', $question->chat_id, $question->id)
             ->andReturn($chatAiAnswer);
 
         $voiceManager = Mockery::mock(VoiceManager::class);
@@ -193,7 +193,7 @@ class AnswerBuilderTest extends TestCase
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getAnswer')
             ->once()
-            ->with($profile, 'Tell me a joke')
+            ->with($profile, 'Tell me a joke', $question->chat_id, $question->id)
             ->andReturn($chatAiAnswer);
 
         $voiceManager = Mockery::mock(VoiceManager::class);

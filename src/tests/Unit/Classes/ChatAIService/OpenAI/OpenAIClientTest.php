@@ -7,7 +7,10 @@ namespace Tests\Unit\Classes\ChatAIService\OpenAI;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Classes\ChatAIService\OpenAI\OpenAIClient;
+use App\Models\Chat;
+use App\Models\Message;
 use App\Models\Profile;
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
@@ -100,6 +103,81 @@ class OpenAIClientTest extends TestCase
                 && str_contains($systemPrompt, 'Do not reveal all profile information at once')
                 && !str_contains($systemPrompt, 'Provide legal advice')
                 && !str_contains($systemPrompt, 'Always maintain a warm, approachable tone');
+        });
+    }
+
+    #[Test]
+    public function it_includes_recent_chat_messages_in_the_system_prompt(): void
+    {
+        Log::spy();
+
+        Http::fake([
+            'https://fake-openai.test/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => 'Context-aware answer.'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 120,
+                    'completion_tokens' => 60,
+                    'total_tokens' => 180,
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Lex',
+            'description' => 'Lawyer assistant',
+            'genre' => 'legal',
+            'personality' => 'friendly',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $otherChat = Chat::create(['profile_id' => $profile->id]);
+
+        for ($i = 1; $i <= 7; $i++) {
+            Message::create([
+                'profile_id' => $profile->id,
+                'chat_id' => $chat->id,
+                'text' => "prior-message-{$i}",
+                'type' => $i % 2 === 0 ? 'answer' : 'question',
+                'source' => $i % 2 === 0 ? 'openai' : 'api',
+            ]);
+        }
+
+        Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $otherChat->id,
+            'text' => 'other-chat-message',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $currentQuestion = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'current-question',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $client = $this->makeClient();
+        $client->getAnswer($profile, $currentQuestion->text, $chat->id, $currentQuestion->id);
+
+        Http::assertSent(function ($request) {
+            $systemPrompt = $request->data()['messages'][0]['content'];
+
+            return str_contains($systemPrompt, 'Recent chat messages from this chat, oldest to newest')
+                && str_contains($systemPrompt, 'prior-message-2')
+                && str_contains($systemPrompt, 'prior-message-7')
+                && str_contains($systemPrompt, '"role":"assistant"')
+                && str_contains($systemPrompt, '"role":"user"')
+                && !str_contains($systemPrompt, 'prior-message-1')
+                && !str_contains($systemPrompt, 'current-question')
+                && !str_contains($systemPrompt, 'other-chat-message');
         });
     }
 

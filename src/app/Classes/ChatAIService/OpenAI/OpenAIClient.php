@@ -64,15 +64,17 @@ class OpenAIClient implements ChatAIClient
      *
      * @param Profile $profile The user profile for context
      * @param string $message The message to get an answer for
+     * @param int|null $chatId The chat ID used to load recent conversation context
+     * @param int|null $currentMessageId The current message ID to exclude from recent context
      * @return ChatAIAnswer The AI answer response
      */
-    public function getAnswer(Profile $profile, string $message): ChatAIAnswer
+    public function getAnswer(Profile $profile, string $message, ?int $chatId = null, ?int $currentMessageId = null): ChatAIAnswer
     {
         $requestUrl = $this->baseUrl . '/chat/completions';
         
         try {
             // Build the system prompt based on profile data
-            $systemPrompt = $this->buildSystemPrompt($profile);
+            $systemPrompt = $this->buildSystemPrompt($profile, $chatId, $currentMessageId);
             
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -230,7 +232,7 @@ class OpenAIClient implements ChatAIClient
      * @param Profile $profile
      * @return string
      */
-    private function buildSystemPrompt(Profile $profile): string
+    private function buildSystemPrompt(Profile $profile, ?int $chatId = null, ?int $currentMessageId = null): string
     {
         $prompt = $profile->name
             ? "Your name is: {$profile->name}"
@@ -257,12 +259,47 @@ class OpenAIClient implements ChatAIClient
                 $prompt .= ". Profile data: {$profileData}";
             }
         }
+
+        $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
+
+        if ($recentMessages !== []) {
+            $recentMessagesJson = json_encode($recentMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if ($recentMessagesJson !== false) {
+                $prompt .= ". Recent chat messages from this chat, oldest to newest: {$recentMessagesJson}. Use them only as conversation context and do not repeat them unless useful";
+            }
+        }
         
         $prompt .= ". Only answer using the information in this prompt. If the requested information is not available here, say you do not have that information at this moment";
         $prompt .= ". Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview";
         $prompt .= ". Always respond in character and maintain consistency with your defined role and personality.";
         
         return $prompt;
+    }
+
+    /**
+     * @return array<int, array{role: string, text: string}>
+     */
+    private function getRecentChatMessages(Profile $profile, ?int $chatId, ?int $currentMessageId): array
+    {
+        if (!$profile->exists || !$chatId) {
+            return [];
+        }
+
+        return $profile->messages()
+            ->where('chat_id', $chatId)
+            ->when($currentMessageId, fn ($query) => $query->where('id', '!=', $currentMessageId))
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get(['id', 'type', 'text', 'created_at'])
+            ->reverse()
+            ->values()
+            ->map(fn ($message) => [
+                'role' => $message->type === 'answer' ? 'assistant' : 'user',
+                'text' => $message->text,
+            ])
+            ->all();
     }
 
     /**
