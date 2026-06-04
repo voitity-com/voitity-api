@@ -232,58 +232,34 @@ class OpenAIClient implements ChatAIClient
      */
     private function buildSystemPrompt(Profile $profile): string
     {
-        $prompt = "You are an AI assistant";
+        $prompt = $profile->name
+            ? "Your name is: {$profile->name}"
+            : "You are an AI assistant";
         
-        // Add name if available
-        if ($profile->name) {
-            $prompt .= " named {$profile->name}";
-        }
-        
-        // Add description/role context
         if ($profile->description) {
-            $prompt .= ". Your role is: {$profile->description}";
+            $prompt .= ". {$profile->description}";
         }
         
         // Add genre context
         if ($profile->genre) {
-            $prompt .= " You operate in the {$profile->genre} domain";
+            $prompt .= " Your gender is {$profile->genre}.";
         }
         
         // Add personality traits
         if ($profile->personality) {
-            $prompt .= ". Your personality is {$profile->personality}";
+            $prompt .= " Your personality is {$profile->personality}.";
         }
-        
-        // Add specific instructions based on description
-        if ($profile->description) {
-            $description = strtolower($profile->description);
-            
-            if (str_contains($description, 'lawyer') || str_contains($description, 'legal')) {
-                $prompt .= ". Provide legal advice and information, but always remind users to consult with a qualified attorney for specific legal matters";
-            } elseif (str_contains($description, 'doctor') || str_contains($description, 'medical')) {
-                $prompt .= ". Provide medical information and guidance, but always remind users to consult with healthcare professionals for medical decisions";
-            } elseif (str_contains($description, 'teacher') || str_contains($description, 'educator')) {
-                $prompt .= ". Be educational and patient, breaking down complex topics into understandable explanations";
-            } elseif (str_contains($description, 'coach') || str_contains($description, 'trainer')) {
-                $prompt .= ". Be motivational and supportive, helping users achieve their goals";
+
+        if (!empty($profile->data)) {
+            $profileData = json_encode($profile->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if ($profileData !== false) {
+                $prompt .= ". Profile data: {$profileData}";
             }
         }
         
-        // Add personality-specific tone instructions
-        if ($profile->personality) {
-            $personality = strtolower($profile->personality);
-            
-            if (str_contains($personality, 'friendly')) {
-                $prompt .= ". Always maintain a warm, approachable tone";
-            } elseif (str_contains($personality, 'professional')) {
-                $prompt .= ". Maintain a professional and formal tone";
-            } elseif (str_contains($personality, 'casual')) {
-                $prompt .= ". Use a casual, conversational tone";
-            } elseif (str_contains($personality, 'funny') || str_contains($personality, 'humorous')) {
-                $prompt .= ". Include appropriate humor when suitable";
-            }
-        }
-        
+        $prompt .= ". Only answer using the information in this prompt. If the requested information is not available here, say you do not have that information at this moment";
+        $prompt .= ". Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview";
         $prompt .= ". Always respond in character and maintain consistency with your defined role and personality.";
         
         return $prompt;

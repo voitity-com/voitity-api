@@ -32,6 +32,14 @@ class OpenAIClientTest extends TestCase
         $profile->description = 'Lawyer assistant';
         $profile->genre = 'legal';
         $profile->personality = 'friendly';
+        $profile->data = [
+            'me' => [
+                'bio' => 'Legal assistant profile for tests.',
+            ],
+            'work' => [
+                'company' => 'Voitity',
+            ],
+        ];
 
         return $profile;
     }
@@ -75,10 +83,23 @@ class OpenAIClientTest extends TestCase
 
         Http::assertSent(function ($request) use ($profile) {
             $payload = $request->data();
+            $systemPrompt = $payload['messages'][0]['content'];
+
             return $request->url() === 'https://fake-openai.test/v1/chat/completions'
                 && $payload['model'] === 'gpt-4o-mini'
                 && $payload['messages'][0]['role'] === 'system'
-                && str_contains($payload['messages'][0]['content'], $profile->name);
+                && str_starts_with($systemPrompt, 'Your name is: ' . $profile->name)
+                && str_contains($systemPrompt, '. ' . $profile->description)
+                && str_contains($systemPrompt, 'Your personality is ' . $profile->personality)
+                && str_contains($systemPrompt, 'Profile data:')
+                && str_contains($systemPrompt, '"company":"Voitity"')
+                && str_contains($systemPrompt, 'Only answer using the information in this prompt')
+                && str_contains($systemPrompt, 'you do not have that information at this moment')
+                && str_contains($systemPrompt, 'Make the conversation feel natural and progressive')
+                && str_contains($systemPrompt, 'decide whether a short or detailed answer is appropriate')
+                && str_contains($systemPrompt, 'Do not reveal all profile information at once')
+                && !str_contains($systemPrompt, 'Provide legal advice')
+                && !str_contains($systemPrompt, 'Always maintain a warm, approachable tone');
         });
     }
 
