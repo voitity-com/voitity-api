@@ -563,6 +563,56 @@
       "name": "Messages",
       "item": [
         {
+          "name": "List Chats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && Array.isArray(json.data.chats) && json.data.chats.length) {",
+                  "  pm.environment.set('chat_id', json.data.chats[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/chats?profile_id={{profile_id}}&page={{chat_page}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "chats"
+              ],
+              "query": [
+                {
+                  "key": "profile_id",
+                  "value": "{{profile_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "{{chat_page}}"
+                }
+              ]
+            },
+            "description": "Lists chats for profile_id, ordered by last update descending and paginated by 20. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles."
+          },
+          "response": []
+        },
+        {
           "name": "Send Message - New Chat",
           "event": [
             {

@@ -20,6 +20,7 @@ return [
             'profile:read',
             'voice:write',
             'voice:use',
+            'chat:read',
             'messages:write',
             'user:write',
             'user:read',
@@ -34,6 +35,7 @@ return [
             'profile:read',
             'voice:write',
             'voice:use',
+            'chat:read',
             'messages:write',
             'user:write',
             'user:read',
@@ -48,6 +50,7 @@ return [
             'profile:read',
             'voice:write',
             'voice:use',
+            'chat:read',
             'messages:write',
             'user:write',
             'user:read',
@@ -58,6 +61,7 @@ return [
     'api' => [
         'abilities' => [
             'profile:read',
+            'chat:read',
             'voice:use',
             'messages:write',
             'user:read',
