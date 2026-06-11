@@ -613,6 +613,61 @@
           "response": []
         },
         {
+          "name": "List Chat Messages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && Array.isArray(json.data.messages) && json.data.messages.length) {",
+                  "  pm.environment.set('message_id', json.data.messages[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/chats/messages?profile_id={{profile_id}}&chat_id={{chat_id}}&page={{message_page}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "chats",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "profile_id",
+                  "value": "{{profile_id}}"
+                },
+                {
+                  "key": "chat_id",
+                  "value": "{{chat_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "{{message_page}}"
+                }
+              ]
+            },
+            "description": "Lists messages for chat_id within profile_id, ordered chronologically and paginated by 20. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles. The chat must belong to the profile."
+          },
+          "response": []
+        },
+        {
           "name": "Send Message - New Chat",
           "event": [
             {

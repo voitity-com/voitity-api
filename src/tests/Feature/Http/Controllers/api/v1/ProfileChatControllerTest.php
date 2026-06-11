@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Models\Chat;
+use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Hash;
 class ProfileChatControllerTest extends TestAPI
 {
     private const ENDPOINT_PROFILE = '/api/profile';
+
     private const ENDPOINT_PROFILE_CHATS = '/api/profile/chats';
+
+    private const ENDPOINT_CHAT_MESSAGES = '/api/profile/chats/messages';
 
     public function test_unauthorized_user_can_not_list_profile_chats(): void
     {
@@ -80,8 +84,8 @@ class ProfileChatControllerTest extends TestAPI
         $profile = $this->createProfileFor($user);
         $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
-            ->getJson(self::ENDPOINT_PROFILE_CHATS . '?profile_id=' . $profile->id);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->getJson(self::ENDPOINT_PROFILE_CHATS.'?profile_id='.$profile->id);
 
         $response->assertStatus(200);
         $response->assertJsonPath('message', 'Chats retrieved successfully.');
@@ -96,7 +100,7 @@ class ProfileChatControllerTest extends TestAPI
             'password' => Hash::make('test123'),
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->getJson(self::ENDPOINT_PROFILE_CHATS);
 
         $response->assertStatus(422);
@@ -197,6 +201,179 @@ class ProfileChatControllerTest extends TestAPI
         $response->assertJsonValidationErrors(['page']);
     }
 
+    public function test_unauthorized_user_can_not_list_chat_messages(): void
+    {
+        $profile = $this->createProfileFor(User::factory()->create());
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_user_without_chat_read_ability_can_not_list_chat_messages(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_can_list_chat_messages_for_own_profile_ordered_chronologically(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->createProfileFor($user);
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+
+        $lastMessage = $this->createMessage($profile, $chat, 'Last message', 'answer', '2026-06-03 10:00:00');
+        $firstMessage = $this->createMessage($profile, $chat, 'First message', 'question', '2026-06-01 10:00:00');
+        $middleMessage = $this->createMessage($profile, $chat, 'Middle message', 'answer', '2026-06-02 10:00:00');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Messages retrieved successfully.');
+        $response->assertJsonPath('data.pagination.current_page', 1);
+        $response->assertJsonPath('data.pagination.per_page', 20);
+        $response->assertJsonPath('data.pagination.total', 3);
+        $response->assertJsonCount(3, 'data.messages');
+
+        $messageIds = collect($response->json('data.messages'))->pluck('id')->all();
+
+        $this->assertSame([$firstMessage->id, $middleMessage->id, $lastMessage->id], $messageIds);
+        $this->assertSame('First message', $response->json('data.messages.0.text'));
+        $this->assertSame('question', $response->json('data.messages.0.type'));
+        $this->assertSame('api', $response->json('data.messages.0.source'));
+        $this->assertSame(['meta' => 'value'], $response->json('data.messages.0.data'));
+        $this->assertSame($firstMessage->created_at->toJSON(), $response->json('data.messages.0.created_at'));
+    }
+
+    public function test_admin_can_list_messages_for_any_profile_chat(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'password' => Hash::make('test123'),
+        ]);
+        $owner = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($owner);
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+        $message = $this->createMessage($profile, $chat, 'Admin readable', 'question', '2026-06-01 10:00:00');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($admin->email, 'test123'))
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.pagination.total', 1);
+        $response->assertJsonPath('data.messages.0.id', $message->id);
+    }
+
+    public function test_non_admin_can_not_list_messages_for_foreign_profile(): void
+    {
+        $reader = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $owner = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($owner);
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+        $this->createMessage($profile, $chat, 'Private message', 'question', '2026-06-01 10:00:00');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($reader->email, 'test123'))
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_list_chat_messages_fails_when_chat_does_not_belong_to_profile(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->createProfileFor($user);
+        $otherProfile = $this->createProfileFor($user);
+        $foreignChat = $this->createChat($otherProfile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$foreignChat->id);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Chat not found.');
+    }
+
+    public function test_list_chat_messages_paginates_twenty_by_default_and_accepts_page_query_parameter(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->createProfileFor($user);
+        $chat = $this->createChat($profile, '2026-06-01 10:00:00', '2026-06-02 10:00:00');
+        $messages = collect();
+
+        for ($index = 1; $index <= 25; $index++) {
+            $messages->push($this->createMessage(
+                $profile,
+                $chat,
+                'Message '.$index,
+                $index % 2 === 0 ? 'answer' : 'question',
+                sprintf('2026-06-%02d 10:00:00', $index)
+            ));
+        }
+
+        $token = $this->getToken($user->email, 'test123');
+        $expectedPageTwoIds = $messages
+            ->sortBy(fn (Message $message) => [$message->created_at->timestamp, $message->id])
+            ->slice(20)
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        $firstPageResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id);
+
+        $firstPageResponse->assertStatus(200);
+        $firstPageResponse->assertJsonCount(20, 'data.messages');
+        $firstPageResponse->assertJsonPath('data.pagination.current_page', 1);
+        $firstPageResponse->assertJsonPath('data.pagination.per_page', 20);
+        $firstPageResponse->assertJsonPath('data.pagination.last_page', 2);
+        $firstPageResponse->assertJsonPath('data.pagination.total', 25);
+
+        $secondPageResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?profile_id='.$profile->id.'&chat_id='.$chat->id.'&page=2');
+
+        $secondPageResponse->assertStatus(200);
+        $secondPageResponse->assertJsonCount(5, 'data.messages');
+        $secondPageResponse->assertJsonPath('data.pagination.current_page', 2);
+        $this->assertSame($expectedPageTwoIds, collect($secondPageResponse->json('data.messages'))->pluck('id')->all());
+    }
+
+    public function test_list_chat_messages_validates_required_fields_and_page(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->getJson(self::ENDPOINT_CHAT_MESSAGES.'?page=0');
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['profile_id', 'chat_id', 'page']);
+    }
+
     private function createProfileFor(User $user): Profile
     {
         return Profile::create([
@@ -222,5 +399,27 @@ class ProfileChatControllerTest extends TestAPI
             ]);
 
         return $chat->fresh();
+    }
+
+    private function createMessage(Profile $profile, Chat $chat, string $text, string $type, string $createdAt): Message
+    {
+        $message = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => $text,
+            'type' => $type,
+            'source' => 'api',
+            'audio' => null,
+            'data' => ['meta' => 'value'],
+        ]);
+
+        DB::table('messages')
+            ->where('id', $message->id)
+            ->update([
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ]);
+
+        return $message->fresh();
     }
 }
