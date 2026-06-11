@@ -55,6 +55,10 @@ class ProfileChatControllerTest extends TestAPI
         $newChat = $this->createChat($profile, '2026-06-03 10:00:00', '2026-06-05 10:00:00');
         $middleChat = $this->createChat($profile, '2026-06-02 10:00:00', '2026-06-04 10:00:00');
         $foreignChat = $this->createChat($otherProfile, '2026-06-04 10:00:00', '2026-06-06 10:00:00');
+        $this->createMessage($profile, $newChat, 'API question', 'question', '2026-06-03 10:00:00', 'api');
+        $this->createMessage($profile, $newChat, 'API follow up', 'question', '2026-06-03 10:01:00', 'api');
+        $lastOpenAiMessage = $this->createMessage($profile, $newChat, 'OpenAI answer', 'answer', '2026-06-03 10:02:00', 'openai');
+        $this->createMessage($otherProfile, $foreignChat, 'Foreign question', 'question', '2026-06-06 10:00:00', 'api');
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->getJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/chats');
@@ -70,9 +74,22 @@ class ProfileChatControllerTest extends TestAPI
 
         $this->assertSame([$newChat->id, $middleChat->id, $oldChat->id], $chatIds);
         $this->assertNotContains($foreignChat->id, $chatIds);
-        $this->assertSame(['id', 'created_at', 'updated_at'], array_keys($response->json('data.chats.0')));
+        $this->assertSame([
+            'id',
+            'created_at',
+            'updated_at',
+            'api_messages_count',
+            'openai_messages_count',
+            'last_message_at',
+        ], array_keys($response->json('data.chats.0')));
         $this->assertSame($newChat->created_at->toJSON(), $response->json('data.chats.0.created_at'));
         $this->assertSame($newChat->updated_at->toJSON(), $response->json('data.chats.0.updated_at'));
+        $this->assertSame(2, $response->json('data.chats.0.api_messages_count'));
+        $this->assertSame(1, $response->json('data.chats.0.openai_messages_count'));
+        $this->assertSame($lastOpenAiMessage->created_at->toJSON(), $response->json('data.chats.0.last_message_at'));
+        $this->assertSame(0, $response->json('data.chats.1.api_messages_count'));
+        $this->assertSame(0, $response->json('data.chats.1.openai_messages_count'));
+        $this->assertNull($response->json('data.chats.1.last_message_at'));
     }
 
     public function test_user_can_list_profile_chats_with_profile_id_query_parameter(): void
@@ -401,14 +418,20 @@ class ProfileChatControllerTest extends TestAPI
         return $chat->fresh();
     }
 
-    private function createMessage(Profile $profile, Chat $chat, string $text, string $type, string $createdAt): Message
-    {
+    private function createMessage(
+        Profile $profile,
+        Chat $chat,
+        string $text,
+        string $type,
+        string $createdAt,
+        string $source = 'api'
+    ): Message {
         $message = Message::create([
             'profile_id' => $profile->id,
             'chat_id' => $chat->id,
             'text' => $text,
             'type' => $type,
-            'source' => 'api',
+            'source' => $source,
             'audio' => null,
             'data' => ['meta' => 'value'],
         ]);

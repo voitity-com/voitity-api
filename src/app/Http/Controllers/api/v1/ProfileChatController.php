@@ -60,7 +60,10 @@ class ProfileChatController extends Controller
      *
      *                         @OA\Property(property="id", type="integer", example=12),
      *                         @OA\Property(property="created_at", type="string", format="date-time"),
-     *                         @OA\Property(property="updated_at", type="string", format="date-time")
+     *                         @OA\Property(property="updated_at", type="string", format="date-time"),
+     *                         @OA\Property(property="api_messages_count", type="integer", example=8),
+     *                         @OA\Property(property="openai_messages_count", type="integer", example=8),
+     *                         @OA\Property(property="last_message_at", type="string", format="date-time", nullable=true)
      *                     )
      *                 ),
      *                 @OA\Property(
@@ -107,6 +110,11 @@ class ProfileChatController extends Controller
             }
 
             $chats = $profile->chats()
+                ->withCount([
+                    'messages as api_messages_count' => fn ($query) => $query->where('source', 'api'),
+                    'messages as openai_messages_count' => fn ($query) => $query->where('source', 'openai'),
+                ])
+                ->withMax('messages as last_message_at', 'created_at')
                 ->orderByDesc('updated_at')
                 ->paginate(
                     self::PER_PAGE,

@@ -608,7 +608,7 @@
                 }
               ]
             },
-            "description": "Lists chats for profile_id, ordered by last update descending and paginated by 20. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles."
+            "description": "Lists chats for profile_id, ordered by last update descending and paginated by 20. Includes api/openai message counts and last_message_at. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles."
           },
           "response": []
         },
