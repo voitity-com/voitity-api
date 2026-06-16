@@ -2,9 +2,11 @@
 
 namespace App\Classes\ChatAIService;
 
+use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
-use App\Classes\VoiceService\VoiceClientGeneratedAudio;
+use App\Enums\SubscriptionUsageType;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Voice;
@@ -15,8 +17,7 @@ class AnswerBuilder
     public function __construct(
         private readonly ChatAIClient $chatAIClient,
         private readonly VoiceManager $voiceManager
-    ) {
-    }
+    ) {}
 
     public function getAnswer(Profile $profile, Message $question): AnswerResponse
     {
@@ -26,6 +27,22 @@ class AnswerBuilder
             $question->chat_id,
             $question->id
         );
+
+        if ($profile->user_id && $chatAIAnswer->source === 'openai') {
+            event(new SubscriptionUsageRequested(
+                userId: $profile->user_id,
+                usageType: SubscriptionUsageType::ChatOpenAiCall,
+                amounts: ['chat_messages' => 1],
+                profileId: $profile->id,
+                sourceType: Message::class,
+                sourceId: (string) $question->id,
+                idempotencyKey: "chat-openai:message:{$question->id}",
+                metadata: [
+                    'status' => $chatAIAnswer->status,
+                    'confidence' => $chatAIAnswer->confidence,
+                ]
+            ));
+        }
 
         $audio = $this->getAudio($profile, $chatAIAnswer->answer);
 
@@ -58,7 +75,7 @@ class AnswerBuilder
         /** @var Voice|null $voice */
         $voice = $profile->voices()->where('active', true)->first();
 
-        if (!$voice) {
+        if (! $voice) {
             return null;
         }
 
@@ -77,6 +94,7 @@ class AnswerBuilder
 
         try {
             $voiceService = new VoiceService($voice, $voiceClient);
+
             return $voiceService->generateAudio($text);
         } catch (\Throwable $e) {
             Log::warning('Audio generation failed.', [

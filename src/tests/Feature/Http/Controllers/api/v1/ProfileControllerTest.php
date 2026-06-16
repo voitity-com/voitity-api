@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionUsageType;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
@@ -42,6 +45,8 @@ class ProfileControllerTest extends TestAPI
 
     public function test_user_can_create_a_profile()
     {
+        Event::fake([SubscriptionUsageRequested::class]);
+
         $profile_data = [
             'name' => $this->faker->name,
             'alias' => 'Demo Alias',
@@ -66,6 +71,13 @@ class ProfileControllerTest extends TestAPI
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $response->assertJsonPath('data.alias', $profile_data['alias']);
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
+        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($new_profile) {
+            return $event->usageType === SubscriptionUsageType::ProfileCreated
+                && $event->userId === $new_profile->user_id
+                && $event->profileId === $new_profile->id
+                && $event->amounts === ['profiles' => 1]
+                && $event->idempotencyKey === "profile-created:{$new_profile->id}";
+        });
     }
 
     public function test_unauthorized_user_can_not_list_profiles()

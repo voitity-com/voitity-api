@@ -39,6 +39,7 @@ database resets, or filesystem cleanup unless the user explicitly asks.
 - Models live in `src/app/Models`.
 - Third-party service adapters live in `src/app/Classes`.
 - Application enums live in `src/app/Enums`.
+- Subscription usage accounting lives in `src/app/Classes/Subscriptions`.
 - AI chat logic lives in `src/app/Classes/ChatAIService`.
 - Video generation logic lives in `src/app/Classes/VideoAIService`.
 - Voice generation and cloning logic lives in `src/app/Classes/VoiceService`.
@@ -69,6 +70,10 @@ migrations.
 For finite string states such as profile status, prefer a PHP backed enum under
 `src/app/Enums` and cast it from the Eloquent model. Store the column as a
 string in migrations; avoid native database enums unless explicitly required.
+
+When tracking subscription limits or paid provider usage, use queued events and
+listeners that call `SubscriptionUsageRecorder`. Do not put quota accounting or
+third-party cost calculations directly in controllers.
 
 ## Authorization
 

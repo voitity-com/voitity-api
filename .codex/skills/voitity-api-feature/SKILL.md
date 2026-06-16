@@ -40,6 +40,10 @@ model, and return the enum value in response payloads. Store the database
 column as a string in migrations unless a native database enum is explicitly
 required.
 
+For subscription usage or quota tracking, dispatch events and handle accounting
+in queued listeners through `SubscriptionUsageRecorder`; keep controllers and
+API responses free of direct accounting work.
+
 ## Authorization
 
 Protected resources must validate authentication, ability, and ownership.
