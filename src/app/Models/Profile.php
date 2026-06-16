@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProfileStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,11 +20,17 @@ class Profile extends Model
         'genre',
         'personality',
         'active',
+        'status',
         'data',
+    ];
+
+    protected $attributes = [
+        'status' => ProfileStatus::Draft->value,
     ];
 
     protected $casts = [
         'data' => 'array',
+        'status' => ProfileStatus::class,
     ];
 
     public function user()

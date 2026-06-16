@@ -13,7 +13,7 @@ class ProfileResponseTest extends TestCase
 {
     public function test_profile_response_returns_profile_payload(): void
     {
-        $profile = new Profile();
+        $profile = new Profile;
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
@@ -23,6 +23,7 @@ class ProfileResponseTest extends TestCase
             'genre' => 'neutral',
             'personality' => 'friendly',
             'active' => true,
+            'status' => 'draft',
             'data' => json_encode(['me' => ['bio' => 'test']]),
         ], true);
         $profile->created_at = Carbon::parse('2026-05-26 10:00:00', 'UTC');
@@ -38,6 +39,7 @@ class ProfileResponseTest extends TestCase
         $this->assertSame('neutral', $payload['genre']);
         $this->assertSame('friendly', $payload['personality']);
         $this->assertTrue($payload['active']);
+        $this->assertSame('draft', $payload['status']);
         $this->assertFalse($payload['voice']);
         $this->assertSame(['me' => ['bio' => 'test']], $payload['data']);
         $this->assertSame('2026-05-26T10:00:00.000000Z', $payload['created_at']);
@@ -46,7 +48,7 @@ class ProfileResponseTest extends TestCase
 
     public function test_profile_response_returns_true_when_profile_has_configured_voice(): void
     {
-        $profile = new Profile();
+        $profile = new Profile;
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
@@ -56,10 +58,11 @@ class ProfileResponseTest extends TestCase
             'genre' => 'neutral',
             'personality' => 'friendly',
             'active' => true,
+            'status' => 'ready',
             'data' => null,
         ], true);
 
-        $voice = new Voice();
+        $voice = new Voice;
         $voice->setRawAttributes([
             'source_voice_id' => 'provider-voice-id',
             'source' => 'elevenlabs',
@@ -74,7 +77,7 @@ class ProfileResponseTest extends TestCase
 
     public function test_profile_response_returns_false_when_voice_source_fields_are_empty(): void
     {
-        $profile = new Profile();
+        $profile = new Profile;
         $profile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
@@ -84,10 +87,11 @@ class ProfileResponseTest extends TestCase
             'genre' => 'neutral',
             'personality' => 'friendly',
             'active' => true,
+            'status' => 'hidden',
             'data' => null,
         ], true);
 
-        $voice = new Voice();
+        $voice = new Voice;
         $voice->setRawAttributes([
             'source_voice_id' => 'provider-voice-id',
             'source' => '',
@@ -102,7 +106,7 @@ class ProfileResponseTest extends TestCase
 
     public function test_profile_list_response_returns_profiles_and_total(): void
     {
-        $firstProfile = new Profile();
+        $firstProfile = new Profile;
         $firstProfile->setRawAttributes([
             'id' => 10,
             'user_id' => 20,
@@ -112,10 +116,11 @@ class ProfileResponseTest extends TestCase
             'genre' => 'neutral',
             'personality' => 'friendly',
             'active' => true,
+            'status' => 'published',
             'data' => null,
         ], true);
 
-        $secondProfile = new Profile();
+        $secondProfile = new Profile;
         $secondProfile->setRawAttributes([
             'id' => 11,
             'user_id' => 20,
@@ -125,6 +130,7 @@ class ProfileResponseTest extends TestCase
             'genre' => 'neutral',
             'personality' => 'helpful',
             'active' => false,
+            'status' => 'draft',
             'data' => null,
         ], true);
 
@@ -136,6 +142,8 @@ class ProfileResponseTest extends TestCase
         $this->assertSame(11, $payload['profiles'][1]['id']);
         $this->assertSame('First Alias', $payload['profiles'][0]['alias']);
         $this->assertSame('Second Alias', $payload['profiles'][1]['alias']);
+        $this->assertSame('published', $payload['profiles'][0]['status']);
+        $this->assertSame('draft', $payload['profiles'][1]['status']);
         $this->assertFalse($payload['profiles'][1]['active']);
         $this->assertFalse($payload['profiles'][0]['voice']);
     }

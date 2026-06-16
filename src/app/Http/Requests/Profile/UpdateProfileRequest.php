@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Profile;
 
+use App\Enums\ProfileStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProfileRequest extends FormRequest
 {
@@ -20,6 +22,7 @@ class UpdateProfileRequest extends FormRequest
             'genre' => 'sometimes|string|max:10',
             'personality' => 'sometimes|string|max:200',
             'active' => 'sometimes|boolean',
+            'status' => ['sometimes', Rule::enum(ProfileStatus::class)],
         ];
     }
 }

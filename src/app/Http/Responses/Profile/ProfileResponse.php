@@ -6,9 +6,7 @@ use App\Models\Profile;
 
 class ProfileResponse
 {
-    public function __construct(private readonly Profile $profile)
-    {
-    }
+    public function __construct(private readonly Profile $profile) {}
 
     public function toArray(): array
     {
@@ -21,6 +19,7 @@ class ProfileResponse
             'genre' => $this->profile->genre,
             'personality' => $this->profile->personality,
             'active' => (bool) $this->profile->active,
+            'status' => $this->profile->status?->value,
             'voice' => $this->hasConfiguredVoice(),
             'data' => $this->profile->data,
             'created_at' => $this->profile->created_at?->toJSON(),
@@ -36,7 +35,7 @@ class ProfileResponse
             );
         }
 
-        if (!$this->profile->exists) {
+        if (! $this->profile->exists) {
             return false;
         }
 

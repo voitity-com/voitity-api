@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Enums\ProfileStatus;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
@@ -11,7 +12,6 @@ use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
 {
-
     /**
      * Profile api endpoint
      */
@@ -19,7 +19,7 @@ class ProfileControllerTest extends TestAPI
 
     public function test_store_fails_with_invalid_fields()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
             ->postJson(self::ENDPOINT_PROFILE, [
                 'name' => '', // empty
                 'alias' => str_repeat('a', 101),
@@ -33,24 +33,24 @@ class ProfileControllerTest extends TestAPI
 
     public function test_unauthorized_user_can_not_create_profile()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
             ->json('POST', self::ENDPOINT_PROFILE, []);
 
         $response->assertStatus(401);
         $response->assertJsonPath('message', 'Unauthenticated.');
     }
 
-    public function test_user_Can_create_a_profile()
+    public function test_user_can_create_a_profile()
     {
         $profile_data = [
-            'name'          => $this->faker->name,
-            'alias'         => 'Demo Alias',
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'name' => $this->faker->name,
+            'alias' => 'Demo Alias',
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
             ->postJson(self::ENDPOINT_PROFILE, $profile_data);
 
         $response->assertJsonPath('message', 'Profile created successfully.');
@@ -62,13 +62,15 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($profile_data['name'], $new_profile->name);
         $this->assertEquals($profile_data['alias'], $new_profile->alias);
         $this->assertEquals($profile_data['description'], $new_profile->description);
-        $this->assertTrue((boolean)$new_profile->active);
+        $this->assertTrue((bool) $new_profile->active);
+        $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $response->assertJsonPath('data.alias', $profile_data['alias']);
+        $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
     }
 
     public function test_unauthorized_user_can_not_list_profiles()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
             ->json('GET', self::ENDPOINT_PROFILE);
 
         $response->assertStatus(401);
@@ -80,7 +82,7 @@ class ProfileControllerTest extends TestAPI
         $user = User::factory()->create(['role' => 'admin']);
         $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('GET', self::ENDPOINT_PROFILE);
 
         $response->assertStatus(403);
@@ -92,27 +94,28 @@ class ProfileControllerTest extends TestAPI
         $otherUser = User::factory()->create(['role' => 'admin']);
 
         $profileA = Profile::create([
-            'user_id'       => $user->id,
-            'alias'         => 'Profile A',
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'alias' => 'Profile A',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Published,
         ]);
         $profileB = Profile::create([
-            'user_id'       => $user->id,
-            'alias'         => 'Profile B',
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'female',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'alias' => 'Profile B',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'female',
+            'personality' => $this->faker->text(100),
         ]);
         $otherProfile = Profile::create([
-            'user_id'       => $otherUser->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $otherUser->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
         Voice::factory()->create([
             'user_id' => $user->id,
@@ -127,7 +130,7 @@ class ProfileControllerTest extends TestAPI
             'source' => '',
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->json('GET', self::ENDPOINT_PROFILE);
 
         $response->assertStatus(200);
@@ -146,14 +149,16 @@ class ProfileControllerTest extends TestAPI
         $profilesById = collect($response->json('data.profiles'))->keyBy('id');
         $this->assertSame('Profile A', $profilesById[$profileA->id]['alias']);
         $this->assertSame('Profile B', $profilesById[$profileB->id]['alias']);
+        $this->assertSame(ProfileStatus::Published->value, $profilesById[$profileA->id]['status']);
+        $this->assertSame(ProfileStatus::Draft->value, $profilesById[$profileB->id]['status']);
         $this->assertTrue($profilesById[$profileA->id]['voice']);
         $this->assertFalse($profilesById[$profileB->id]['voice']);
     }
 
     public function test_unauthorized_user_can_not_show_a_profile()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
-            ->json('GET', self::ENDPOINT_PROFILE . '/100');
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
+            ->json('GET', self::ENDPOINT_PROFILE.'/100');
 
         $response->assertStatus(401);
         $response->assertJsonPath('message', 'Unauthenticated.');
@@ -163,15 +168,15 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
-            ->json('GET', self::ENDPOINT_PROFILE . '/' . $profile->id);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->json('GET', self::ENDPOINT_PROFILE.'/'.$profile->id);
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
@@ -181,12 +186,13 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'alias'         => 'Show Alias',
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'alias' => 'Show Alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Hidden,
         ]);
         Voice::factory()->create([
             'user_id' => $user->id,
@@ -195,14 +201,15 @@ class ProfileControllerTest extends TestAPI
             'source' => 'elevenlabs',
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
-            ->json('GET', self::ENDPOINT_PROFILE . '/' . $profile->id);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('GET', self::ENDPOINT_PROFILE.'/'.$profile->id);
 
         $response->assertJsonPath('message', 'Profile retrieved successfully.');
         $response->assertJsonPath('data.id', $profile->id);
         $response->assertJsonPath('data.name', $profile->name);
         $response->assertJsonPath('data.alias', $profile->alias);
         $response->assertJsonPath('data.description', $profile->description);
+        $response->assertJsonPath('data.status', ProfileStatus::Hidden->value);
         $response->assertJsonPath('data.voice', true);
         $response->assertStatus(200);
     }
@@ -212,12 +219,13 @@ class ProfileControllerTest extends TestAPI
         $owner = User::factory()->create(['role' => 'admin']);
         $reader = User::factory()->create(['role' => 'api']);
         $profile = Profile::create([
-            'user_id'       => $owner->id,
-            'alias'         => 'public-alias',
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $owner->id,
+            'alias' => 'public-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Published,
         ]);
         Voice::factory()->create([
             'user_id' => $owner->id,
@@ -228,14 +236,15 @@ class ProfileControllerTest extends TestAPI
 
         $token = $reader->createToken('test-token', ['profile:read'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->json('GET', self::ENDPOINT_PROFILE . '/alias/' . $profile->alias);
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$profile->alias);
 
         $response->assertStatus(200);
         $response->assertJsonPath('message', 'Profile retrieved successfully.');
         $response->assertJsonPath('data.id', $profile->id);
         $response->assertJsonPath('data.user_id', $owner->id);
         $response->assertJsonPath('data.alias', $profile->alias);
+        $response->assertJsonPath('data.status', ProfileStatus::Published->value);
         $response->assertJsonPath('data.voice', true);
     }
 
@@ -243,26 +252,26 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'api']);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'alias'         => 'private-alias',
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'alias' => 'private-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
         $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->json('GET', self::ENDPOINT_PROFILE . '/alias/' . $profile->alias);
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$profile->alias);
 
         $response->assertStatus(403);
     }
 
     public function test_unauthorized_user_can_not_update_a_profile()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
-            ->json('PATCH', self::ENDPOINT_PROFILE . '/100', []);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/100', []);
 
         $response_content = json_decode($response->getContent());
 
@@ -274,15 +283,15 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
-            ->json('PATCH', self::ENDPOINT_PROFILE . '/' . $profile->id, []);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, []);
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
@@ -292,23 +301,24 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
         $new_data = [
-            'name'          => $this->faker->name,
-            'alias'         => 'Updated Alias',
-            'description'   => $this->faker->text(200),
-            'genre'         => 'female',
-            'active'        => false
+            'name' => $this->faker->name,
+            'alias' => 'Updated Alias',
+            'description' => $this->faker->text(200),
+            'genre' => 'female',
+            'active' => false,
+            'status' => ProfileStatus::Published->value,
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
-            ->json('PATCH', self::ENDPOINT_PROFILE . '/' . $profile->id, $new_data);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, $new_data);
 
         $response->assertJsonPath('message', 'Profile updated successfully.');
         $response->assertStatus(200);
@@ -318,14 +328,34 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($new_data['alias'], $new_profile->alias);
         $this->assertEquals($new_data['description'], $new_profile->description);
         $this->assertEquals($new_data['genre'], $new_profile->genre);
-        $this->assertFalse((boolean)$new_profile->active);
+        $this->assertFalse((bool) $new_profile->active);
+        $this->assertSame(ProfileStatus::Published, $new_profile->status);
         $response->assertJsonPath('data.alias', $new_data['alias']);
+        $response->assertJsonPath('data.status', ProfileStatus::Published->value);
+    }
+
+    public function test_user_can_not_update_profile_with_invalid_status()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, ['status' => 'archived']);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['status']);
     }
 
     public function test_unauthorized_user_can_not_update_a_profile_data()
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
-            ->json('PUT', self::ENDPOINT_PROFILE . '/100/data', []);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
+            ->json('PUT', self::ENDPOINT_PROFILE.'/100/data', []);
 
         $response_content = json_decode($response->getContent());
 
@@ -337,21 +367,21 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
         $new_data = [
-            'me'            => ['description' => $this->faker->text(200)],
-            'work'          => [$this->faker->text(100), $this->faker->text(100)],
-            'projects'      => [$this->faker->text(100), $this->faker->text(100)],
+            'me' => ['description' => $this->faker->text(200)],
+            'work' => [$this->faker->text(100), $this->faker->text(100)],
+            'projects' => [$this->faker->text(100), $this->faker->text(100)],
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
-            ->json('PUT', self::ENDPOINT_PROFILE . '/' . $profile->id . '/data', ['data' => $new_data]);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data', ['data' => $new_data]);
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
@@ -361,21 +391,21 @@ class ProfileControllerTest extends TestAPI
     {
         $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
         $profile = Profile::create([
-            'user_id'       => $user->id,
-            'name'          => $this->faker->name,
-            'description'   => $this->faker->text(200),
-            'genre'         => 'male',
-            'personality'   => $this->faker->text(100)
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
         ]);
 
         $new_data = [
-            'me'            => ['description' => $this->faker->text(200)],
-            'work'          => [$this->faker->text(100), $this->faker->text(100)],
-            'projects'      => [$this->faker->text(100), $this->faker->text(100)],
+            'me' => ['description' => $this->faker->text(200)],
+            'work' => [$this->faker->text(100), $this->faker->text(100)],
+            'projects' => [$this->faker->text(100), $this->faker->text(100)],
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
-            ->json('PUT', self::ENDPOINT_PROFILE . '/' . $profile->id . '/data', ['data' => $new_data]);
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data', ['data' => $new_data]);
 
         $response->assertJsonPath('message', 'Profile updated successfully.');
         $response->assertStatus(200);
@@ -383,5 +413,4 @@ class ProfileControllerTest extends TestAPI
         $new_profile = Profile::find($profile->id);
         $this->assertEquals($new_data, $new_profile->data);
     }
-
 }

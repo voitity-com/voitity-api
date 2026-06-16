@@ -435,7 +435,7 @@
                 "profile"
               ]
             },
-            "description": "Creates a profile and stores profile_id from data.id."
+            "description": "Creates a profile and stores profile_id from data.id. New profiles default to status draft."
           },
           "response": []
         },
@@ -506,7 +506,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true,\n  \"status\": \"{{profile_status}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile/{{profile_id}}",
@@ -519,7 +519,7 @@
                 "{{profile_id}}"
               ]
             },
-            "description": "Updates the profile identified by profile_id."
+            "description": "Updates the profile identified by profile_id. Valid status values: draft, ready, published, hidden."
           },
           "response": []
         },

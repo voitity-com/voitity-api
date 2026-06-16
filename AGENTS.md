@@ -38,6 +38,7 @@ database resets, or filesystem cleanup unless the user explicitly asks.
 - API response wrappers live in `src/app/Http/Responses`.
 - Models live in `src/app/Models`.
 - Third-party service adapters live in `src/app/Classes`.
+- Application enums live in `src/app/Enums`.
 - AI chat logic lives in `src/app/Classes/ChatAIService`.
 - Video generation logic lives in `src/app/Classes/VideoAIService`.
 - Voice generation and cloning logic lives in `src/app/Classes/VoiceService`.
@@ -61,6 +62,13 @@ When adding or changing an endpoint:
 
 Default pagination for list endpoints is 20 unless the user specifies another
 default.
+
+For database changes, always create a new migration. Do not edit historical
+migrations.
+
+For finite string states such as profile status, prefer a PHP backed enum under
+`src/app/Enums` and cast it from the Eloquent model. Store the column as a
+string in migrations; avoid native database enums unless explicitly required.
 
 ## Authorization
 

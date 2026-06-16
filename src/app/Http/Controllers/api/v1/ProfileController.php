@@ -21,18 +21,23 @@ class ProfileController extends Controller
      *     summary="List authenticated user profiles",
      *     tags={"Profile"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Profiles retrieved successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Profiles retrieved successfully."),
      *             @OA\Property(property="data", type="object",
      *                 @OA\Property(property="total", type="integer", example=2),
      *                 @OA\Property(
      *                     property="profiles",
      *                     type="array",
+     *
      *                     @OA\Items(
      *                         type="object",
+     *
      *                         @OA\Property(property="id", type="integer", example=1),
      *                         @OA\Property(property="user_id", type="integer", example=1),
      *                         @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
@@ -41,6 +46,7 @@ class ProfileController extends Controller
      *                         @OA\Property(property="genre", type="string", example="male"),
      *                         @OA\Property(property="personality", type="string", example="friendly"),
      *                         @OA\Property(property="active", type="boolean", example=true),
+     *                         @OA\Property(property="status", type="string", enum={"draft","ready","published","hidden"}, example="draft"),
      *                         @OA\Property(property="voice", type="boolean", example=true),
      *                         @OA\Property(property="data", type="object", nullable=true),
      *                         @OA\Property(property="created_at", type="string", format="date-time", nullable=true),
@@ -50,6 +56,7 @@ class ProfileController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="User not found"),
@@ -61,7 +68,7 @@ class ProfileController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
@@ -91,10 +98,13 @@ class ProfileController extends Controller
      *     summary="Create a new profile",
      *     tags={"Profile"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\JsonContent(
      *             required={"name","description","genre","personality"},
+     *
      *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
      *             @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
@@ -103,14 +113,18 @@ class ProfileController extends Controller
      *             @OA\Property(property="active", type="boolean", example=true)
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Profile created successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Profile created successfully."),
      *             @OA\Property(property="data", type="object")
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=422, description="Validation error")
      * )
@@ -120,7 +134,7 @@ class ProfileController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
@@ -142,17 +156,22 @@ class ProfileController extends Controller
      *     summary="Get a profile",
      *     tags={"Profile"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(
      *         name="profile",
      *         in="path",
      *         required=true,
      *         description="Profile ID",
+     *
      *         @OA\Schema(type="integer")
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Profile retrieved successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Profile retrieved successfully."),
      *             @OA\Property(property="data", type="object",
      *                 @OA\Property(property="id", type="integer", example=1),
@@ -163,6 +182,7 @@ class ProfileController extends Controller
      *                 @OA\Property(property="genre", type="string", example="male"),
      *                 @OA\Property(property="personality", type="string", example="friendly"),
      *                 @OA\Property(property="active", type="boolean", example=true),
+     *                 @OA\Property(property="status", type="string", enum={"draft","ready","published","hidden"}, example="draft"),
      *                 @OA\Property(property="voice", type="boolean", example=true),
      *                 @OA\Property(property="data", type="object", nullable=true),
      *                 @OA\Property(property="created_at", type="string", format="date-time"),
@@ -170,6 +190,7 @@ class ProfileController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile not found"),
@@ -181,11 +202,11 @@ class ProfileController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$profile || $profile->user_id !== $user->id) {
+            if (! $profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
@@ -213,17 +234,22 @@ class ProfileController extends Controller
      *     summary="Get a profile by alias",
      *     tags={"Profile"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(
      *         name="alias",
      *         in="path",
      *         required=true,
      *         description="Profile alias",
+     *
      *         @OA\Schema(type="string", maxLength=100)
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Profile retrieved successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Profile retrieved successfully."),
      *             @OA\Property(property="data", type="object",
      *                 @OA\Property(property="id", type="integer", example=1),
@@ -234,6 +260,7 @@ class ProfileController extends Controller
      *                 @OA\Property(property="genre", type="string", example="male"),
      *                 @OA\Property(property="personality", type="string", example="friendly"),
      *                 @OA\Property(property="active", type="boolean", example=true),
+     *                 @OA\Property(property="status", type="string", enum={"draft","ready","published","hidden"}, example="published"),
      *                 @OA\Property(property="voice", type="boolean", example=true),
      *                 @OA\Property(property="data", type="object", nullable=true),
      *                 @OA\Property(property="created_at", type="string", format="date-time"),
@@ -241,6 +268,7 @@ class ProfileController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile not found"),
@@ -254,7 +282,7 @@ class ProfileController extends Controller
                 ->with('voices:id,profile_id,source_voice_id,source')
                 ->first();
 
-            if (!$profile) {
+            if (! $profile) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
@@ -280,32 +308,42 @@ class ProfileController extends Controller
      *     summary="Update a profile",
      *     tags={"Profile"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(
      *         name="id",
      *         in="path",
      *         required=true,
      *         description="Profile ID",
+     *
      *         @OA\Schema(type="integer")
      *     ),
+     *
      *     @OA\RequestBody(
      *         required=false,
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="name", type="string", maxLength=100, example="John Doe"),
      *             @OA\Property(property="alias", type="string", maxLength=100, nullable=true, example="JD"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="A short bio"),
      *             @OA\Property(property="genre", type="string", maxLength=10, example="male"),
      *             @OA\Property(property="personality", type="string", maxLength=200, example="friendly"),
-     *             @OA\Property(property="active", type="boolean", example=true)
+     *             @OA\Property(property="active", type="boolean", example=true),
+     *             @OA\Property(property="status", type="string", enum={"draft","ready","published","hidden"}, example="published")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Profile updated successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
      *             @OA\Property(property="data", type="object")
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile not found"),
@@ -317,11 +355,11 @@ class ProfileController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$profile || $profile->user_id !== $user->id) {
+            if (! $profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
@@ -337,50 +375,59 @@ class ProfileController extends Controller
         }
     }
 
-        /**
-         * @OA\Put(
-         *     path="/api/profile/{profile}/data",
-         *     summary="Update the data field of a profile",
-         *     tags={"Profile"},
-         *     security={{"sanctum":{}}},
-         *     @OA\Parameter(
-         *         name="profile",
-         *         in="path",
-         *         required=true,
-         *         description="Profile ID",
-         *         @OA\Schema(type="integer")
-         *     ),
-         *     @OA\RequestBody(
-         *         required=true,
-         *         @OA\JsonContent(
-         *             required={"data"},
-         *             @OA\Property(property="data", type="object", example={"me": {"bio": "text"}, "work": {"company": "Acme"}})
-         *         )
-         *     ),
-         *     @OA\Response(
-         *         response=200,
-         *         description="Profile updated successfully.",
-         *         @OA\JsonContent(
-         *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
-         *             @OA\Property(property="data", type="object")
-         *         )
-         *     ),
-         *     @OA\Response(response=401, description="Unauthenticated"),
-         *     @OA\Response(response=403, description="Unauthorized"),
-         *     @OA\Response(response=404, description="Profile not found"),
-         *     @OA\Response(response=422, description="Validation error")
-         * )
-         */
+    /**
+     * @OA\Put(
+     *     path="/api/profile/{profile}/data",
+     *     summary="Update the data field of a profile",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *
+     *     @OA\Parameter(
+     *         name="profile",
+     *         in="path",
+     *         required=true,
+     *         description="Profile ID",
+     *
+     *         @OA\Schema(type="integer")
+     *     ),
+     *
+     *     @OA\RequestBody(
+     *         required=true,
+     *
+     *         @OA\JsonContent(
+     *             required={"data"},
+     *
+     *             @OA\Property(property="data", type="object", example={"me": {"bio": "text"}, "work": {"company": "Acme"}})
+     *         )
+     *     ),
+     *
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile updated successfully.",
+     *
+     *         @OA\JsonContent(
+     *
+     *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function updateData(StoreProfileDataRequest $request, Profile $profile): JsonResponse
     {
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$profile || $profile->user_id !== $user->id) {
+            if (! $profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 

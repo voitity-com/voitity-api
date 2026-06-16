@@ -33,6 +33,13 @@ For every new or changed endpoint:
 9. Update Postman when the public endpoint changes.
 10. Run the smallest relevant test first.
 
+For schema changes, create a new migration and do not edit historical
+migrations. For finite string states, prefer a PHP backed enum under
+`src/app/Enums`, validate it with `Rule::enum(...)`, cast it on the Eloquent
+model, and return the enum value in response payloads. Store the database
+column as a string in migrations unless a native database enum is explicitly
+required.
+
 ## Authorization
 
 Protected resources must validate authentication, ability, and ownership.
