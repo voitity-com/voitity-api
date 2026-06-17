@@ -12,6 +12,7 @@ use App\Http\Controllers\api\v1\UserController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\VoiceController;
 use App\Http\Controllers\api\v1\VoiceSampleController;
+use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 
 Route::get('health', function() {
     return response()->json(['message' => 'ok']);
@@ -51,4 +52,8 @@ Route::prefix('/voice')->group(function() {
 Route::prefix('/avatar')->group(function() {
     Route::post('/generate', [AvatarController::class, 'generateAvatar'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
     Route::get('/{profile}', [AvatarController::class, 'show'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
+});
+
+Route::prefix('/subscription')->group(function() {
+    Route::get('/limits', [SubscriptionLimitsController::class, 'show'])->middleware(['auth:sanctum', 'abilities:subscription-limits:read']);
 });

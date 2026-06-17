@@ -25,7 +25,8 @@ return [
             'user:write',
             'user:read',
             'avatar:write',
-            'avatar:read'
+            'avatar:read',
+            'subscription-limits:read'
         ]
     ],
     'user' => [
@@ -40,7 +41,8 @@ return [
             'user:write',
             'user:read',
             'avatar:write',
-            'avatar:read'
+            'avatar:read',
+            'subscription-limits:read'
         ]
     ],
     'profile' => [

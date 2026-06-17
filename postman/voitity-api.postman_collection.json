@@ -366,6 +366,36 @@
       ]
     },
     {
+      "name": "Subscription",
+      "item": [
+        {
+          "name": "Get Subscription Limits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "limits"
+              ]
+            },
+            "description": "Gets the active subscription for the authenticated user, remaining limits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Profile",
       "item": [
         {
