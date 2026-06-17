@@ -2,9 +2,12 @@
 
 namespace App\Listeners\Voices;
 
-use App\Classes\VoiceService\VoiceService;
 use App\Classes\VoiceService\VoiceManager;
+use App\Classes\VoiceService\VoiceService;
+use App\Enums\SubscriptionUsageType;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
+use App\Models\Voice;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -29,8 +32,6 @@ class CloneVoice implements ShouldQueue
 
     /**
      * The VoiceManager instance.
-     *
-     * @var VoiceManager
      */
     protected VoiceManager $voiceManager;
 
@@ -44,16 +45,13 @@ class CloneVoice implements ShouldQueue
 
     /**
      * Handle the event.
-     *
-     * @param VoiceSampleAdded $event
-     * @return void
      */
     public function handle(VoiceSampleAdded $event): void
     {
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
 
-        if (!empty($voice->source_voice_id)) {
+        if (! empty($voice->source_voice_id)) {
             Log::info('Voice already cloned, skipping CloneVoice listener', [
                 'voice_id' => $voice->id,
                 'voice_name' => $voice->name,
@@ -62,24 +60,25 @@ class CloneVoice implements ShouldQueue
                 'file' => $voiceSample->file,
                 'duration' => $voiceSample->duration,
             ]);
+
             return;
         }
-        
+
         Log::info('CloneVoice listener triggered', [
             'voice_id' => $voice->id,
             'voice_name' => $voice->name,
             'user_id' => $voice->user_id,
-            'voice_sample_id' => $voiceSample->id, 
+            'voice_sample_id' => $voiceSample->id,
         ]);
 
         try {
             // Create VoiceService instance using VoiceManager
             $voiceClient = $this->voiceManager->driver();
             $voiceService = new VoiceService($voice, $voiceClient);
-            
+
             // Clone the voice using the voice sample
             $clonedVoice = $voiceService->cloneVoice($voiceSample);
-            
+
             Log::info('Voice cloning successful', [
                 'voice_id' => $voice->id,
                 'voice_sample_id' => $voiceSample->id,
@@ -87,7 +86,24 @@ class CloneVoice implements ShouldQueue
                 'provider_voice_id' => $clonedVoice->getProviderVoiceId(),
                 'status' => $clonedVoice->status,
             ]);
-            
+
+            if ($clonedVoice->isSuccessful()) {
+                event(new SubscriptionUsageRequested(
+                    userId: $voice->user_id,
+                    usageType: SubscriptionUsageType::VoiceCloned,
+                    amounts: ['voice_clones' => 1],
+                    profileId: $voice->profile_id,
+                    sourceType: Voice::class,
+                    sourceId: (string) $voice->id,
+                    idempotencyKey: "voice-clone:{$voice->id}",
+                    metadata: [
+                        'provider' => $clonedVoice->source,
+                        'provider_voice_id' => $clonedVoice->getProviderVoiceId(),
+                        'voice_sample_id' => $voiceSample->id,
+                    ]
+                ));
+            }
+
         } catch (\Exception $e) {
             Log::error('Voice cloning failed during processing', [
                 'voice_id' => $voice->id,
@@ -95,11 +111,11 @@ class CloneVoice implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             // Re-throw to trigger the failed method
             throw $e;
         }
-        
+
         Log::info('CloneVoice processing completed', [
             'voice_id' => $voice->id,
         ]);
@@ -107,16 +123,12 @@ class CloneVoice implements ShouldQueue
 
     /**
      * Handle a job failure.
-     *
-     * @param VoiceSampleAdded $event
-     * @param \Throwable $exception
-     * @return void
      */
     public function failed(VoiceSampleAdded $event, \Throwable $exception): void
     {
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
-        
+
         Log::error('CloneVoice listener failed', [
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,

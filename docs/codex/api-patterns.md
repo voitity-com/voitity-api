@@ -33,6 +33,10 @@ with `Rule::enum(...)`, cast it from the model, and serialize the enum value in
 API responses. Store the database column as a string in migrations to keep
 migrations portable and easy to roll forward.
 
+For subscription usage accounting, dispatch an event and let a queued listener
+call `SubscriptionUsageRecorder`. Keep endpoint responses independent from
+usage tracking performance.
+
 ## Pagination
 
 Default list pagination is 20 unless the user specifies another value.

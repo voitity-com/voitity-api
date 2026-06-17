@@ -2,17 +2,21 @@
 
 namespace App\Providers;
 
-use App\Events\Voices\VoiceSampleAdded;
-use App\Listeners\Voices\CloneVoice;
-use App\Listeners\Voices\AddSample;
-use App\Events\MessageStored;
-use App\Listeners\ProcessStoredMessage;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Events\MessageStored;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
+use App\Events\Voices\VoiceSampleAdded;
 use App\Listeners\AI\Images\GetAIImageForAvatar;
 use App\Listeners\AI\Videos\CreateAiVideoForAvatar;
 use App\Listeners\AI\Videos\GetAIVideoForAvatar;
+use App\Listeners\ProcessStoredMessage;
+use App\Listeners\Subscriptions\RecordSubscriptionUsage;
+use App\Listeners\Subscriptions\TrackAvatarImageUsage;
+use App\Listeners\Subscriptions\TrackAvatarVideoUsage;
+use App\Listeners\Voices\AddSample;
+use App\Listeners\Voices\CloneVoice;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
@@ -32,19 +36,22 @@ class EventServiceProvider extends ServiceProvider
         ],
         AiImageForAvatarCreated::class => [
             GetAIImageForAvatar::class,
+            TrackAvatarImageUsage::class,
         ],
         AiImageForAvatarGenerated::class => [
             CreateAiVideoForAvatar::class,
         ],
         AiVideoForAvatarCreated::class => [
             GetAIVideoForAvatar::class,
+            TrackAvatarVideoUsage::class,
+        ],
+        SubscriptionUsageRequested::class => [
+            RecordSubscriptionUsage::class,
         ],
     ];
 
     /**
      * Register any events for your application.
-     *
-     * @return void
      */
     public function boot(): void
     {
@@ -53,8 +60,6 @@ class EventServiceProvider extends ServiceProvider
 
     /**
      * Determine if events and listeners should be automatically discovered.
-     *
-     * @return bool
      */
     public function shouldDiscoverEvents(): bool
     {

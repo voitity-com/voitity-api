@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Enums\SubscriptionUsageType;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreProfileDataRequest;
 use App\Http\Requests\Profile\StoreProfileRequest;
@@ -139,6 +141,16 @@ class ProfileController extends Controller
             }
 
             $profile = $user->profiles()->create($request->validated());
+
+            event(new SubscriptionUsageRequested(
+                userId: $user->id,
+                usageType: SubscriptionUsageType::ProfileCreated,
+                amounts: ['profiles' => 1],
+                profileId: $profile->id,
+                sourceType: Profile::class,
+                sourceId: (string) $profile->id,
+                idempotencyKey: "profile-created:{$profile->id}"
+            ));
 
             return response()->json([
                 'message' => 'Profile created successfully.',

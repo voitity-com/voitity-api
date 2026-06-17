@@ -67,4 +67,9 @@ class Profile extends Model
     {
         return $this->hasMany(ProfileAvatar::class);
     }
+
+    public function subscriptionUses(): HasMany
+    {
+        return $this->hasMany(SubscriptionUse::class);
+    }
 }

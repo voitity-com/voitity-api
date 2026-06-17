@@ -8,18 +8,20 @@ use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\VoiceService\VoiceClient;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
+use App\Enums\SubscriptionUsageType;
+use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
+use Illuminate\Support\Facades\Event;
 use Mockery;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
 class AnswerBuilderTest extends TestCase
 {
-
     protected function tearDown(): void
     {
         Mockery::close();
@@ -28,6 +30,8 @@ class AnswerBuilderTest extends TestCase
 
     public function test_get_answer_stores_audio_payload_when_generation_succeeds(): void
     {
+        Event::fake([SubscriptionUsageRequested::class]);
+
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
             'user_id' => $user->id,
@@ -109,6 +113,20 @@ class AnswerBuilderTest extends TestCase
 
         $this->assertSame('https://cdn.example.com/audio/answer.mp3', $response['audio_url']);
         $this->assertSame('Doing great!', $response['text']);
+        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $question) {
+            return $event->usageType === SubscriptionUsageType::ChatOpenAiCall
+                && $event->userId === $profile->user_id
+                && $event->profileId === $profile->id
+                && $event->sourceId === (string) $question->id
+                && $event->amounts === ['chat_messages' => 1];
+        });
+        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $voice) {
+            return $event->usageType === SubscriptionUsageType::VoiceTtsCharacters
+                && $event->userId === $profile->user_id
+                && $event->profileId === $profile->id
+                && $event->sourceId === (string) $voice->id
+                && $event->amounts === ['tts_characters' => strlen('Doing great!')];
+        });
     }
 
     public function test_get_answer_without_active_voice_returns_null_audio(): void

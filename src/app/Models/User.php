@@ -3,11 +3,11 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Config;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
@@ -58,14 +58,12 @@ class User extends Authenticatable
 
     /**
      * Return abilities for the specific role
-     *
-     * @return array
      */
     public function getRoleAbilities(): array
     {
-        return Config::get('roles.' . $this->role . '.abilities') ?? [];
+        return Config::get('roles.'.$this->role.'.abilities') ?? [];
     }
-    
+
     /**
      * Get the profiles for the user.
      */
@@ -73,7 +71,7 @@ class User extends Authenticatable
     {
         return $this->hasMany(Profile::class);
     }
-    
+
     /**
      * Get the voices for the user.
      */
@@ -104,5 +102,20 @@ class User extends Authenticatable
     public function profileAvatars()
     {
         return $this->hasMany(ProfileAvatar::class);
+    }
+
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    public function subscriptionLimits()
+    {
+        return $this->hasMany(SubscriptionLimit::class);
+    }
+
+    public function subscriptionUses()
+    {
+        return $this->hasMany(SubscriptionUse::class);
     }
 }
