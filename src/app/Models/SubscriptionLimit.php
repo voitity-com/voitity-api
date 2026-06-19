@@ -18,11 +18,13 @@ class SubscriptionLimit extends Model
         'voice_clones_remaining',
         'tts_characters_remaining',
         'chat_messages_remaining',
+        'credits_remaining',
     ];
 
     protected $casts = [
         'period_started_at' => 'datetime',
         'period_renews_at' => 'datetime',
+        'credits_remaining' => 'float',
     ];
 
     public function subscription(): BelongsTo

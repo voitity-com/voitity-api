@@ -389,7 +389,7 @@
                 "limits"
               ]
             },
-            "description": "Gets the active subscription for the authenticated user, remaining limits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
+            "description": "Gets the active subscription for the authenticated user, remaining limits including credits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
           },
           "response": []
         }

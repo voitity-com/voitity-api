@@ -9,6 +9,11 @@ use Illuminate\Support\Collection;
 class SubscriptionLimitsResponse
 {
     private const METRICS = [
+        'credits' => [
+            'remaining' => 'credits_remaining',
+            'used' => 'credits_used',
+            'decimal' => true,
+        ],
         'profiles' => [
             'remaining' => 'profiles_remaining',
             'used' => 'profiles_used',
@@ -36,7 +41,7 @@ class SubscriptionLimitsResponse
     ];
 
     /**
-     * @param  array<string, int>  $usageTotals
+     * @param  array<string, int|float>  $usageTotals
      * @param  Collection<int, object>  $usageBreakdown
      */
     public function __construct(
@@ -83,12 +88,12 @@ class SubscriptionLimitsResponse
 
         return collect(self::METRICS)
             ->mapWithKeys(function (array $columns, string $metric) use ($limit): array {
-                $remaining = (int) ($limit?->{$columns['remaining']} ?? 0);
-                $used = (int) ($this->usageTotals[$metric] ?? 0);
+                $remaining = $this->usageValue($metric, $limit?->{$columns['remaining']} ?? 0);
+                $used = $this->usageValue($metric, $this->usageTotals[$metric] ?? 0);
 
                 return [
                     $metric => [
-                        'included' => $remaining + $used,
+                        'included' => $this->sumUsageValues($metric, $remaining, $used),
                         'remaining' => $remaining,
                         'used' => $used,
                     ],
@@ -98,13 +103,13 @@ class SubscriptionLimitsResponse
     }
 
     /**
-     * @param  array<string, int>  $usage
+     * @param  array<string, int|float>  $usage
      */
     private function usageData(array $usage): array
     {
         return collect(self::METRICS)
             ->mapWithKeys(fn (array $columns, string $metric): array => [
-                $metric => (int) ($usage[$metric] ?? 0),
+                $metric => $this->usageValue($metric, $usage[$metric] ?? 0),
             ])
             ->all();
     }
@@ -116,6 +121,7 @@ class SubscriptionLimitsResponse
                 'usage_type' => $this->enumValue($row->usage_type),
                 'records_count' => (int) $row->records_count,
                 'used' => $this->usageData([
+                    'credits' => (float) $row->credits_used,
                     'profiles' => (int) $row->profiles_used,
                     'avatar_images' => (int) $row->avatar_images_used,
                     'avatar_video_seconds' => (int) $row->avatar_video_seconds_used,
@@ -127,6 +133,26 @@ class SubscriptionLimitsResponse
             ])
             ->values()
             ->all();
+    }
+
+    private function usageValue(string $metric, mixed $value): int|float
+    {
+        if ((bool) (self::METRICS[$metric]['decimal'] ?? false)) {
+            return round((float) $value, 2);
+        }
+
+        return (int) $value;
+    }
+
+    private function sumUsageValues(string $metric, int|float $remaining, int|float $used): int|float
+    {
+        $total = $remaining + $used;
+
+        if ((bool) (self::METRICS[$metric]['decimal'] ?? false)) {
+            return round((float) $total, 2);
+        }
+
+        return (int) $total;
     }
 
     private function dateTimeToJson(mixed $value): ?string

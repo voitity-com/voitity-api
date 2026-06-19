@@ -47,10 +47,12 @@ class SubscriptionUsageRecorderTest extends TestCase
         $this->assertSame(1, $limit->voice_clones_remaining);
         $this->assertSame(10000, $limit->tts_characters_remaining);
         $this->assertSame(1000, $limit->chat_messages_remaining);
+        $this->assertSame(1000.0, $limit->credits_remaining);
 
         $this->assertSame($subscription->id, $use->subscription_id);
         $this->assertSame($profile->id, $use->profile_id);
         $this->assertSame(1, $use->profiles_used);
+        $this->assertSame(0.0, $use->credits_used);
         $this->assertSame(SubscriptionUsageType::ProfileCreated, $use->usage_type);
     }
 
@@ -79,6 +81,38 @@ class SubscriptionUsageRecorderTest extends TestCase
         $this->assertSame($firstUse->id, $secondUse->id);
         $this->assertSame(1, SubscriptionUse::count());
         $this->assertSame(0, SubscriptionLimit::first()->avatar_images_remaining);
+        $this->assertSame(1000.0, SubscriptionLimit::first()->credits_remaining);
+    }
+
+    public function test_it_reduces_credits_for_chat_messages_and_tts_characters(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $chatUse = $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::ChatOpenAiCall,
+            amounts: ['chat_messages' => 1],
+            idempotencyKey: 'chat-openai:message:1',
+            profileId: $profile->id
+        );
+
+        $ttsUse = $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::VoiceTtsCharacters,
+            amounts: ['tts_characters' => 150],
+            idempotencyKey: 'tts:voice:1',
+            profileId: $profile->id
+        );
+
+        $limit = SubscriptionLimit::first();
+
+        $this->assertSame(0.5, $chatUse->credits_used);
+        $this->assertSame(7.5, $ttsUse->credits_used);
+        $this->assertSame(999, $limit->chat_messages_remaining);
+        $this->assertSame(9850, $limit->tts_characters_remaining);
+        $this->assertSame(992.0, $limit->credits_remaining);
     }
 
     public function test_it_renews_expired_subscription_and_resets_limits(): void
@@ -105,6 +139,7 @@ class SubscriptionUsageRecorderTest extends TestCase
             'voice_clones_remaining' => 0,
             'tts_characters_remaining' => 0,
             'chat_messages_remaining' => 0,
+            'credits_remaining' => 0,
         ]);
 
         (new SubscriptionUsageRecorder)->record(
@@ -124,6 +159,7 @@ class SubscriptionUsageRecorderTest extends TestCase
         $this->assertSame(SubscriptionStatus::Renewed, $renewedSubscription->status);
         $this->assertSame(999, $renewedLimit->chat_messages_remaining);
         $this->assertSame(1, $renewedLimit->profiles_remaining);
+        $this->assertSame(999.5, $renewedLimit->credits_remaining);
     }
 
     private function profileFor(User $user): Profile

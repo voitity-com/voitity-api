@@ -24,6 +24,7 @@ class SubscriptionUse extends Model
         'voice_clones_used',
         'tts_characters_used',
         'chat_messages_used',
+        'credits_used',
         'metadata',
         'used_at',
     ];
@@ -32,6 +33,7 @@ class SubscriptionUse extends Model
         'usage_type' => SubscriptionUsageType::class,
         'metadata' => 'array',
         'used_at' => 'datetime',
+        'credits_used' => 'float',
     ];
 
     public function subscription(): BelongsTo

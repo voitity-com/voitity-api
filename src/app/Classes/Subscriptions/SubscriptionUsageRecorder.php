@@ -87,6 +87,7 @@ class SubscriptionUsageRecorder
             $subscription = $this->currentSubscriptionFor($user);
             $limit = $this->currentLimitFor($subscription);
             $normalizedAmounts = $this->normalizeAmounts($amounts);
+            $creditsUsed = $this->creditsUsedForPlan($subscription->plan, $normalizedAmounts);
 
             $use = SubscriptionUse::create(array_merge([
                 'subscription_id' => $subscription->id,
@@ -98,13 +99,14 @@ class SubscriptionUsageRecorder
                 'idempotency_key' => $idempotencyKey,
                 'metadata' => $metadata,
                 'used_at' => now(),
-            ], $this->usageColumns($normalizedAmounts)));
+            ], $this->usageColumns($normalizedAmounts, $creditsUsed)));
 
             foreach ($normalizedAmounts as $metric => $amount) {
                 $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
                 $limit->{$limitColumn} = max(0, ((int) $limit->{$limitColumn}) - $amount);
             }
 
+            $limit->credits_remaining = round(max(0, ((float) $limit->credits_remaining) - $creditsUsed), 2);
             $limit->save();
 
             return $use;
@@ -182,7 +184,7 @@ class SubscriptionUsageRecorder
             'user_id' => $subscription->user_id,
             'period_started_at' => Carbon::parse($subscription->started_at),
             'period_renews_at' => Carbon::parse($subscription->renews_at),
-        ], $this->limitColumns($limits)));
+        ], $this->limitColumns($subscription->plan, $limits)));
     }
 
     /**
@@ -201,9 +203,9 @@ class SubscriptionUsageRecorder
 
     /**
      * @param  array<string, int>  $amounts
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
-    private function usageColumns(array $amounts): array
+    private function usageColumns(array $amounts, float $creditsUsed): array
     {
         $columns = [];
 
@@ -211,14 +213,16 @@ class SubscriptionUsageRecorder
             $columns[self::METRIC_COLUMNS[$metric]['use']] = $amount;
         }
 
+        $columns['credits_used'] = $creditsUsed;
+
         return $columns;
     }
 
     /**
      * @param  array<string, int>  $limits
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
-    private function limitColumns(array $limits): array
+    private function limitColumns(SubscriptionPlan $plan, array $limits): array
     {
         $columns = [];
 
@@ -226,7 +230,40 @@ class SubscriptionUsageRecorder
             $columns[self::METRIC_COLUMNS[$metric]['limit']] = max(0, (int) ($limits[$metric] ?? 0));
         }
 
+        $columns['credits_remaining'] = $this->creditTotalForPlan($plan);
+
         return $columns;
+    }
+
+    /**
+     * @param  array<string, int>  $amounts
+     */
+    private function creditsUsedForPlan(SubscriptionPlan $plan, array $amounts): float
+    {
+        $allocations = config("subscriptions.plans.{$plan->value}.credits.allocations", []);
+        $creditsUsed = 0.0;
+
+        foreach ($amounts as $metric => $amount) {
+            if ($amount <= 0 || ! isset($allocations[$metric])) {
+                continue;
+            }
+
+            $credits = (float) ($allocations[$metric]['credits'] ?? 0);
+            $units = (float) ($allocations[$metric]['units'] ?? 0);
+
+            if ($credits <= 0 || $units <= 0) {
+                continue;
+            }
+
+            $creditsUsed += $amount * ($credits / $units);
+        }
+
+        return round($creditsUsed, 2);
+    }
+
+    private function creditTotalForPlan(SubscriptionPlan $plan): float
+    {
+        return round((float) config("subscriptions.plans.{$plan->value}.credits.total", 0), 2);
     }
 
     /**

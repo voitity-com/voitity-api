@@ -37,7 +37,7 @@ class SubscriptionLimitsController extends Controller
      *                     @OA\Property(property="user_id", type="integer", example=4),
      *                     @OA\Property(property="plan", type="string", example="starter"),
      *                     @OA\Property(property="plan_name", type="string", example="Starter"),
-     *                     @OA\Property(property="price_usd", type="number", format="float", example=7),
+     *                     @OA\Property(property="price_usd", type="number", format="float", example=8),
      *                     @OA\Property(property="currency", type="string", example="USD"),
      *                     @OA\Property(property="interval", type="string", example="monthly"),
      *                     @OA\Property(property="status", type="string", example="first"),
@@ -97,11 +97,12 @@ class SubscriptionLimitsController extends Controller
     }
 
     /**
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
     private function usageTotals(Collection $usageBreakdown): array
     {
         return [
+            'credits' => round((float) $usageBreakdown->sum('credits_used'), 2),
             'profiles' => (int) $usageBreakdown->sum('profiles_used'),
             'avatar_images' => (int) $usageBreakdown->sum('avatar_images_used'),
             'avatar_video_seconds' => (int) $usageBreakdown->sum('avatar_video_seconds_used'),
@@ -116,6 +117,7 @@ class SubscriptionLimitsController extends Controller
         return $subscription->uses()
             ->select('usage_type')
             ->selectRaw('COUNT(*) as records_count')
+            ->selectRaw('SUM(credits_used) as credits_used')
             ->selectRaw('SUM(profiles_used) as profiles_used')
             ->selectRaw('SUM(avatar_images_used) as avatar_images_used')
             ->selectRaw('SUM(avatar_video_seconds_used) as avatar_video_seconds_used')

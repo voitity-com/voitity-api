@@ -37,12 +37,16 @@ class RecordSubscriptionUsageTest extends TestCase
 
         (new RecordSubscriptionUsage(new SubscriptionUsageRecorder))->handle($event);
 
-        $this->assertSame(9850, SubscriptionLimit::first()->tts_characters_remaining);
+        $limit = SubscriptionLimit::first();
+
+        $this->assertSame(9850, $limit->tts_characters_remaining);
+        $this->assertSame(992.5, $limit->credits_remaining);
         $this->assertDatabaseHas('subscription_uses', [
             'user_id' => $user->id,
             'profile_id' => $profile->id,
             'usage_type' => SubscriptionUsageType::VoiceTtsCharacters->value,
             'tts_characters_used' => 150,
+            'credits_used' => 7.5,
             'idempotency_key' => 'tts:test',
         ]);
     }

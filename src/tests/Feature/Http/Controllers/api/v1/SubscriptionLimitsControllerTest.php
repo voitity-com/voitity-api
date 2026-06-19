@@ -49,6 +49,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'usage_type' => SubscriptionUsageType::ProfileCreated,
             'idempotency_key' => 'profile-created:1',
             'profiles_used' => 1,
+            'credits_used' => 0,
             'used_at' => '2026-06-17 10:00:00',
         ]);
 
@@ -59,6 +60,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'usage_type' => SubscriptionUsageType::AvatarVideoCreated,
             'idempotency_key' => 'avatar-video:1',
             'avatar_video_seconds_used' => 2,
+            'credits_used' => 0,
             'used_at' => '2026-06-17 11:00:00',
         ]);
 
@@ -69,6 +71,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'usage_type' => SubscriptionUsageType::VoiceTtsCharacters,
             'idempotency_key' => 'voice-tts:1',
             'tts_characters_used' => 1000,
+            'credits_used' => 50,
             'used_at' => '2026-06-17 12:00:00',
         ]);
 
@@ -88,6 +91,9 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription.interval', 'monthly');
         $response->assertJsonPath('data.subscription.status', 'first');
         $response->assertJsonPath('data.subscription.active', true);
+        $response->assertJsonPath('data.limits.credits.included', 1000);
+        $response->assertJsonPath('data.limits.credits.remaining', 950);
+        $response->assertJsonPath('data.limits.credits.used', 50);
         $response->assertJsonPath('data.limits.profiles.included', 1);
         $response->assertJsonPath('data.limits.profiles.remaining', 0);
         $response->assertJsonPath('data.limits.profiles.used', 1);
@@ -97,6 +103,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.tts_characters.included', 10000);
         $response->assertJsonPath('data.limits.tts_characters.remaining', 9000);
         $response->assertJsonPath('data.limits.tts_characters.used', 1000);
+        $response->assertJsonPath('data.usage.totals.credits', 50);
         $response->assertJsonPath('data.usage.totals.profiles', 1);
         $response->assertJsonPath('data.usage.totals.avatar_video_seconds', 2);
         $response->assertJsonPath('data.usage.totals.tts_characters', 1000);
@@ -108,6 +115,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $this->assertSame(1, $usageByType['avatar_video_created']['records_count']);
         $this->assertSame(2, $usageByType['avatar_video_created']['used']['avatar_video_seconds']);
         $this->assertSame(1, $usageByType['voice_tts_characters']['records_count']);
+        $this->assertSame(50, $usageByType['voice_tts_characters']['used']['credits']);
         $this->assertSame(1000, $usageByType['voice_tts_characters']['used']['tts_characters']);
     }
 
@@ -164,6 +172,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'voice_clones_remaining' => 1,
             'tts_characters_remaining' => 9000,
             'chat_messages_remaining' => 1000,
+            'credits_remaining' => 950,
         ]);
 
         return $subscription;
