@@ -20,7 +20,7 @@ WORKDIR /var/www/html
 COPY src/ /var/www/html
 
 # Install Laravel dependencies
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 # Add startup checks for bind-mounted development source
 COPY docker/entrypoint.sh /usr/local/bin/laravel-entrypoint
