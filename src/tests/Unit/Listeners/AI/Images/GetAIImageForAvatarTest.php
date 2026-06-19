@@ -30,7 +30,7 @@ class GetAIImageForAvatarTest extends TestCase
     public function it_stores_generated_image_updates_record_and_dispatches_generated_event(): void
     {
         Event::fake([AiImageForAvatarGenerated::class]);
-        Storage::fake('public');
+        Storage::fake('profiles');
         Http::fake([
             'https://example.com/generated-image.png' => Http::response('image-bytes', 200, [
                 'Content-Type' => 'image/png',
@@ -53,9 +53,11 @@ class GetAIImageForAvatarTest extends TestCase
 
         $aiImage->refresh();
 
+        $path = "images/{$aiImage->id}.png";
+
         $this->assertSame('succeeded', $aiImage->status);
-        $this->assertSame("aiimages/{$aiImage->id}.png", $aiImage->file);
-        Storage::disk('public')->assertExists($aiImage->file);
+        $this->assertSame(Storage::disk('profiles')->url($path), $aiImage->file);
+        Storage::disk('profiles')->assertExists($path);
         Event::assertDispatched(AiImageForAvatarGenerated::class, function ($event) use ($aiImage) {
             return $event->aiImage->is($aiImage)
                 && $event->sourceImageUrl === 'https://example.com/generated-image.png';

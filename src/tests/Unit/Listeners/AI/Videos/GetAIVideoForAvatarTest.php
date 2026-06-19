@@ -29,7 +29,7 @@ class GetAIVideoForAvatarTest extends TestCase
     #[Test]
     public function it_stores_generated_video_updates_record_and_creates_avatar(): void
     {
-        Storage::fake('public');
+        Storage::fake('profiles');
         Http::fake([
             'https://example.com/generated-video.mp4' => Http::response('video-bytes', 200, [
                 'Content-Type' => 'video/mp4',
@@ -53,9 +53,11 @@ class GetAIVideoForAvatarTest extends TestCase
         $aiVideo->refresh();
         $avatar = ProfileAvatar::where('profile_id', $aiVideo->profile_id)->first();
 
+        $path = "videos/{$aiVideo->id}.mp4";
+
         $this->assertSame('succeeded', $aiVideo->status);
-        $this->assertSame("aivideos/{$aiVideo->id}.mp4", $aiVideo->file);
-        Storage::disk('public')->assertExists($aiVideo->file);
+        $this->assertSame(Storage::disk('profiles')->url($path), $aiVideo->file);
+        Storage::disk('profiles')->assertExists($path);
         $this->assertNotNull($avatar);
         $this->assertSame($aiImage->id, $avatar->aiimage_id);
         $this->assertSame($aiVideo->id, $avatar->ai_video_id);
@@ -66,7 +68,7 @@ class GetAIVideoForAvatarTest extends TestCase
     #[Test]
     public function it_updates_only_video_and_file_when_avatar_exists(): void
     {
-        Storage::fake('public');
+        Storage::fake('profiles');
         Http::fake([
             'https://example.com/generated-video.mp4' => Http::response('video-bytes', 200, [
                 'Content-Type' => 'video/mp4',

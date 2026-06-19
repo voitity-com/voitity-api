@@ -30,13 +30,14 @@ class AvatarRepository
         try {
             $profile->loadMissing('user');
 
-            $path = $sourceImage->store('avatar-sources', 'public');
+            $disk = $this->profileArtifactDisk();
+            $path = $sourceImage->store($this->sourceImageFolder(), $disk);
 
             if (!is_string($path)) {
                 throw new RuntimeException('Avatar source image could not be stored.');
             }
 
-            $sourceImageUri = $this->sourceImageToDataUri($path, $sourceImage);
+            $sourceImageUri = $this->sourceImageToDataUri($path, $sourceImage, $disk);
             $owner = $profile->user ?: $actor;
 
             Log::info('Avatar image generation started.', [
@@ -89,11 +90,23 @@ class AvatarRepository
         return $this->videoAIService;
     }
 
-    private function sourceImageToDataUri(string $path, UploadedFile $sourceImage): string
+    private function sourceImageToDataUri(string $path, UploadedFile $sourceImage, string $disk): string
     {
-        $content = Storage::disk('public')->get($path);
+        $content = Storage::disk($disk)->get($path);
         $mimeType = $sourceImage->getMimeType() ?: 'image/png';
 
         return "data:{$mimeType};base64," . base64_encode($content);
+    }
+
+    private function profileArtifactDisk(): string
+    {
+        return (string) config('videoai.profiles.disk', 'profiles');
+    }
+
+    private function sourceImageFolder(): string
+    {
+        $folder = trim((string) config('videoai.profiles.source_image_folder', 'images/sources'), '/');
+
+        return $folder !== '' ? $folder : 'images/sources';
     }
 }

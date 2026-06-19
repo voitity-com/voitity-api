@@ -53,6 +53,21 @@ return [
             'report' => false,
         ],
 
+        'profiles' => [
+            'driver' => env('FILESYSTEM_PROFILES_DRIVER', env('FILESYSTEM_PUBLIC_DRIVER', 'local')),
+            'root' => storage_path('app/public'),
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_PROFILES_BUCKET', env('AWS_PUBLIC_BUCKET', env('AWS_BUCKET'))),
+            'url' => env('AWS_PROFILES_URL', env('FILESYSTEM_PUBLIC_URL', env('APP_URL').'/storage')),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => env('AWS_PROFILES_VISIBILITY', env('FILESYSTEM_PUBLIC_VISIBILITY', 'public')),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

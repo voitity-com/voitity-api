@@ -31,6 +31,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Profile Artifact Storage
+    |--------------------------------------------------------------------------
+    |
+    | Generated avatar assets are public profile artifacts. In production this
+    | disk points to the dedicated profiles S3 bucket.
+    |
+    */
+
+    'profiles' => [
+        'disk' => env('VIDEOAI_PROFILES_DISK', 'profiles'),
+        'image_folder' => env('VIDEOAI_PROFILES_IMAGE_FOLDER', 'images'),
+        'source_image_folder' => env('VIDEOAI_PROFILES_SOURCE_IMAGE_FOLDER', 'images/sources'),
+        'video_folder' => env('VIDEOAI_PROFILES_VIDEO_FOLDER', 'videos'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Video AI Service Drivers
     |--------------------------------------------------------------------------
     |

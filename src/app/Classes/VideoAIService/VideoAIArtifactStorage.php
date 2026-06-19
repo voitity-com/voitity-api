@@ -10,12 +10,12 @@ class VideoAIArtifactStorage
 {
     public function storeImageFromUrl(string $url, int|string $id): string
     {
-        return $this->storeFromUrl($url, 'aiimages', $id, 'png');
+        return $this->storeFromUrl($url, $this->imageFolder(), $id, 'png');
     }
 
     public function storeVideoFromUrl(string $url, int|string $id): string
     {
-        return $this->storeFromUrl($url, 'aivideos', $id, 'mp4');
+        return $this->storeFromUrl($url, $this->videoFolder(), $id, 'mp4');
     }
 
     protected function storeFromUrl(string $url, string $folder, int|string $id, string $defaultExtension): string
@@ -32,9 +32,10 @@ class VideoAIArtifactStorage
         );
 
         $path = "{$folder}/{$id}.{$extension}";
-        Storage::disk('public')->put($path, $response->body());
+        $disk = Storage::disk($this->disk());
+        $disk->put($path, $response->body());
 
-        return $path;
+        return $disk->url($path);
     }
 
     protected function extensionFromUrl(string $url): ?string
@@ -54,5 +55,27 @@ class VideoAIArtifactStorage
             'video/mp4' => 'mp4',
             default => $defaultExtension,
         };
+    }
+
+    private function disk(): string
+    {
+        return (string) config('videoai.profiles.disk', 'profiles');
+    }
+
+    private function imageFolder(): string
+    {
+        return $this->folder('videoai.profiles.image_folder', 'images');
+    }
+
+    private function videoFolder(): string
+    {
+        return $this->folder('videoai.profiles.video_folder', 'videos');
+    }
+
+    private function folder(string $key, string $default): string
+    {
+        $folder = trim((string) config($key, $default), '/');
+
+        return $folder !== '' ? $folder : $default;
     }
 }

@@ -27,7 +27,7 @@ class AvatarRepositoryTest extends TestCase
     public function it_generates_avatar_image_and_dispatches_avatar_event(): void
     {
         Event::fake([AiImageForAvatarCreated::class]);
-        Storage::fake('public');
+        Storage::fake('profiles');
 
         $user = User::factory()->create();
         $profile = $this->profileForUser($user);
@@ -56,7 +56,7 @@ class AvatarRepositoryTest extends TestCase
 
         $this->assertSame($user->id, $aiImage->user_id);
         $this->assertSame($profile->id, $aiImage->profile_id);
-        $this->assertCount(1, Storage::disk('public')->allFiles('avatar-sources'));
+        $this->assertCount(1, Storage::disk('profiles')->allFiles('images/sources'));
         Event::assertDispatched(AiImageForAvatarCreated::class, fn ($event) => $event->aiImage->is($aiImage));
     }
 
@@ -64,7 +64,7 @@ class AvatarRepositoryTest extends TestCase
     public function admin_generated_avatar_uses_profile_owner_as_artifact_owner(): void
     {
         Event::fake([AiImageForAvatarCreated::class]);
-        Storage::fake('public');
+        Storage::fake('profiles');
 
         $admin = User::factory()->create(['role' => 'admin']);
         $owner = User::factory()->create(['role' => 'user']);
