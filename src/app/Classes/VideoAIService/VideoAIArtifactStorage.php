@@ -33,7 +33,10 @@ class VideoAIArtifactStorage
 
         $path = "{$folder}/{$id}.{$extension}";
         $disk = Storage::disk($this->disk());
-        $disk->put($path, $response->body());
+
+        if (!$disk->put($path, $response->body())) {
+            throw new RuntimeException("Unable to store generated artifact at {$path}");
+        }
 
         return $disk->url($path);
     }

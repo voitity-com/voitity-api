@@ -70,7 +70,7 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => env('AWS_PROFILES_VISIBILITY', env('FILESYSTEM_PUBLIC_VISIBILITY', 'public')),
-            'throw' => false,
+            'throw' => env('FILESYSTEM_PROFILES_THROW', true),
             'report' => false,
         ],
 
