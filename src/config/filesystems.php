@@ -1,5 +1,11 @@
 <?php
 
+$profilesDriver = env('FILESYSTEM_PROFILES_DRIVER', env('FILESYSTEM_PUBLIC_DRIVER', 'local'));
+$profilesRoot = env(
+    'FILESYSTEM_PROFILES_ROOT',
+    strtolower((string) $profilesDriver) === 's3' ? '' : storage_path('app/public')
+);
+
 return [
 
     /*
@@ -54,8 +60,8 @@ return [
         ],
 
         'profiles' => [
-            'driver' => env('FILESYSTEM_PROFILES_DRIVER', env('FILESYSTEM_PUBLIC_DRIVER', 'local')),
-            'root' => storage_path('app/public'),
+            'driver' => $profilesDriver,
+            'root' => $profilesRoot,
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
             'region' => env('AWS_DEFAULT_REGION'),
