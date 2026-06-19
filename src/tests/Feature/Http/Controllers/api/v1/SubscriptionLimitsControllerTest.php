@@ -83,7 +83,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription.user_id', $user->id);
         $response->assertJsonPath('data.subscription.plan', 'starter');
         $response->assertJsonPath('data.subscription.plan_name', 'Starter');
-        $response->assertJsonPath('data.subscription.price_usd', 7);
+        $response->assertJsonPath('data.subscription.price_usd', 8);
         $response->assertJsonPath('data.subscription.currency', 'USD');
         $response->assertJsonPath('data.subscription.interval', 'monthly');
         $response->assertJsonPath('data.subscription.status', 'first');

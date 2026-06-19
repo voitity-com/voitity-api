@@ -6,7 +6,7 @@ return [
     'plans' => [
         'starter' => [
             'name' => 'Starter',
-            'price_usd' => 7.00,
+            'price_usd' => 8.00,
             'currency' => 'USD',
             'interval' => 'monthly',
             'limits' => [
@@ -16,6 +16,23 @@ return [
                 'voice_clones' => 1,
                 'tts_characters' => 10000,
                 'chat_messages' => 1000,
+            ],
+            'credits' => [
+                'total' => 1000,
+                'allocations' => [
+                    'chat_messages' => [
+                        'credits' => 500,
+                        'units' => 1000,
+                        'unit' => 'messages',
+                        'units_per_credit' => 2,
+                    ],
+                    'tts_characters' => [
+                        'credits' => 500,
+                        'units' => 10000,
+                        'unit' => 'characters',
+                        'units_per_credit' => 20,
+                    ],
+                ],
             ],
             'cost_assumptions' => [
                 'avatar_images' => [
