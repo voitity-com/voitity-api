@@ -65,6 +65,7 @@ jobs:
               "aws secretsmanager get-secret-value --secret-id bigmelo/prod/api/env --region us-east-1 --query SecretString --output text > .env",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 139194331469.dkr.ecr.us-east-1.amazonaws.com",
               "/usr/local/bin/docker-compose pull",
+              "/usr/local/bin/docker-compose run --rm api php artisan optimize:clear",
               "/usr/local/bin/docker-compose run --rm api php artisan migrate --force",
               "/usr/local/bin/docker-compose up -d --remove-orphans",
               "docker image prune -f"
