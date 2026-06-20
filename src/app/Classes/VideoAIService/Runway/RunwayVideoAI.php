@@ -41,7 +41,7 @@ class RunwayVideoAI implements VideoAIClient
         $this->referenceImageTag = $referenceImageTag ?: (string) config('videoai.drivers.runway.reference_image_tag', 'base_image');
         $this->defaultImageRatio = $defaultImageRatio ?: (string) config('videoai.drivers.runway.default_image_ratio', '1024:1024');
         $this->defaultVideoRatio = $defaultVideoRatio ?: (string) config('videoai.drivers.runway.default_video_ratio', '960:960');
-        $this->defaultDuration = $defaultDuration ?: (int) config('videoai.drivers.runway.default_duration', 5);
+        $this->defaultDuration = $defaultDuration ?: (int) config('videoai.drivers.runway.default_duration', 2);
 
         if (!$this->apiKey) {
             throw new InvalidArgumentException('Runway API key is not configured');

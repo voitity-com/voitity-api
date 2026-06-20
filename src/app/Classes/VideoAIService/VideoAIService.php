@@ -54,7 +54,7 @@ class VideoAIService
     {
         $duration ??= (int) config(
             'videoai.drivers.'.config('videoai.default', 'runway').'.default_duration',
-            3
+            2
         );
 
         return $this->videoAIClient->createVideo($sourceImage, $prompt, $ratio, $duration);

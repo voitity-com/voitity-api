@@ -26,7 +26,7 @@ return [
 
     'prompts' => [
         'image' => 'Using reference image base_image, create a Pixar-like hyperrealistic 3D portrait. Preserve identity, face shape, skin tone, hair, eyes, expression, pose, clothing, proportions, age, ethnicity, hairstyle, and colors. Match the original facial traits exactly. Do not add, invent, enlarge, darken, thicken, enhance, or exaggerate any feature. If source has no beard, keep face clean-shaven. Never add or amplify beard, mustache, stubble, beard shadow, goatee, sideburns, facial hair texture, dark patches on cheeks/chin, extra hair, hairline, eyebrows, scars, accessories, makeup, or new details. Apply subtle retouch: reduce blemishes, acne, redness, wrinkles, facial shine, and under-eye shadows; keep natural skin texture. Smooth contours without blurring identity. Use pure white background (#FFFFFF), soft studio lighting, realistic eyes, detailed hair, natural face shape, cinematic 3D rendering. Avoid distorted features, plastic skin, heavy makeup, cartoon proportions.',
-        'video' => 'Create a 3-second animated avatar clip from this portrait. Preserve identity, face shape, outfit, framing, and the clean white background. Do not make a frozen still image. Add visible but natural motion: one gentle blink, small eye movement toward camera, slight head tilt and return, and subtle breathing in the shoulders. Keep the mouth closed unless a small natural smile already exists; no talking, no lip-sync, no teeth, no exaggerated expression. No camera movement, zoom, lighting change, or background change. Smooth cinematic motion; first and last frame should be close enough for a clean loop.',
+        'video' => 'Create a 2-second avatar clip from this portrait. Preserve identity, face shape, outfit, framing, and the clean white background exactly. Keep the avatar almost still. The only motion allowed is one natural blink and a very slight head tilt, then return to the original pose. No shoulder movement, no breathing motion, no eye darting, no facial expression change, no smile change, no mouth movement, no talking, no lip-sync, no teeth, no camera movement, no zoom, no lighting change, no background change, and no added gestures. Smooth minimal motion only.',
     ],
 
     /*
@@ -68,7 +68,7 @@ return [
             'reference_image_tag' => env('RUNWAY_REFERENCE_IMAGE_TAG', 'base_image'),
             'default_image_ratio' => env('RUNWAY_DEFAULT_IMAGE_RATIO', '1024:1024'),
             'default_video_ratio' => env('RUNWAY_DEFAULT_VIDEO_RATIO', '960:960'),
-            'default_duration' => (int) env('RUNWAY_DEFAULT_DURATION', 3),
+            'default_duration' => (int) env('RUNWAY_DEFAULT_DURATION', 2),
         ],
 
         // Additional drivers may be configured here.
