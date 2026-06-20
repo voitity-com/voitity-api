@@ -102,11 +102,11 @@ class RunwayVideoAI implements VideoAIClient
         }
     }
 
-    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): AiVideo
+    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', ?int $duration = null): AiVideo
     {
         $requestUrl = "{$this->baseUrl}/v1/image_to_video";
         $ratio = $ratio ?: $this->defaultVideoRatio;
-        $duration = $duration ?: $this->defaultDuration;
+        $duration ??= $this->defaultDuration;
 
         try {
             Log::info('Runway: Starting video generation', [

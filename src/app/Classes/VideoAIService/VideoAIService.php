@@ -50,8 +50,13 @@ class VideoAIService
         return $aiImage;
     }
 
-    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', int $duration = 5): AiVideo
+    public function createVideo(string $sourceImage, string $prompt, string $ratio = '', ?int $duration = null): AiVideo
     {
+        $duration ??= (int) config(
+            'videoai.drivers.'.config('videoai.default', 'runway').'.default_duration',
+            3
+        );
+
         return $this->videoAIClient->createVideo($sourceImage, $prompt, $ratio, $duration);
     }
 

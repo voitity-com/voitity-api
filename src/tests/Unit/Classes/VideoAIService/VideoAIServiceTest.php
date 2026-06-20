@@ -41,12 +41,14 @@ class VideoAIServiceTest extends TestCase
     #[Test]
     public function it_delegates_create_video_to_client(): void
     {
+        config()->set('videoai.drivers.runway.default_duration', 3);
+
         $client = Mockery::mock(VideoAIClient::class);
         $video = new AiVideo(id: 'video-task-id');
 
         $client->shouldReceive('createVideo')
             ->once()
-            ->with('https://example.com/source.png', 'prompt', '1280:720', 5)
+            ->with('https://example.com/source.png', 'prompt', '1280:720', 3)
             ->andReturn($video);
 
         $service = new VideoAIService($client);
