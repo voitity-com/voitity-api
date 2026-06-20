@@ -15,6 +15,12 @@ return [
 
     'default' => env('VOICE_DRIVER', 'elevenlabs'),
 
+    'generated_audio' => [
+        'disk' => env('VOICE_GENERATED_AUDIO_DISK', 'public'),
+        'folder' => env('VOICE_GENERATED_AUDIO_FOLDER', 'generated'),
+        'visibility' => env('VOICE_GENERATED_AUDIO_VISIBILITY', 'public'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Voice Service Drivers

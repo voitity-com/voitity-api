@@ -298,9 +298,18 @@ class ElevenLabsVoiceClient implements VoiceClient
     protected function storeGeneratedAudio(Voice $voice, string $audioContent): ?string
     {
         try {
-            $filename = 'generated/' . $voice->id . '/' . uniqid() . '.mp3';
-            Storage::disk('public')->put($filename, $audioContent);
-            return Storage::disk('public')->url($filename);
+            $diskName = config('voice.generated_audio.disk', 'public');
+            $folder = trim((string) config('voice.generated_audio.folder', 'generated'), '/');
+            $visibility = config('voice.generated_audio.visibility', 'public');
+            $filename = ($folder ? "{$folder}/" : '') . $voice->id . '/' . uniqid() . '.mp3';
+            $disk = Storage::disk($diskName);
+
+            $disk->put($filename, $audioContent, [
+                'ContentType' => 'audio/mpeg',
+                'visibility' => $visibility,
+            ]);
+
+            return $disk->url($filename);
         } catch (\Exception $e) {
             Log::error('Failed to store generated audio', [
                 'voice_id' => $voice->id,
