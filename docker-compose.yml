@@ -21,6 +21,7 @@ services:
       - DB_DATABASE=voitity
       - DB_USERNAME=voitity
       - DB_PASSWORD=voitity
+      - RUN_QUEUE_WORKER=${RUN_QUEUE_WORKER:-false}
 
   db:
     image: ankane/pgvector
@@ -31,7 +32,7 @@ services:
       POSTGRES_USER: voitity
       POSTGRES_PASSWORD: voitity
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

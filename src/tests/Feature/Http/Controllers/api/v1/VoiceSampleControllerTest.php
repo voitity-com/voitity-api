@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Classes\VoiceSampleFileManager;
+use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
@@ -93,18 +94,49 @@ class VoiceSampleControllerTest extends TestAPI
         $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
         $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
 
-        // Create a user with id 2 first
-        $user = User::factory()->create();
-        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        $owner = User::factory()->create();
+        $requestUser = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $voice = Voice::factory()->create(['user_id' => $owner->id]);
         $data = [
             'file' => UploadedFile::fake()->create('sample.mp3', 100, 'audio/mpeg')
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($requestUser->email, 'test123'))
             ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), $data);
             
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Voice not found.');
+    }
+
+    public function test_admin_can_create_voice_sample_for_another_users_voice()
+    {
+        $mockFileManager = Mockery::mock(VoiceSampleFileManager::class);
+        $mockFileManager->shouldReceive('processSampleFile')
+            ->once()
+            ->andReturn(true);
+        $mockFileManager->shouldReceive('getFileName')
+            ->once()
+            ->andReturn('admin-sample.mp3');
+        $mockFileManager->shouldReceive('getFileDuration')
+            ->once()
+            ->andReturn(90);
+
+        $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
+
+        $token = $this->getToken();
+        $owner = User::factory()->create();
+        $voice = Voice::factory()->create(['user_id' => $owner->id]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson(str_replace('voice-id', (string)$voice->id, self::ENDPOINT_VOICESAMPLE), [
+                'file' => UploadedFile::fake()->create('sample.mp3', 100, 'audio/mpeg')
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice sample created successfully.');
     }
 
     public function test_user_can_create_voice_sample()
@@ -205,13 +237,20 @@ class VoiceSampleControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Unauthenticated.');
     }
 
-    public function test_non_admin_user_can_not_process_a_voice_sample()
+    public function test_profile_owner_can_process_a_voice_sample()
     {
+        Event::fake();
+
         $user = User::factory()->create([
             'role' => 'user',
             'password' => Hash::make('test123'),
         ]);
-        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        $voiceUser = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $voice = Voice::factory()->create([
+            'user_id' => $voiceUser->id,
+            'profile_id' => $profile->id,
+        ]);
         $voiceSample = VoiceSample::factory()->create([
             'voice_id' => $voice->id,
             'file' => 'test-uuid-123.mp3',
@@ -222,8 +261,42 @@ class VoiceSampleControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
             ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
 
-        $response->assertStatus(403);
-        $response->assertJsonPath('message', 'Only admin users can process voice samples.');
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice sample is processing successfully.');
+
+        Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voice, $voiceSample) {
+            return $event->voice->id === $voice->id && $event->voiceSample->id === $voiceSample->id;
+        });
+    }
+
+    public function test_user_can_not_process_a_voice_sample_for_another_users_profile()
+    {
+        $owner = User::factory()->create();
+        $requestUser = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->profileForUser($owner);
+        $voice = Voice::factory()->create([
+            'user_id' => $owner->id,
+            'profile_id' => $profile->id,
+        ]);
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'test-uuid-123.mp3',
+            'duration' => 120,
+            'active' => true
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($requestUser->email, 'test123'))
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Voice not found.');
+        $this->assertDatabaseMissing('voice_provider_requests', [
+            'voice_id' => $voice->id,
+            'voice_sample_id' => $voiceSample->id,
+        ]);
     }
 
     public function test_user_can_not_process_a_voice_sample_if_it_was_processed_previously()
@@ -256,7 +329,7 @@ class VoiceSampleControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Voice sample was already processed.');
     }
 
-    public function test_user_can_process_a_voice_sample()
+    public function test_admin_can_process_a_voice_sample()
     {
         Event::fake();
 
@@ -287,5 +360,17 @@ class VoiceSampleControllerTest extends TestAPI
         Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voiceSample) {
             return $event->voiceSample->id === $voiceSample->id;
         });
+    }
+
+    private function profileForUser(User $user): Profile
+    {
+        return Profile::create([
+            'user_id'       => $user->id,
+            'name'          => $this->faker->name,
+            'description'   => $this->faker->text(200),
+            'genre'         => 'male',
+            'personality'   => $this->faker->text(100),
+            'active'        => true,
+        ]);
     }
 }

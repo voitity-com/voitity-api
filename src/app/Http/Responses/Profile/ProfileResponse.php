@@ -3,6 +3,7 @@
 namespace App\Http\Responses\Profile;
 
 use App\Models\Profile;
+use App\Models\Voice;
 
 class ProfileResponse
 {
@@ -10,6 +11,8 @@ class ProfileResponse
 
     public function toArray(): array
     {
+        $activeVoice = $this->activeVoice();
+
         return [
             'id' => $this->profile->id,
             'user_id' => $this->profile->user_id,
@@ -20,30 +23,39 @@ class ProfileResponse
             'personality' => $this->profile->personality,
             'active' => (bool) $this->profile->active,
             'status' => $this->profile->status?->value,
-            'voice' => $this->hasConfiguredVoice(),
+            'voice' => $this->hasConfiguredVoice($activeVoice),
+            'voice_id' => $activeVoice?->id,
             'data' => $this->profile->data,
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];
     }
 
-    private function hasConfiguredVoice(): bool
+    private function activeVoice(): ?Voice
     {
         if ($this->profile->relationLoaded('voices')) {
-            return $this->profile->voices->contains(
-                fn ($voice) => filled($voice->source_voice_id) && filled($voice->source)
+            return $this->profile->voices->first(
+                fn (Voice $voice) => (bool) $voice->active
             );
         }
 
         if (! $this->profile->exists) {
-            return false;
+            return null;
         }
 
         return $this->profile->voices()
-            ->whereNotNull('source_voice_id')
-            ->where('source_voice_id', '!=', '')
-            ->whereNotNull('source')
-            ->where('source', '!=', '')
-            ->exists();
+            ->where('active', true)
+            ->latest('id')
+            ->first();
+    }
+
+    private function hasConfiguredVoice(?Voice $voice): bool
+    {
+        if (! $voice) {
+            return false;
+        }
+
+        return filled($voice->source_voice_id)
+            && filled($voice->source);
     }
 }
