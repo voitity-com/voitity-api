@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Voice\StoreVoiceSampleRequest;
+use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
 use App\Classes\VoiceSampleFileManager;
@@ -78,7 +79,7 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$voice || $voice->user_id !== $user->id) {
+            if (!$voice || !$this->userCanManageVoice($user, $voice)) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
 
@@ -169,14 +170,6 @@ class VoiceSampleController extends Controller
      *         )
      *     ),
      *     @OA\Response(
-     *         response=403,
-     *         description="Only admin users can process voice samples",
-     *         @OA\JsonContent(
-     *             type="object",
-     *             @OA\Property(property="message", type="string", example="Only admin users can process voice samples.")
-     *         )
-     *     ),
-     *     @OA\Response(
      *         response=401,
      *         description="Unauthenticated",
      *         @OA\JsonContent(
@@ -203,8 +196,12 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if ($user->role !== 'admin') {
-                return response()->json(['message' => 'Only admin users can process voice samples.'], 403);
+            if (!$this->userCanManageVoice($user, $voice)) {
+                return response()->json(['message' => 'Voice not found.'], 404);
+            }
+
+            if ((int) $voiceSample->voice_id !== (int) $voice->id) {
+                return response()->json(['message' => 'Voice sample not found.'], 404);
             }
 
             // Check if voice sample was already processed
@@ -236,5 +233,20 @@ class VoiceSampleController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    private function userCanManageVoice(User $user, Voice $voice): bool
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        if ((int) $voice->user_id === (int) $user->id) {
+            return true;
+        }
+
+        $voice->loadMissing('profile:id,user_id');
+
+        return $voice->profile !== null && (int) $voice->profile->user_id === (int) $user->id;
     }
 }

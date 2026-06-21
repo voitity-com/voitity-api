@@ -75,7 +75,7 @@ class ProfileController extends Controller
             }
 
             $profiles = $user->profiles()
-                ->with('voices:id,profile_id,source_voice_id,source')
+                ->with('voices:id,profile_id,source_voice_id,source,active')
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -222,7 +222,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $profile->loadMissing('voices:id,profile_id,source_voice_id,source');
+            $profile->loadMissing('voices:id,profile_id,source_voice_id,source,active');
 
             return response()->json([
                 'message' => 'Profile retrieved successfully.',
@@ -291,7 +291,7 @@ class ProfileController extends Controller
     {
         try {
             $profile = Profile::where('alias', $alias)
-                ->with('voices:id,profile_id,source_voice_id,source')
+                ->with('voices:id,profile_id,source_voice_id,source,active')
                 ->first();
 
             if (! $profile) {

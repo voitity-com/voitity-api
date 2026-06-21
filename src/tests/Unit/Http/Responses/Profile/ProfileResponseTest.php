@@ -41,6 +41,7 @@ class ProfileResponseTest extends TestCase
         $this->assertTrue($payload['active']);
         $this->assertSame('draft', $payload['status']);
         $this->assertFalse($payload['voice']);
+        $this->assertNull($payload['voice_id']);
         $this->assertSame(['me' => ['bio' => 'test']], $payload['data']);
         $this->assertSame('2026-05-26T10:00:00.000000Z', $payload['created_at']);
         $this->assertSame('2026-05-26T11:00:00.000000Z', $payload['updated_at']);
@@ -64,8 +65,10 @@ class ProfileResponseTest extends TestCase
 
         $voice = new Voice;
         $voice->setRawAttributes([
+            'id' => 30,
             'source_voice_id' => 'provider-voice-id',
             'source' => 'elevenlabs',
+            'active' => true,
         ], true);
 
         $profile->setRelation('voices', collect([$voice]));
@@ -73,6 +76,7 @@ class ProfileResponseTest extends TestCase
         $payload = (new ProfileResponse($profile))->toArray();
 
         $this->assertTrue($payload['voice']);
+        $this->assertSame(30, $payload['voice_id']);
     }
 
     public function test_profile_response_returns_false_when_voice_source_fields_are_empty(): void
@@ -93,8 +97,10 @@ class ProfileResponseTest extends TestCase
 
         $voice = new Voice;
         $voice->setRawAttributes([
+            'id' => 31,
             'source_voice_id' => 'provider-voice-id',
             'source' => '',
+            'active' => true,
         ], true);
 
         $profile->setRelation('voices', collect([$voice]));
@@ -102,6 +108,7 @@ class ProfileResponseTest extends TestCase
         $payload = (new ProfileResponse($profile))->toArray();
 
         $this->assertFalse($payload['voice']);
+        $this->assertSame(31, $payload['voice_id']);
     }
 
     public function test_profile_list_response_returns_profiles_and_total(): void

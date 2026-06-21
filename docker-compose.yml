@@ -21,6 +21,7 @@ services:
       - DB_DATABASE=voitity
       - DB_USERNAME=voitity
       - DB_PASSWORD=voitity
+      - RUN_QUEUE_WORKER=${RUN_QUEUE_WORKER:-false}
 
   db:
     image: ankane/pgvector
