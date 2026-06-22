@@ -436,10 +436,17 @@
                   "if (json.data && json.data.payment_order) {",
                   "  pm.environment.set(\"payment_order_id\", json.data.payment_order.id);",
                   "  pm.environment.set(\"payment_reference\", json.data.payment_order.reference);",
+                  "  if (json.data.payment_order.amounts) {",
+                  "    pm.environment.set(\"wompi_event_amount_in_cents\", String(json.data.payment_order.amounts.amount_in_cents));",
+                  "  }",
+                  "  pm.environment.unset(\"wompi_event_id\");",
+                  "  pm.environment.unset(\"wompi_transaction_id\");",
+                  "  pm.environment.unset(\"wompi_event_checksum\");",
                   "}",
                   "if (json.data && json.data.checkout) {",
                   "  pm.environment.set(\"wompi_checkout_url\", json.data.checkout.checkout_url);",
-                  "}"
+                  "}",
+                  "pm.environment.set(\"wompi_event_status\", pm.environment.get(\"wompi_event_status\") || \"APPROVED\");"
                 ]
               }
             }
@@ -524,7 +531,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"evt_{{payment_reference}}\",\n  \"event\": \"transaction.updated\",\n  \"data\": {\n    \"transaction\": {\n      \"id\": \"trx_{{payment_reference}}\",\n      \"amount_in_cents\": 3200000,\n      \"reference\": \"{{payment_reference}}\",\n      \"currency\": \"COP\",\n      \"status\": \"APPROVED\"\n    }\n  },\n  \"environment\": \"test\",\n  \"signature\": {\n    \"properties\": [\n      \"transaction.id\",\n      \"transaction.status\",\n      \"transaction.amount_in_cents\"\n    ],\n    \"checksum\": \"{{wompi_event_checksum}}\"\n  },\n  \"timestamp\": 1530291411,\n  \"sent_at\": \"2018-07-20T16:45:05.000Z\"\n}"
+              "raw": "{\n  \"id\": \"{{wompi_event_id}}\",\n  \"event\": \"transaction.updated\",\n  \"data\": {\n    \"transaction\": {\n      \"id\": \"{{wompi_transaction_id}}\",\n      \"amount_in_cents\": {{wompi_event_amount_in_cents}},\n      \"reference\": \"{{payment_reference}}\",\n      \"currency\": \"COP\",\n      \"status\": \"{{wompi_event_status}}\"\n    }\n  },\n  \"environment\": \"test\",\n  \"signature\": {\n    \"properties\": [\n      \"transaction.id\",\n      \"transaction.status\",\n      \"transaction.amount_in_cents\"\n    ],\n    \"checksum\": \"{{wompi_event_checksum}}\"\n  },\n  \"timestamp\": {{wompi_event_timestamp}},\n  \"sent_at\": \"{{wompi_event_sent_at}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/payments/wompi/events",
@@ -538,9 +545,41 @@
                 "events"
               ]
             },
-            "description": "Local webhook endpoint for Wompi events. In real Sandbox testing, configure the public HTTPS tunnel URL in Wompi and let Wompi call this endpoint. For manual Postman testing, compute wompi_event_checksum as SHA256(transaction.id + transaction.status + transaction.amount_in_cents + timestamp + WOMPI_EVENTS_SECRET)."
+            "description": "Local webhook endpoint for Wompi events. For manual Postman testing, set wompi_events_secret to the local WOMPI_EVENTS_SECRET value, run Create Wompi Checkout first, then send this request. The pre-request script computes X-Event-Checksum as SHA256(transaction.id + transaction.status + transaction.amount_in_cents + timestamp + WOMPI_EVENTS_SECRET)."
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const reference = pm.environment.get(\"payment_reference\");",
+                  "const eventsSecret = pm.environment.get(\"wompi_events_secret\");",
+                  "if (!reference) {",
+                  "  throw new Error(\"Run Payments / Create Wompi Checkout first so payment_reference is available.\");",
+                  "}",
+                  "if (!eventsSecret) {",
+                  "  throw new Error(\"Set wompi_events_secret in the Postman environment using the local WOMPI_EVENTS_SECRET value.\");",
+                  "}",
+                  "const amountInCents = String(pm.environment.get(\"wompi_event_amount_in_cents\") || \"3200000\");",
+                  "const status = String(pm.environment.get(\"wompi_event_status\") || \"APPROVED\").toUpperCase();",
+                  "const timestamp = String(pm.environment.get(\"wompi_event_timestamp\") || Math.floor(Date.now() / 1000));",
+                  "const transactionId = pm.environment.get(\"wompi_transaction_id\") || `trx_${reference}`;",
+                  "const eventId = pm.environment.get(\"wompi_event_id\") || `evt_${reference}`;",
+                  "const sentAt = pm.environment.get(\"wompi_event_sent_at\") || new Date().toISOString();",
+                  "pm.environment.set(\"wompi_event_amount_in_cents\", amountInCents);",
+                  "pm.environment.set(\"wompi_event_status\", status);",
+                  "pm.environment.set(\"wompi_event_timestamp\", timestamp);",
+                  "pm.environment.set(\"wompi_transaction_id\", transactionId);",
+                  "pm.environment.set(\"wompi_event_id\", eventId);",
+                  "pm.environment.set(\"wompi_event_sent_at\", sentAt);",
+                  "const checksumPayload = `${transactionId}${status}${amountInCents}${timestamp}${eventsSecret}`;",
+                  "pm.environment.set(\"wompi_event_checksum\", CryptoJS.SHA256(checksumPayload).toString(CryptoJS.enc.Hex));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

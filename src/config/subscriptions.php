@@ -88,6 +88,38 @@ return [
             ],
             'estimated_total_cost_usd' => 3.33,
         ],
+        'starter_annual' => [
+            'name' => 'Starter',
+            'price_usd' => 80.00,
+            'currency' => 'USD',
+            'interval' => 'annual',
+            'limits' => [
+                'profiles' => 12,
+                'avatar_images' => 12,
+                'avatar_video_seconds' => 60,
+                'voice_clones' => 12,
+                'tts_characters' => 120000,
+                'chat_messages' => 12000,
+            ],
+            'credits' => [
+                'total' => 12000,
+                'allocations' => [
+                    'chat_messages' => [
+                        'credits' => 6000,
+                        'units' => 12000,
+                        'unit' => 'messages',
+                        'units_per_credit' => 2,
+                    ],
+                    'tts_characters' => [
+                        'credits' => 6000,
+                        'units' => 120000,
+                        'unit' => 'characters',
+                        'units_per_credit' => 20,
+                    ],
+                ],
+            ],
+            'estimated_total_cost_usd' => 39.96,
+        ],
         'pro' => [
             'name' => 'Pro',
             'price_usd' => null,

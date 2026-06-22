@@ -29,7 +29,7 @@ class PaymentControllerTest extends TestAPI
         Config::set('payment.display_currency', 'USD');
         Config::set('payment.processing_currency', 'COP');
         Config::set('payment.usd_cop_rate', 4000);
-        Config::set('payment.redirect_url', 'http://localhost:5173/checkout/result');
+        Config::set('payment.redirect_url', 'http://localhost:5173/dashboard/settings/billing/payment-result');
         Config::set('payment.drivers.wompi.environment', 'sandbox');
         Config::set('payment.drivers.wompi.public_key', 'pub_test_key');
         Config::set('payment.drivers.wompi.private_key', 'prv_test_key');
@@ -56,6 +56,13 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.exchange_rate', 4000);
         $response->assertJsonPath('data.plans.0.id', 'starter');
         $response->assertJsonPath('data.plans.0.purchasable', true);
+
+        $plans = collect($response->json('data.plans'))->keyBy('id');
+
+        $this->assertTrue($plans->has('starter_annual'));
+        $this->assertSame(80, $plans->get('starter_annual')['price_usd']);
+        $this->assertSame('annual', $plans->get('starter_annual')['interval']);
+        $this->assertTrue($plans->get('starter_annual')['purchasable']);
     }
 
     public function test_user_can_create_wompi_checkout_for_starter_plan(): void
@@ -87,6 +94,36 @@ class PaymentControllerTest extends TestAPI
             'provider' => 'wompi',
             'status' => 'pending',
             'amount_in_cents' => 3200000,
+            'currency' => 'COP',
+        ]);
+    }
+
+    public function test_user_can_create_wompi_checkout_for_starter_annual_plan(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::CHECKOUT_ENDPOINT, ['plan' => 'starter_annual']);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('message', 'Wompi checkout created successfully.');
+        $response->assertJsonPath('data.payment_order.user_id', $user->id);
+        $response->assertJsonPath('data.payment_order.plan', 'starter_annual');
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 80);
+        $response->assertJsonPath('data.payment_order.amounts.exchange_rate', 4000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 320000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 32000000);
+        $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
+        $response->assertJsonPath('data.payment_order.status', 'pending');
+        $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
+
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'plan' => 'starter_annual',
+            'provider' => 'wompi',
+            'status' => 'pending',
+            'amount_in_cents' => 32000000,
             'currency' => 'COP',
         ]);
     }
@@ -198,6 +235,34 @@ class PaymentControllerTest extends TestAPI
         ]);
     }
 
+    public function test_valid_wompi_approved_event_activates_annual_subscription(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingPaymentOrder($user, SubscriptionPlan::StarterAnnual, 80);
+        $payload = $this->wompiPayload($paymentOrder);
+
+        $response = $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $payload, [
+            'X-Event-Checksum' => $this->eventChecksum($payload),
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Wompi event processed successfully.');
+
+        $paymentOrder->refresh();
+        $subscription = $paymentOrder->subscription()->firstOrFail();
+
+        $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->status);
+        $this->assertSame(SubscriptionPlan::StarterAnnual, $subscription->plan);
+        $this->assertTrue($subscription->renews_at->isSameDay($subscription->started_at->copy()->addYear()));
+
+        $this->assertDatabaseHas('subscription_limits', [
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'credits_remaining' => 12000,
+            'profiles_remaining' => 12,
+        ]);
+    }
+
     public function test_duplicate_wompi_event_is_idempotent(): void
     {
         $user = User::factory()->create();
@@ -234,18 +299,23 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame(0, Subscription::where('user_id', $user->id)->count());
     }
 
-    private function createPendingPaymentOrder(User $user): PaymentOrder
-    {
+    private function createPendingPaymentOrder(
+        User $user,
+        SubscriptionPlan $plan = SubscriptionPlan::Starter,
+        float $displayAmountUsd = 8,
+    ): PaymentOrder {
+        $amountInCents = (int) round($displayAmountUsd * 4000 * 100);
+
         return PaymentOrder::create([
             'user_id' => $user->id,
             'provider' => PaymentProvider::Wompi,
             'reference' => 'VOI-'.$user->id.'-'.$this->faker->unique()->bothify('????####'),
-            'plan' => SubscriptionPlan::Starter,
-            'display_amount_usd' => 8,
+            'plan' => $plan,
+            'display_amount_usd' => $displayAmountUsd,
             'display_currency' => 'USD',
             'exchange_rate' => 4000,
-            'amount_cop' => 32000,
-            'amount_in_cents' => 3200000,
+            'amount_cop' => round($amountInCents / 100, 2),
+            'amount_in_cents' => $amountInCents,
             'currency' => 'COP',
             'status' => PaymentOrderStatus::Pending,
         ]);
