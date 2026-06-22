@@ -29,7 +29,7 @@ class PaymentControllerTest extends TestAPI
         Config::set('payment.display_currency', 'USD');
         Config::set('payment.processing_currency', 'COP');
         Config::set('payment.usd_cop_rate', 4000);
-        Config::set('payment.redirect_url', 'http://localhost:5173/checkout/result');
+        Config::set('payment.redirect_url', 'http://localhost:5173/dashboard/settings/billing/payment-result');
         Config::set('payment.drivers.wompi.environment', 'sandbox');
         Config::set('payment.drivers.wompi.public_key', 'pub_test_key');
         Config::set('payment.drivers.wompi.private_key', 'prv_test_key');

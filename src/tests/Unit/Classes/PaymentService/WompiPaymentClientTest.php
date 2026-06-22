@@ -35,7 +35,7 @@ class WompiPaymentClientTest extends TestCase
             reference: 'VOI-1-TEST',
             amountInCents: 3200000,
             currency: 'COP',
-            redirectUrl: 'http://localhost:5173/checkout/result',
+            redirectUrl: 'http://localhost:5173/dashboard/settings/billing/payment-result',
             customerData: ['email' => 'user@example.com', 'full-name' => 'Test User'],
         ));
 
