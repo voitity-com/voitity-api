@@ -26,8 +26,11 @@ return [
             'user:read',
             'avatar:write',
             'avatar:read',
-            'subscription-limits:read'
-        ]
+            'subscription-limits:read',
+            'subscription-plans:read',
+            'payments:create',
+            'payments:read',
+        ],
     ],
     'user' => [
         'abilities' => [
@@ -42,8 +45,11 @@ return [
             'user:read',
             'avatar:write',
             'avatar:read',
-            'subscription-limits:read'
-        ]
+            'subscription-limits:read',
+            'subscription-plans:read',
+            'payments:create',
+            'payments:read',
+        ],
     ],
     'profile' => [
         'abilities' => [
@@ -57,8 +63,8 @@ return [
             'user:write',
             'user:read',
             'avatar:write',
-            'avatar:read'
-        ]
+            'avatar:read',
+        ],
     ],
     'api' => [
         'abilities' => [
@@ -67,7 +73,7 @@ return [
             'voice:use',
             'messages:write',
             'user:read',
-            'avatar:read'
-        ]
-    ]
+            'avatar:read',
+        ],
+    ],
 ];

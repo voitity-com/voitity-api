@@ -352,6 +352,109 @@
                 ]
             }
         },
+        "/api/avatar/generate": {
+            "post": {
+                "tags": [
+                    "Avatar"
+                ],
+                "summary": "Generate an avatar from a profile image",
+                "operationId": "bfd9dd469a926b8706832276d35b262d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "profile_id",
+                                    "image"
+                                ],
+                                "properties": {
+                                    "profile_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "image": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Avatar generation started successfully."
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "avatar:write"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/avatar/{profile}": {
+            "get": {
+                "tags": [
+                    "Avatar"
+                ],
+                "summary": "Get active profile avatar",
+                "operationId": "a5e3971c1d9a8a113c9dbcb54f489ce2",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Avatar retrieved successfully."
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile or avatar not found"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "avatar:read"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/profile/{profile}/messages": {
             "post": {
                 "tags": [
@@ -465,6 +568,339 @@
                 ]
             }
         },
+        "/api/payments/wompi/checkout": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Create a Wompi checkout for a subscription plan",
+                "operationId": "ddfbcbfce646e936ba2a56d8692c6afa",
+                "responses": {
+                    "201": {
+                        "description": "Wompi checkout created successfully"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/payments/{paymentOrder}": {
+            "get": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get a payment order",
+                "operationId": "dd3389c3a2009d8c435263e307c7d6f9",
+                "responses": {
+                    "200": {
+                        "description": "Payment order retrieved successfully"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/profile/chats": {
+            "get": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "List profile chats",
+                "operationId": "c4691a94a8cb152cc1052737793f371a",
+                "parameters": [
+                    {
+                        "name": "profile_id",
+                        "in": "query",
+                        "description": "Profile identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Pagination page",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chats retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Chats retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "chats": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer",
+                                                                "example": 12
+                                                            },
+                                                            "created_at": {
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "updated_at": {
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "api_messages_count": {
+                                                                "type": "integer",
+                                                                "example": 8
+                                                            },
+                                                            "openai_messages_count": {
+                                                                "type": "integer",
+                                                                "example": 8
+                                                            },
+                                                            "last_message_at": {
+                                                                "type": "string",
+                                                                "format": "date-time",
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "pagination": {
+                                                    "properties": {
+                                                        "current_page": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer",
+                                                            "example": 20
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer",
+                                                            "example": 2
+                                                        },
+                                                        "total": {
+                                                            "type": "integer",
+                                                            "example": 25
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "chat:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/profile/chats/messages": {
+            "get": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "List chat messages",
+                "operationId": "b571f14fa9c61e4a3f1b6527a46e9943",
+                "parameters": [
+                    {
+                        "name": "profile_id",
+                        "in": "query",
+                        "description": "Profile identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "chat_id",
+                        "in": "query",
+                        "description": "Chat identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Pagination page",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Messages retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Messages retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "messages": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer",
+                                                                "example": 1050
+                                                            },
+                                                            "profile_id": {
+                                                                "type": "integer",
+                                                                "example": 1
+                                                            },
+                                                            "chat_id": {
+                                                                "type": "integer",
+                                                                "example": 12
+                                                            },
+                                                            "text": {
+                                                                "type": "string",
+                                                                "example": "Can you summarize my notes?"
+                                                            },
+                                                            "type": {
+                                                                "type": "string",
+                                                                "example": "question"
+                                                            },
+                                                            "source": {
+                                                                "type": "string",
+                                                                "example": "api",
+                                                                "nullable": true
+                                                            },
+                                                            "audio": {
+                                                                "type": "string",
+                                                                "nullable": true
+                                                            },
+                                                            "data": {
+                                                                "type": "object",
+                                                                "nullable": true
+                                                            },
+                                                            "created_at": {
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "updated_at": {
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "pagination": {
+                                                    "properties": {
+                                                        "current_page": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer",
+                                                            "example": 20
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer",
+                                                            "example": 2
+                                                        },
+                                                        "total": {
+                                                            "type": "integer",
+                                                            "example": 25
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile or chat not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "chat:read"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/profile": {
             "get": {
                 "tags": [
@@ -501,6 +937,12 @@
                                                                 "type": "integer",
                                                                 "example": 1
                                                             },
+                                                            "alias": {
+                                                                "type": "string",
+                                                                "maxLength": 100,
+                                                                "example": "JD",
+                                                                "nullable": true
+                                                            },
                                                             "name": {
                                                                 "type": "string",
                                                                 "example": "John Doe"
@@ -520,6 +962,16 @@
                                                             "active": {
                                                                 "type": "boolean",
                                                                 "example": true
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "draft",
+                                                                    "ready",
+                                                                    "published",
+                                                                    "hidden"
+                                                                ],
+                                                                "example": "draft"
                                                             },
                                                             "voice": {
                                                                 "type": "boolean",
@@ -593,6 +1045,12 @@
                                         "type": "string",
                                         "maxLength": 100,
                                         "example": "John Doe"
+                                    },
+                                    "alias": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "JD",
+                                        "nullable": true
                                     },
                                     "description": {
                                         "type": "string",
@@ -692,6 +1150,12 @@
                                                     "type": "integer",
                                                     "example": 1
                                                 },
+                                                "alias": {
+                                                    "type": "string",
+                                                    "maxLength": 100,
+                                                    "example": "JD",
+                                                    "nullable": true
+                                                },
                                                 "name": {
                                                     "type": "string",
                                                     "example": "John Doe"
@@ -711,6 +1175,137 @@
                                                 "active": {
                                                     "type": "boolean",
                                                     "example": true
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "ready",
+                                                        "published",
+                                                        "hidden"
+                                                    ],
+                                                    "example": "draft"
+                                                },
+                                                "voice": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "data": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/profile/alias/{alias}": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Get a profile by alias",
+                "operationId": "137f50f44f8d5c05f9da040280c093c5",
+                "parameters": [
+                    {
+                        "name": "alias",
+                        "in": "path",
+                        "description": "Profile alias",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Profile retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "alias": {
+                                                    "type": "string",
+                                                    "maxLength": 100,
+                                                    "example": "JD",
+                                                    "nullable": true
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "John Doe"
+                                                },
+                                                "description": {
+                                                    "type": "string",
+                                                    "example": "A short bio"
+                                                },
+                                                "genre": {
+                                                    "type": "string",
+                                                    "example": "male"
+                                                },
+                                                "personality": {
+                                                    "type": "string",
+                                                    "example": "friendly"
+                                                },
+                                                "active": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "ready",
+                                                        "published",
+                                                        "hidden"
+                                                    ],
+                                                    "example": "published"
                                                 },
                                                 "voice": {
                                                     "type": "boolean",
@@ -786,6 +1381,12 @@
                                         "maxLength": 100,
                                         "example": "John Doe"
                                     },
+                                    "alias": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "JD",
+                                        "nullable": true
+                                    },
                                     "description": {
                                         "type": "string",
                                         "maxLength": 500,
@@ -804,6 +1405,16 @@
                                     "active": {
                                         "type": "boolean",
                                         "example": true
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "draft",
+                                            "ready",
+                                            "published",
+                                            "hidden"
+                                        ],
+                                        "example": "published"
                                     }
                                 },
                                 "type": "object"
@@ -931,6 +1542,134 @@
                 "security": [
                     {
                         "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/subscription/limits": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get active subscription limits",
+                "operationId": "22be609c4045c43bf19faaf25a39dc90",
+                "responses": {
+                    "200": {
+                        "description": "Subscription limits retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription limits retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "subscription": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "user_id": {
+                                                            "type": "integer",
+                                                            "example": 4
+                                                        },
+                                                        "plan": {
+                                                            "type": "string",
+                                                            "example": "starter"
+                                                        },
+                                                        "plan_name": {
+                                                            "type": "string",
+                                                            "example": "Starter"
+                                                        },
+                                                        "price_usd": {
+                                                            "type": "number",
+                                                            "format": "float",
+                                                            "example": 8
+                                                        },
+                                                        "currency": {
+                                                            "type": "string",
+                                                            "example": "USD"
+                                                        },
+                                                        "interval": {
+                                                            "type": "string",
+                                                            "example": "monthly"
+                                                        },
+                                                        "status": {
+                                                            "type": "string",
+                                                            "example": "first"
+                                                        },
+                                                        "active": {
+                                                            "type": "boolean",
+                                                            "example": true
+                                                        },
+                                                        "started_at": {
+                                                            "type": "string",
+                                                            "format": "date-time"
+                                                        },
+                                                        "renews_at": {
+                                                            "type": "string",
+                                                            "format": "date-time"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "limits": {
+                                                    "type": "object"
+                                                },
+                                                "usage": {
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Active subscription not found"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "subscription-limits:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/subscription/plans": {
+            "get": {
+                "tags": [
+                    "Subscription"
+                ],
+                "summary": "Get available subscription plans",
+                "operationId": "c2f9403102adaea1022cd6f8dd3e7cc3",
+                "responses": {
+                    "200": {
+                        "description": "Subscription plans retrieved successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "subscription-plans:read"
+                        ]
                     }
                 ]
             }
@@ -1450,22 +2189,6 @@
                             }
                         }
                     },
-                    "403": {
-                        "description": "Only admin users can process voice samples",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Only admin users can process voice samples."
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
                     "401": {
                         "description": "Unauthenticated",
                         "content": {
@@ -1507,6 +2230,20 @@
                     }
                 ]
             }
+        },
+        "/api/payments/wompi/events": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Receive Wompi payment events",
+                "operationId": "61a25e3f93c3573d9878db404993e0f1",
+                "responses": {
+                    "200": {
+                        "description": "Wompi event received"
+                    }
+                }
+            }
         }
     },
     "tags": [
@@ -1515,12 +2252,28 @@
             "description": "Auth"
         },
         {
+            "name": "Avatar",
+            "description": "Avatar"
+        },
+        {
             "name": "Messages",
             "description": "Messages"
         },
         {
+            "name": "Payments",
+            "description": "Payments"
+        },
+        {
             "name": "Profile",
             "description": "Profile"
+        },
+        {
+            "name": "Subscriptions",
+            "description": "Subscriptions"
+        },
+        {
+            "name": "Subscription",
+            "description": "Subscription"
         },
         {
             "name": "User",

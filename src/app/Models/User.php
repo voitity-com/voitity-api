@@ -118,4 +118,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(SubscriptionUse::class);
     }
+
+    public function paymentOrders()
+    {
+        return $this->hasMany(PaymentOrder::class);
+    }
 }
