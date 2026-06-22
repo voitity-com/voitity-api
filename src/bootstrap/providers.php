@@ -7,4 +7,5 @@ return [
     App\Providers\VoiceSampleServiceProvider::class,
     App\Providers\VoiceServiceProvider::class,
     App\Providers\VideoAIServiceProvider::class,
+    App\Providers\PaymentServiceProvider::class,
 ];

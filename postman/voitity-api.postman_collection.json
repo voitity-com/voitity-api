@@ -369,6 +369,31 @@
       "name": "Subscription",
       "item": [
         {
+          "name": "Get Subscription Plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "plans"
+              ]
+            },
+            "description": "Lists subscription plans, purchasable status, display currency, processing currency, and the USD/COP exchange rate. Requires token ability: subscription-plans:read."
+          },
+          "response": []
+        },
+        {
           "name": "Get Subscription Limits",
           "request": {
             "method": "GET",
@@ -390,6 +415,130 @@
               ]
             },
             "description": "Gets the active subscription for the authenticated user, remaining limits including credits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Wompi Checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.payment_order) {",
+                  "  pm.environment.set(\"payment_order_id\", json.data.payment_order.id);",
+                  "  pm.environment.set(\"payment_reference\", json.data.payment_order.reference);",
+                  "}",
+                  "if (json.data && json.data.checkout) {",
+                  "  pm.environment.set(\"wompi_checkout_url\", json.data.checkout.checkout_url);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"starter\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/wompi/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "wompi",
+                "checkout"
+              ]
+            },
+            "description": "Creates a pending local payment order and returns Wompi Web Checkout URL plus Widget config. Requires token ability: payments:create. Open wompi_checkout_url to pay in Sandbox."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{payment_order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{payment_order_id}}"
+              ]
+            },
+            "description": "Gets one payment order owned by the authenticated user, or any order when authenticated as admin. Requires token ability: payments:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Wompi Events Webhook",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Event-Checksum",
+                "value": "{{wompi_event_checksum}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_{{payment_reference}}\",\n  \"event\": \"transaction.updated\",\n  \"data\": {\n    \"transaction\": {\n      \"id\": \"trx_{{payment_reference}}\",\n      \"amount_in_cents\": 3200000,\n      \"reference\": \"{{payment_reference}}\",\n      \"currency\": \"COP\",\n      \"status\": \"APPROVED\"\n    }\n  },\n  \"environment\": \"test\",\n  \"signature\": {\n    \"properties\": [\n      \"transaction.id\",\n      \"transaction.status\",\n      \"transaction.amount_in_cents\"\n    ],\n    \"checksum\": \"{{wompi_event_checksum}}\"\n  },\n  \"timestamp\": 1530291411,\n  \"sent_at\": \"2018-07-20T16:45:05.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/wompi/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "wompi",
+                "events"
+              ]
+            },
+            "description": "Local webhook endpoint for Wompi events. In real Sandbox testing, configure the public HTTPS tunnel URL in Wompi and let Wompi call this endpoint. For manual Postman testing, compute wompi_event_checksum as SHA256(transaction.id + transaction.status + transaction.amount_in_cents + timestamp + WOMPI_EVENTS_SECRET)."
           },
           "response": []
         }
