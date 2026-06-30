@@ -984,6 +984,117 @@
             "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id."
           },
           "response": []
+        },
+        {
+          "name": "Send Audio Message - New Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  if (json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                  "  if (json.data.message_id) pm.environment.set('message_id', json.data.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{message_audio_file_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messages/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messages",
+                "audio"
+              ]
+            },
+            "description": "Uploads an audio recording, transcribes it, creates a new chat when chat_id is omitted, and sends the transcribed text as a message. Requires messages:write. The response includes request_text and request_audio_url for the stored user audio message. Set message_audio_file_path to a local audio file such as webm, mp3, wav, m4a, ogg, or flac. Browser recordings in WebM/MP4 containers are accepted."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Audio Message - Existing Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  if (json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                  "  if (json.data.message_id) pm.environment.set('message_id', json.data.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{message_audio_file_path}}"
+                },
+                {
+                  "key": "chat_id",
+                  "value": "{{chat_id}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messages/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messages",
+                "audio"
+              ]
+            },
+            "description": "Uploads an audio recording to an existing chat, transcribes it, stores the audio URL on the message, and sends the transcribed text. The response includes request_text and request_audio_url for the stored user audio message. Browser recordings in WebM/MP4 containers are accepted. Run 'Send Message - New Chat' or 'Send Audio Message - New Chat' first to populate chat_id."
+          },
+          "response": []
         }
       ]
     },
