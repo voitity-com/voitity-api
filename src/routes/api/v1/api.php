@@ -39,6 +39,7 @@ Route::prefix('/profile')->group(function () {
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/chats', [ProfileChatController::class, 'listChats'])->middleware(['auth:sanctum', 'abilities:chat:read']);
+    Route::post('/{profile}/messages/audio', [MessageController::class, 'storeAudio'])->middleware(['auth:sanctum', 'abilities:messages:write']);
     Route::post('/{profile}/messages', [MessageController::class, 'store'])->middleware(['auth:sanctum', 'abilities:messages:write']);
 });
 

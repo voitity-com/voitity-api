@@ -16,6 +16,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Audio Message Storage
+    |--------------------------------------------------------------------------
+    |
+    | Uploaded audio messages are stored after successful transcription and the
+    | public URL is persisted on the message record.
+    |
+    */
+
+    'audio_messages' => [
+        'disk' => env('CHAT_AUDIO_MESSAGES_DISK', 'public'),
+        'folder' => env('CHAT_AUDIO_MESSAGES_FOLDER', 'messages/audio'),
+        'visibility' => env('CHAT_AUDIO_MESSAGES_VISIBILITY', 'public'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Chat AI Service Drivers
     |--------------------------------------------------------------------------
     |
