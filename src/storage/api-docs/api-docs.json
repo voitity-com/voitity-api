@@ -568,6 +568,132 @@
                 ]
             }
         },
+        "/api/profile/{profile}/messages/audio": {
+            "post": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Send an audio message to a profile",
+                "description": "Transcribes a user audio recording, stores it as a message, and triggers the AI workflow to generate a reply.",
+                "operationId": "73a4ae83f788e491ba26facbd8c3f70c",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "description": "Profile identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "audio"
+                                ],
+                                "properties": {
+                                    "audio": {
+                                        "description": "Audio recording to transcribe. Browser WebM/MP4 recordings may be detected as video/webm or video/mp4 containers.",
+                                        "type": "file",
+                                        "format": "binary"
+                                    },
+                                    "chat_id": {
+                                        "description": "Existing chat identifier",
+                                        "type": "integer",
+                                        "example": 12,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Audio message processed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Message processed successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "chat_id": {
+                                                    "type": "integer",
+                                                    "example": 42
+                                                },
+                                                "message_id": {
+                                                    "description": "Answer message identifier",
+                                                    "type": "integer",
+                                                    "example": 1051
+                                                },
+                                                "text": {
+                                                    "type": "string",
+                                                    "example": "Here is the information you requested."
+                                                },
+                                                "audio_url": {
+                                                    "type": "string",
+                                                    "example": "https://cdn.example.com/audio/answer.mp3",
+                                                    "nullable": true
+                                                },
+                                                "request_message_id": {
+                                                    "description": "Stored user audio message identifier",
+                                                    "type": "integer",
+                                                    "example": 1050
+                                                },
+                                                "request_text": {
+                                                    "description": "Transcribed text from the uploaded audio",
+                                                    "type": "string",
+                                                    "example": "Necesito ayuda con mi perfil"
+                                                },
+                                                "request_audio_url": {
+                                                    "type": "string",
+                                                    "example": "https://cdn.example.com/messages/audio/1/recording.webm",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Audio message stored and processing pending"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Profile or chat not found"
+                    },
+                    "422": {
+                        "description": "Validation error or empty transcription"
+                    },
+                    "502": {
+                        "description": "Audio transcription failed"
+                    },
+                    "500": {
+                        "description": "Unexpected error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/payments/wompi/checkout": {
             "post": {
                 "tags": [
@@ -1546,6 +1672,87 @@
                 ]
             }
         },
+        "/api/profile/{profile}/data/networks": {
+            "put": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Update profile social networks",
+                "operationId": "5c36d1bf60747aaffbf1a0d614bcb2ee",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "description": "Profile ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "networks"
+                                ],
+                                "properties": {
+                                    "networks": {
+                                        "description": "Map of supported social network key to profile URL. Sending an empty object removes all networks.",
+                                        "type": "object",
+                                        "example": {
+                                            "facebook": "https://facebook.com/voitity",
+                                            "instagram": "https://instagram.com/voitity"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Profile updated successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/subscription/limits": {
             "get": {
                 "tags": [
@@ -1842,7 +2049,7 @@
                         }
                     },
                     "400": {
-                        "description": "User already has an active voice or no active profile found."
+                        "description": "No active profile found."
                     },
                     "401": {
                         "description": "Unauthenticated"

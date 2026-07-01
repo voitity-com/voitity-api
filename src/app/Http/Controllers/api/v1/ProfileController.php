@@ -11,12 +11,16 @@ use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
+use App\Models\Voice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
+    private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
+
     /**
      * @OA\Get(
      *     path="/api/profile",
@@ -140,7 +144,14 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            $profile = $user->profiles()->create($request->validated());
+            [$profile] = DB::transaction(function () use ($request, $user): array {
+                $profile = $user->profiles()->create($request->validated());
+                $voice = $this->createBaseVoiceForProfile($profile);
+
+                $profile->setRelation('voices', collect([$voice]));
+
+                return [$profile, $voice];
+            });
 
             event(new SubscriptionUsageRequested(
                 userId: $user->id,
@@ -160,6 +171,24 @@ class ProfileController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    private function createBaseVoiceForProfile(Profile $profile): Voice
+    {
+        /** @var Voice $voice */
+        $voice = $profile->voices()->create([
+            'user_id' => $profile->user_id,
+            'name' => $profile->name,
+            'description' => $profile->description,
+            'language_code' => self::DEFAULT_VOICE_LANGUAGE_CODE,
+            'source_voice_id' => null,
+            'source' => null,
+            'is_verified' => false,
+            'verified_at' => null,
+            'active' => true,
+        ]);
+
+        return $voice;
     }
 
     /**
@@ -429,6 +458,53 @@ class ProfileController extends Controller
      *     @OA\Response(response=404, description="Profile not found"),
      *     @OA\Response(response=422, description="Validation error")
      * )
+     *
+     * @OA\Put(
+     *     path="/api/profile/{profile}/data/networks",
+     *     summary="Update profile social networks",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *
+     *     @OA\Parameter(
+     *         name="profile",
+     *         in="path",
+     *         required=true,
+     *         description="Profile ID",
+     *
+     *         @OA\Schema(type="integer")
+     *     ),
+     *
+     *     @OA\RequestBody(
+     *         required=true,
+     *
+     *         @OA\JsonContent(
+     *             required={"networks"},
+     *
+     *             @OA\Property(
+     *                 property="networks",
+     *                 type="object",
+     *                 example={"facebook": "https://facebook.com/voitity", "instagram": "https://instagram.com/voitity"},
+     *                 description="Map of supported social network key to profile URL. Sending an empty object removes all networks."
+     *             )
+     *         )
+     *     ),
+     *
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile updated successfully.",
+     *
+     *         @OA\JsonContent(
+     *
+     *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function updateData(StoreProfileDataRequest $request, Profile $profile): JsonResponse
     {
@@ -443,7 +519,12 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $profile->update($request->validated());
+            if ($request->isUpdatingNetworks()) {
+                $profile->networks = (object) $request->validated('networks');
+                $profile->save();
+            } else {
+                $profile->update($request->validated());
+            }
 
             return response()->json([
                 'message' => 'Profile updated successfully.',
