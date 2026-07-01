@@ -292,6 +292,43 @@ class ProfileControllerTest extends TestAPI
         $response->assertStatus(403);
     }
 
+    public function test_unauthorized_user_can_not_list_social_networks()
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
+            ->json('GET', self::ENDPOINT_PROFILE.'/social-networks');
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_user_without_profile_read_ability_can_not_list_social_networks()
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/social-networks');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_can_list_social_networks()
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/social-networks');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Social networks retrieved successfully.');
+        $response->assertJsonPath('data.networks.facebook.name', 'Facebook');
+        $response->assertJsonPath(
+            'data.networks.github.icon',
+            'https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/github.png'
+        );
+    }
+
     public function test_unauthorized_user_can_not_update_a_profile()
     {
         $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
@@ -447,6 +484,7 @@ class ProfileControllerTest extends TestAPI
             'tiktok',
             'youtube',
             'linkedin',
+            'github',
             'x',
             'threads',
             'whatsapp',

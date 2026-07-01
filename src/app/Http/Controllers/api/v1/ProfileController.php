@@ -344,6 +344,62 @@ class ProfileController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/api/profile/social-networks",
+     *     summary="List supported profile social networks",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *
+     *     @OA\Response(
+     *         response=200,
+     *         description="Social networks retrieved successfully.",
+     *
+     *         @OA\JsonContent(
+     *
+     *             @OA\Property(property="message", type="string", example="Social networks retrieved successfully."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="networks",
+     *                     type="object",
+     *                     example={"facebook": {"name": "Facebook", "icon": "https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/facebook.png"}}
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="User not found"),
+     *     @OA\Response(response=500, description="Unexpected error")
+     * )
+     */
+    public function socialNetworks(Request $request): JsonResponse
+    {
+        try {
+            if (! $request->user()) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            return response()->json([
+                'message' => 'Social networks retrieved successfully.',
+                'data' => [
+                    'networks' => config('social-networks.networks', []),
+                ],
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Error listing social networks.', [
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * @OA\Patch(
      *     path="/api/profile/{id}",
      *     summary="Update a profile",

@@ -22,6 +22,10 @@ return [
             'name' => 'LinkedIn',
             'icon' => 'https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/linkedin.png',
         ],
+        'github' => [
+            'name' => 'GitHub',
+            'icon' => 'https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/github.png',
+        ],
         'x' => [
             'name' => 'X',
             'icon' => 'https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/x.png',
