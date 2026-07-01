@@ -709,6 +709,31 @@
           "response": []
         },
         {
+          "name": "List Supported Social Networks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/social-networks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "social-networks"
+              ]
+            },
+            "description": "Lists supported social network keys, display names, and public S3 icon URLs. Requires token ability: profile:read."
+          },
+          "response": []
+        },
+        {
           "name": "Update Profile",
           "request": {
             "method": "PATCH",
