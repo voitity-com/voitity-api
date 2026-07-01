@@ -11,12 +11,16 @@ use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
+use App\Models\Voice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
+    private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
+
     /**
      * @OA\Get(
      *     path="/api/profile",
@@ -140,7 +144,14 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            $profile = $user->profiles()->create($request->validated());
+            [$profile] = DB::transaction(function () use ($request, $user): array {
+                $profile = $user->profiles()->create($request->validated());
+                $voice = $this->createBaseVoiceForProfile($profile);
+
+                $profile->setRelation('voices', collect([$voice]));
+
+                return [$profile, $voice];
+            });
 
             event(new SubscriptionUsageRequested(
                 userId: $user->id,
@@ -160,6 +171,24 @@ class ProfileController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    private function createBaseVoiceForProfile(Profile $profile): Voice
+    {
+        /** @var Voice $voice */
+        $voice = $profile->voices()->create([
+            'user_id' => $profile->user_id,
+            'name' => $profile->name,
+            'description' => $profile->description,
+            'language_code' => self::DEFAULT_VOICE_LANGUAGE_CODE,
+            'source_voice_id' => null,
+            'source' => null,
+            'is_verified' => false,
+            'verified_at' => null,
+            'active' => true,
+        ]);
+
+        return $voice;
     }
 
     /**

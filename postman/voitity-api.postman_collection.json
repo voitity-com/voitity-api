@@ -1179,7 +1179,7 @@
                 "voice"
               ]
             },
-            "description": "Creates a voice and stores voice_id from data.id. A user can only have one active voice."
+            "description": "Creates a voice for the selected profile and stores voice_id from data.id. If the profile already has an active voice, the existing voice is returned. A profile can only have one active voice."
           },
           "response": []
         },

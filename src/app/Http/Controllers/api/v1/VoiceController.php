@@ -9,7 +9,9 @@ use App\Http\Requests\Voice\StoreVoiceRequest;
 use App\Http\Requests\Voice\TestVoiceRequest;
 use App\Http\Responses\Voice\VoiceTestResponse;
 use App\Models\Profile;
+use App\Models\Voice;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class VoiceController extends Controller
@@ -20,25 +22,32 @@ class VoiceController extends Controller
      *     summary="Create a new voice",
      *     tags={"Voice"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\JsonContent(
      *             required={"name"},
+     *
      *             @OA\Property(property="name", type="string", maxLength=100, example="Sample Voice"),
      *             @OA\Property(property="description", type="string", maxLength=500, example="Voice description"),
      *             @OA\Property(property="language_code", type="string", maxLength=10, example="es"),
      *             @OA\Property(property="profile_id", type="integer", example=1, description="Profile ID (optional, will use first active profile if not provided)")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Voice created successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Voice created successfully."),
      *             @OA\Property(property="data", type="object")
      *         )
      *     ),
-     *     @OA\Response(response=400, description="User already has an active voice or no active profile found."),
+     *
+     *     @OA\Response(response=400, description="No active profile found."),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="User not found"),
      *     @OA\Response(response=422, description="Validation error")
@@ -49,31 +58,55 @@ class VoiceController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if ($user->voices()->where('active', true)->exists()) {
-                return response()->json(['message' => 'User already has an active voice.'], 400);
-            }
-
-            // Handle profile_id logic
             $validatedData = $request->validated();
-            
-            if (!isset($validatedData['profile_id'])) {
-                // Get the first active profile for the user
+
+            if (! isset($validatedData['profile_id'])) {
                 $activeProfile = $user->profiles()->where('active', true)->first();
-                
-                if (!$activeProfile) {
+
+                if (! $activeProfile) {
                     return response()->json(['message' => 'User has no active profile. Please create or activate a profile first.'], 400);
                 }
-                
+
                 $validatedData['profile_id'] = $activeProfile->id;
             }
 
-            $voice = $user->voices()->create($validatedData);
+            $voice = DB::transaction(function () use ($user, $validatedData): Voice {
+                /** @var Profile $profile */
+                $profile = Profile::query()
+                    ->whereKey($validatedData['profile_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            return response()->json(['message' => 'Voice created successfully.', 'data' => $voice], 200);
+                $existingVoice = $profile->voices()
+                    ->where('active', true)
+                    ->latest('id')
+                    ->first();
+
+                if ($existingVoice) {
+                    return $existingVoice;
+                }
+
+                /** @var Voice $voice */
+                $voice = $profile->voices()->create([
+                    'user_id' => $user->id,
+                    'name' => $validatedData['name'],
+                    'description' => $validatedData['description'] ?? null,
+                    'language_code' => $validatedData['language_code'],
+                    'active' => true,
+                ]);
+
+                return $voice;
+            });
+
+            $message = $voice->wasRecentlyCreated
+                ? 'Voice created successfully.'
+                : 'Voice already exists for profile.';
+
+            return response()->json(['message' => $message, 'data' => $voice], 200);
 
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
@@ -86,18 +119,24 @@ class VoiceController extends Controller
      *     summary="Generate test audio for a profile voice",
      *     tags={"Voice"},
      *     security={{"sanctum":{"voice:use"}}},
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\JsonContent(
      *             required={"profile_id","text"},
+     *
      *             @OA\Property(property="profile_id", type="integer", example=1),
      *             @OA\Property(property="text", type="string", maxLength=5000, example="Hola, esta es una prueba de voz.")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Voice audio generated successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Voice audio generated successfully."),
      *             @OA\Property(
      *                 property="data",
@@ -114,6 +153,7 @@ class VoiceController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile or voice not found"),
@@ -127,7 +167,7 @@ class VoiceController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
@@ -135,26 +175,26 @@ class VoiceController extends Controller
 
             $profileQuery = Profile::where('id', $payload['profile_id']);
 
-            if (!$this->canUseAnyProfileVoice($user->role)) {
+            if (! $this->canUseAnyProfileVoice($user->role)) {
                 $profileQuery->where('user_id', $user->id);
             }
 
             /** @var Profile|null $profile */
             $profile = $profileQuery->first();
 
-            if (!$profile) {
+            if (! $profile) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
             $voiceQuery = $profile->voices()->where('active', true);
 
-            if (!$this->canUseAnyProfileVoice($user->role)) {
+            if (! $this->canUseAnyProfileVoice($user->role)) {
                 $voiceQuery->where('user_id', $user->id);
             }
 
             $voice = $voiceQuery->first();
 
-            if (!$voice) {
+            if (! $voice) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
 

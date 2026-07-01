@@ -2049,7 +2049,7 @@
                         }
                     },
                     "400": {
-                        "description": "User already has an active voice or no active profile found."
+                        "description": "No active profile found."
                     },
                     "401": {
                         "description": "Unauthenticated"

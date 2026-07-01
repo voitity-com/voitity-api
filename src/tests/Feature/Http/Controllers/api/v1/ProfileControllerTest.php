@@ -64,13 +64,25 @@ class ProfileControllerTest extends TestAPI
         $response_content = json_decode($response->getContent());
 
         $new_profile = Profile::find($response_content->data->id);
+        $baseVoice = Voice::where('profile_id', $new_profile->id)->first();
+
+        $this->assertNotNull($baseVoice);
         $this->assertEquals($profile_data['name'], $new_profile->name);
         $this->assertEquals($profile_data['alias'], $new_profile->alias);
         $this->assertEquals($profile_data['description'], $new_profile->description);
         $this->assertTrue((bool) $new_profile->active);
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
+        $this->assertSame($new_profile->user_id, $baseVoice->user_id);
+        $this->assertSame($new_profile->name, $baseVoice->name);
+        $this->assertSame($new_profile->description, $baseVoice->description);
+        $this->assertSame('es', $baseVoice->language_code);
+        $this->assertTrue((bool) $baseVoice->active);
+        $this->assertNull($baseVoice->source);
+        $this->assertNull($baseVoice->source_voice_id);
         $response->assertJsonPath('data.alias', $profile_data['alias']);
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
+        $response->assertJsonPath('data.voice', false);
+        $response->assertJsonPath('data.voice_id', $baseVoice->id);
         Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($new_profile) {
             return $event->usageType === SubscriptionUsageType::ProfileCreated
                 && $event->userId === $new_profile->user_id
