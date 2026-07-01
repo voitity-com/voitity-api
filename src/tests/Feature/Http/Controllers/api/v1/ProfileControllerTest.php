@@ -425,4 +425,181 @@ class ProfileControllerTest extends TestAPI
         $new_profile = Profile::find($profile->id);
         $this->assertEquals($new_data, $new_profile->data);
     }
+
+    public function test_social_networks_config_contains_supported_networks_with_s3_icons()
+    {
+        $networks = config('social-networks.networks');
+        $expectedNetworks = [
+            'facebook',
+            'instagram',
+            'tiktok',
+            'youtube',
+            'linkedin',
+            'x',
+            'threads',
+            'whatsapp',
+            'telegram',
+            'discord',
+            'twitch',
+            'kick',
+            'spotify',
+            'onlyfans',
+        ];
+
+        $this->assertSame($expectedNetworks, array_keys($networks));
+
+        foreach ($expectedNetworks as $network) {
+            $this->assertNotEmpty($networks[$network]['name']);
+            $this->assertSame(
+                "https://bigmelo-prod-profiles-139194331469.s3.amazonaws.com/icons/{$network}.png",
+                $networks[$network]['icon']
+            );
+        }
+    }
+
+    public function test_user_can_update_profile_networks()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $networks = [
+            'facebook' => 'https://facebook.com/voitity',
+            'instagram' => 'https://instagram.com/voitity',
+            'youtube' => 'https://youtube.com/@voitity',
+        ];
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => $networks,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Profile updated successfully.');
+        $response->assertJsonPath('data.networks.facebook', $networks['facebook']);
+        $response->assertJsonPath('data.networks.instagram', $networks['instagram']);
+        $response->assertJsonPath('data.networks.youtube', $networks['youtube']);
+
+        $newProfile = Profile::find($profile->id);
+        $this->assertSame($networks, $newProfile->networks);
+    }
+
+    public function test_user_can_replace_profile_networks_with_empty_object()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'networks' => [
+                'facebook' => 'https://facebook.com/voitity',
+            ],
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => [],
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertStringContainsString('"networks":{}', $response->getContent());
+
+        $newProfile = Profile::find($profile->id);
+        $this->assertSame([], $newProfile->networks);
+    }
+
+    public function test_user_can_not_update_profile_networks_with_unsupported_network()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => [
+                    'myspace' => 'https://myspace.com/voitity',
+                ],
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['networks.myspace']);
+    }
+
+    public function test_user_can_not_update_profile_networks_with_invalid_url()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => [
+                    'facebook' => 'not-a-url',
+                ],
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['networks.facebook']);
+    }
+
+    public function test_user_without_profile_write_ability_can_not_update_profile_networks()
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => [
+                    'facebook' => 'https://facebook.com/voitity',
+                ],
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_can_not_update_profile_networks_if_he_is_not_owner()
+    {
+        $owner = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $owner->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->json('PUT', self::ENDPOINT_PROFILE.'/'.$profile->id.'/data/networks', [
+                'networks' => [
+                    'facebook' => 'https://facebook.com/voitity',
+                ],
+            ]);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
 }

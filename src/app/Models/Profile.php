@@ -22,14 +22,17 @@ class Profile extends Model
         'active',
         'status',
         'data',
+        'networks',
     ];
 
     protected $attributes = [
         'status' => ProfileStatus::Draft->value,
+        'networks' => '{}',
     ];
 
     protected $casts = [
         'data' => 'array',
+        'networks' => 'array',
         'status' => ProfileStatus::class,
     ];
 

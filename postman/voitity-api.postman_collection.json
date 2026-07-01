@@ -774,6 +774,41 @@
             "description": "Updates the profile data JSON field."
           },
           "response": []
+        },
+        {
+          "name": "Update Profile Networks",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"networks\": {\n    \"facebook\": \"https://facebook.com/voitity\",\n    \"instagram\": \"https://instagram.com/voitity\",\n    \"youtube\": \"https://youtube.com/@voitity\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/data/networks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "data",
+                "networks"
+              ]
+            },
+            "description": "Replaces the profile networks JSON field. Supported keys come from social-networks.php. Send { \"networks\": {} } to remove all networks. Requires token ability: profile:write."
+          },
+          "response": []
         }
       ]
     },

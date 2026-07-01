@@ -26,6 +26,7 @@ class ProfileResponse
             'voice' => $this->hasConfiguredVoice($activeVoice),
             'voice_id' => $activeVoice?->id,
             'data' => $this->profile->data,
+            'networks' => (object) ($this->profile->networks ?? []),
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];

@@ -429,6 +429,53 @@ class ProfileController extends Controller
      *     @OA\Response(response=404, description="Profile not found"),
      *     @OA\Response(response=422, description="Validation error")
      * )
+     *
+     * @OA\Put(
+     *     path="/api/profile/{profile}/data/networks",
+     *     summary="Update profile social networks",
+     *     tags={"Profile"},
+     *     security={{"sanctum":{}}},
+     *
+     *     @OA\Parameter(
+     *         name="profile",
+     *         in="path",
+     *         required=true,
+     *         description="Profile ID",
+     *
+     *         @OA\Schema(type="integer")
+     *     ),
+     *
+     *     @OA\RequestBody(
+     *         required=true,
+     *
+     *         @OA\JsonContent(
+     *             required={"networks"},
+     *
+     *             @OA\Property(
+     *                 property="networks",
+     *                 type="object",
+     *                 example={"facebook": "https://facebook.com/voitity", "instagram": "https://instagram.com/voitity"},
+     *                 description="Map of supported social network key to profile URL. Sending an empty object removes all networks."
+     *             )
+     *         )
+     *     ),
+     *
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile updated successfully.",
+     *
+     *         @OA\JsonContent(
+     *
+     *             @OA\Property(property="message", type="string", example="Profile updated successfully."),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function updateData(StoreProfileDataRequest $request, Profile $profile): JsonResponse
     {
@@ -443,7 +490,12 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $profile->update($request->validated());
+            if ($request->isUpdatingNetworks()) {
+                $profile->networks = (object) $request->validated('networks');
+                $profile->save();
+            } else {
+                $profile->update($request->validated());
+            }
 
             return response()->json([
                 'message' => 'Profile updated successfully.',
