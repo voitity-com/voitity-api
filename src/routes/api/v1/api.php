@@ -4,6 +4,7 @@ use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\MessageController;
 use App\Http\Controllers\api\v1\PaymentController;
+use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
@@ -36,6 +37,7 @@ Route::prefix('/profile')->group(function () {
     Route::get('/chats/messages', [ProfileChatController::class, 'getChatMessages'])->middleware(['auth:sanctum', 'abilities:chat:read']);
     Route::get('/social-networks', [ProfileController::class, 'socialNetworks'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/alias/{alias}', [ProfileController::class, 'getProfileByAlias'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/transcriptions/audio', [ProfileAudioTranscriptionController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:transcribe']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
@@ -54,6 +56,8 @@ Route::prefix('/voice')->group(function () {
 
 Route::prefix('/avatar')->group(function () {
     Route::post('/generate', [AvatarController::class, 'generateAvatar'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
+    Route::get('/{profile}/history', [AvatarController::class, 'history'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
+    Route::post('/{profile}/activate', [AvatarController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
     Route::get('/{profile}', [AvatarController::class, 'show'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
 });
 

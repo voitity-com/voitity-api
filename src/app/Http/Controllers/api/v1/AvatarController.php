@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Repositories\AvatarRepository;
+use App\Exceptions\Avatar\AvatarGenerationInProgressException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Avatar\GenerateAvatarRequest;
 use App\Models\AiImage;
@@ -12,6 +13,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class AvatarController extends Controller
 {
@@ -56,11 +59,16 @@ class AvatarController extends Controller
             }
 
             $aiImage = $avatarRepository->generateAvatar($user, $profile, $request->file('image'));
+            $avatar = ProfileAvatar::with(['aiImage', 'aiVideo'])
+                ->where('aiimage_id', $aiImage->id)
+                ->first();
 
             return response()->json([
                 'message' => 'Avatar generation started successfully.',
-                'data' => $this->aiImageToArray($aiImage),
+                'data' => $this->aiImageToArray($aiImage, $avatar),
             ], 200);
+        } catch (AvatarGenerationInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         } catch (\Throwable $e) {
             Log::error('Error generating avatar.', [
                 'user_id' => $request->user()?->id,
@@ -101,19 +109,113 @@ class AvatarController extends Controller
             }
 
             $avatar = $avatarRepository->getActiveAvatarForProfile($profile);
+            $processingAvatar = $avatarRepository->getProcessingAvatarForProfile($profile);
 
             if (!$avatar) {
                 return response()->json(['message' => 'Avatar not found.'], 404);
             }
 
+            $data = $this->profileAvatarToArray($avatar);
+            $data['has_processing_avatar'] = (bool) $processingAvatar;
+            $data['processing_avatar'] = $processingAvatar ? $this->profileAvatarToArray($processingAvatar) : null;
+
             return response()->json([
                 'message' => 'Avatar retrieved successfully.',
-                'data' => $this->profileAvatarToArray($avatar),
+                'data' => $data,
             ], 200);
         } catch (\Throwable $e) {
             Log::error('Error retrieving avatar.', [
                 'user_id' => $request->user()?->id,
                 'profile_id' => $profile->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function history(Request $request, Profile $profile, AvatarRepository $avatarRepository): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user instanceof User) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (!$this->userCanGenerateAvatarForProfile($user, $profile)) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            $avatars = $avatarRepository->getAvatarHistoryForProfile($profile);
+            $activeAvatar = $avatars->firstWhere('status', ProfileAvatar::STATUS_ACTIVE);
+            $processingAvatar = $avatars->firstWhere('status', ProfileAvatar::STATUS_PROCESSING);
+
+            return response()->json([
+                'message' => 'Avatar history retrieved successfully.',
+                'data' => [
+                    'avatars' => $avatars
+                        ->map(fn (ProfileAvatar $avatar) => $this->profileAvatarToArray($avatar))
+                        ->values()
+                        ->all(),
+                    'active_avatar' => $activeAvatar ? $this->profileAvatarToArray($activeAvatar) : null,
+                    'processing_avatar' => $processingAvatar ? $this->profileAvatarToArray($processingAvatar) : null,
+                    'total' => $avatars->count(),
+                ],
+            ], 200);
+        } catch (\Throwable $e) {
+            Log::error('Error retrieving avatar history.', [
+                'user_id' => $request->user()?->id,
+                'profile_id' => $profile->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function activate(Request $request, Profile $profile, AvatarRepository $avatarRepository): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user instanceof User) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (!$this->userCanGenerateAvatarForProfile($user, $profile)) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            $validated = $request->validate([
+                'avatar_id' => ['required', 'integer', 'exists:profile_avatars,id'],
+            ]);
+
+            $avatar = ProfileAvatar::with(['aiImage', 'aiVideo'])
+                ->where('profile_id', $profile->id)
+                ->find((int) $validated['avatar_id']);
+
+            if (!$avatar) {
+                return response()->json(['message' => 'Avatar not found.'], 404);
+            }
+
+            $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar);
+
+            return response()->json([
+                'message' => 'Avatar activated successfully.',
+                'data' => $this->profileAvatarToArray($activeAvatar),
+            ], 200);
+        } catch (AvatarGenerationInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error activating avatar.', [
+                'user_id' => $request->user()?->id,
+                'profile_id' => $profile->id ?? null,
+                'avatar_id' => $request->input('avatar_id'),
                 'message' => $e->getMessage(),
             ]);
 
@@ -129,7 +231,7 @@ class AvatarController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function aiImageToArray(AiImage $aiImage): array
+    private function aiImageToArray(AiImage $aiImage, ?ProfileAvatar $avatar = null): array
     {
         return [
             'id' => $aiImage->id,
@@ -139,6 +241,7 @@ class AvatarController extends Controller
             'source' => $aiImage->source,
             'status' => $aiImage->status,
             'file' => $aiImage->file,
+            'avatar' => $avatar ? $this->profileAvatarToArray($avatar) : null,
             'created_at' => $aiImage->created_at,
             'updated_at' => $aiImage->updated_at,
         ];
@@ -160,6 +263,7 @@ class AvatarController extends Controller
             'ai_image' => $avatar->aiImage ? $this->aiImageToArray($avatar->aiImage) : null,
             'ai_video' => $avatar->aiVideo ? [
                 'id' => $avatar->aiVideo->id,
+                'aiimage_id' => $avatar->aiVideo->aiimage_id,
                 'source_id' => $avatar->aiVideo->source_id,
                 'source' => $avatar->aiVideo->source,
                 'status' => $avatar->aiVideo->status,

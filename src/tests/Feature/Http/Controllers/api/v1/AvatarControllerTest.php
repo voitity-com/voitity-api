@@ -29,6 +29,12 @@ class AvatarControllerTest extends TestAPI
         $profile = $this->profileForUser($user);
         $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
         $aiImage = $this->aiImageForProfile($profile);
+        $processingAvatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
 
         $this->mock(AvatarRepository::class, function ($mock) use ($user, $profile, $aiImage): void {
             $mock->shouldReceive('generateAvatar')
@@ -51,6 +57,8 @@ class AvatarControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Avatar generation started successfully.');
         $response->assertJsonPath('data.id', $aiImage->id);
         $response->assertJsonPath('data.profile_id', $profile->id);
+        $response->assertJsonPath('data.avatar.id', $processingAvatar->id);
+        $response->assertJsonPath('data.avatar.status', ProfileAvatar::STATUS_PROCESSING);
     }
 
     public function test_user_can_not_generate_avatar_for_other_user_profile(): void
@@ -155,7 +163,12 @@ class AvatarControllerTest extends TestAPI
             'aiimage_id' => $aiImage->id,
             'ai_video_id' => $aiVideo->id,
             'file' => $aiVideo->file,
-            'status' => 'active',
+            'status' => ProfileAvatar::STATUS_ACTIVE,
+        ]);
+        ProfileAvatar::create([
+            'user_id' => $owner->id,
+            'profile_id' => $profile->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
@@ -166,6 +179,107 @@ class AvatarControllerTest extends TestAPI
         $response->assertJsonPath('data.id', $avatar->id);
         $response->assertJsonPath('data.ai_video_id', $aiVideo->id);
         $response->assertJsonPath('data.file', 'aivideos/1.mp4');
+        $response->assertJsonPath('data.has_processing_avatar', true);
+        $response->assertJsonPath('data.processing_avatar.status', ProfileAvatar::STATUS_PROCESSING);
+    }
+
+    public function test_user_can_list_own_avatar_history(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:read'])->plainTextToken;
+        $active = $this->avatarForProfile($profile, ProfileAvatar::STATUS_ACTIVE, 'aivideos/active.mp4');
+        $inactive = $this->avatarForProfile($profile, ProfileAvatar::STATUS_INACTIVE, 'aivideos/old.mp4');
+        $processing = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->get("/api/avatar/{$profile->id}/history");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Avatar history retrieved successfully.');
+        $response->assertJsonPath('data.total', 3);
+        $response->assertJsonPath('data.processing_avatar.id', $processing->id);
+        $response->assertJsonPath('data.active_avatar.id', $active->id);
+        $response->assertJsonPath('data.avatars.0.id', $processing->id);
+        $response->assertJsonPath('data.avatars.1.id', $active->id);
+        $response->assertJsonPath('data.avatars.2.id', $inactive->id);
+    }
+
+    public function test_user_can_not_list_avatar_history_for_other_profile(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $profile = $this->profileForUser($otherUser);
+        $token = $user->createToken('test-token', ['avatar:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->get("/api/avatar/{$profile->id}/history");
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_user_can_activate_inactive_avatar(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $active = $this->avatarForProfile($profile, ProfileAvatar::STATUS_ACTIVE, 'aivideos/active.mp4');
+        $inactive = $this->avatarForProfile($profile, ProfileAvatar::STATUS_INACTIVE, 'aivideos/old.mp4');
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $inactive->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Avatar activated successfully.');
+        $response->assertJsonPath('data.id', $inactive->id);
+        $response->assertJsonPath('data.status', ProfileAvatar::STATUS_ACTIVE);
+
+        $this->assertSame(ProfileAvatar::STATUS_INACTIVE, $active->fresh()->status);
+        $this->assertSame(ProfileAvatar::STATUS_ACTIVE, $inactive->fresh()->status);
+    }
+
+    public function test_user_can_not_activate_avatar_while_generation_is_processing(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $inactive = $this->avatarForProfile($profile, ProfileAvatar::STATUS_INACTIVE, 'aivideos/old.mp4');
+        ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $inactive->id,
+            ]);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('message', 'Avatar generation is still processing for this profile.');
+    }
+
+    public function test_failed_avatar_can_not_be_activated(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $failed = $this->avatarForProfile($profile, ProfileAvatar::STATUS_FAILED, null);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $failed->id,
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Avatar cannot be activated.');
     }
 
     private function profileForUser(User $user): Profile
@@ -189,6 +303,29 @@ class AvatarControllerTest extends TestAPI
             'source' => 'runway',
             'status' => $status,
             'file' => $file,
+        ]);
+    }
+
+    private function avatarForProfile(Profile $profile, string $status, ?string $file): ProfileAvatar
+    {
+        $aiImage = $this->aiImageForProfile($profile, 'succeeded', $file ? str_replace('aivideos/', 'aiimages/', $file) . '.png' : null);
+        $aiVideo = AiVideo::create([
+            'user_id' => $profile->user_id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'source_id' => 'video-source-id-' . uniqid(),
+            'source' => 'runway',
+            'status' => $file ? 'succeeded' : 'failed',
+            'file' => $file,
+        ]);
+
+        return ProfileAvatar::create([
+            'user_id' => $profile->user_id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'ai_video_id' => $aiVideo->id,
+            'file' => $file,
+            'status' => $status,
         ]);
     }
 

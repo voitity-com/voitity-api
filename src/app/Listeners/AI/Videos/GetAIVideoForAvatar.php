@@ -8,6 +8,7 @@ use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\ProfileAvatar;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -75,6 +76,7 @@ class GetAIVideoForAvatar implements ShouldQueue
             if ($video->isFailed()) {
                 $aiVideo->status = 'failed';
                 $aiVideo->save();
+                $this->markAvatarFailed($event);
 
                 Log::error('AI video generation failed at provider', [
                     'aivideo_id' => $aiVideo->id,
@@ -105,6 +107,7 @@ class GetAIVideoForAvatar implements ShouldQueue
         if ($aiVideo) {
             $aiVideo->status = 'failed';
             $aiVideo->save();
+            $this->markAvatarFailed($event);
         }
 
         Log::error('GetAIVideoForAvatar listener failed', [
@@ -122,20 +125,32 @@ class GetAIVideoForAvatar implements ShouldQueue
             return;
         }
 
-        $avatar = ProfileAvatar::where('profile_id', $aiVideo->profile_id)->first();
+        DB::transaction(function () use ($event, $aiVideo): void {
+            $avatar = ProfileAvatar::where('profile_id', $aiVideo->profile_id)
+                ->where('aiimage_id', $event->aiImage?->id)
+                ->first();
 
-        if (!$avatar) {
-            $avatar = new ProfileAvatar([
-                'user_id' => $aiVideo->user_id,
-                'profile_id' => $aiVideo->profile_id,
-                'aiimage_id' => $event->aiImage?->id,
-                'status' => 'active',
-            ]);
-        }
+            if (!$avatar) {
+                $avatar = new ProfileAvatar([
+                    'user_id' => $aiVideo->user_id,
+                    'profile_id' => $aiVideo->profile_id,
+                    'aiimage_id' => $event->aiImage?->id,
+                ]);
+            }
 
-        $avatar->ai_video_id = $aiVideo->id;
-        $avatar->file = $aiVideo->file;
-        $avatar->save();
+            ProfileAvatar::where('profile_id', $aiVideo->profile_id)
+                ->where('status', ProfileAvatar::STATUS_ACTIVE)
+                ->when($avatar->exists, fn ($query) => $query->where('id', '<>', $avatar->id))
+                ->update(['status' => ProfileAvatar::STATUS_INACTIVE]);
+
+            $avatar->user_id = $aiVideo->user_id;
+            $avatar->profile_id = $aiVideo->profile_id;
+            $avatar->aiimage_id = $event->aiImage?->id;
+            $avatar->ai_video_id = $aiVideo->id;
+            $avatar->file = $aiVideo->file;
+            $avatar->status = ProfileAvatar::STATUS_ACTIVE;
+            $avatar->save();
+        });
     }
 
     private function releaseOrMarkFailed($aiVideo): void
@@ -143,6 +158,7 @@ class GetAIVideoForAvatar implements ShouldQueue
         if ($this->attempts() >= $this->tries) {
             $aiVideo->status = 'failed';
             $aiVideo->save();
+            $this->markAvatarFailedByVideo($aiVideo);
 
             Log::error('AI video generation exceeded max attempts', [
                 'aivideo_id' => $aiVideo->id,
@@ -167,5 +183,27 @@ class GetAIVideoForAvatar implements ShouldQueue
     private function normalizeStatus(string $status): string
     {
         return strtolower($status);
+    }
+
+    private function markAvatarFailed(AiVideoForAvatarCreated $event): void
+    {
+        $aiImageId = $event->aiImage?->id ?? $event->aiVideo->aiimage_id;
+
+        if ($aiImageId) {
+            ProfileAvatar::where('aiimage_id', $aiImageId)
+                ->where('status', ProfileAvatar::STATUS_PROCESSING)
+                ->update(['status' => ProfileAvatar::STATUS_FAILED]);
+        }
+    }
+
+    private function markAvatarFailedByVideo($aiVideo): void
+    {
+        if (!$aiVideo->aiimage_id) {
+            return;
+        }
+
+        ProfileAvatar::where('aiimage_id', $aiVideo->aiimage_id)
+            ->where('status', ProfileAvatar::STATUS_PROCESSING)
+            ->update(['status' => ProfileAvatar::STATUS_FAILED]);
     }
 }
