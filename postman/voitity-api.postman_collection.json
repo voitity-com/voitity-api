@@ -734,6 +734,53 @@
           "response": []
         },
         {
+          "name": "Transcribe Profile Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{profile_transcription_audio_file_path}}"
+                },
+                {
+                  "key": "field",
+                  "value": "{{profile_transcription_field}}",
+                  "type": "text"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language_code}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/transcriptions/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "transcriptions",
+                "audio"
+              ]
+            },
+            "description": "Uploads an audio recording, transcribes it, and returns text plus field limit metadata for description/personality. Requires token ability: profile:transcribe. Set profile_transcription_audio_file_path to a local audio file such as webm, mp3, wav, m4a, ogg, or flac. profile_transcription_field should be description or personality."
+          },
+          "response": []
+        },
+        {
           "name": "Update Profile",
           "request": {
             "method": "PATCH",

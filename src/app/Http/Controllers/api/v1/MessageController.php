@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
-use App\Classes\ChatAIService\ChatAIClient;
+use App\Classes\ChatAIService\AudioTranscriptionService;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Events\MessageStored;
 use App\Http\Controllers\Controller;
@@ -158,7 +158,7 @@ class MessageController extends Controller
     public function storeAudio(
         StoreAudioMessageRequest $request,
         Profile $profile,
-        ChatAIClient $chatAIClient
+        AudioTranscriptionService $transcriptionService
     ): JsonResponse {
         try {
             $payload = $request->validated();
@@ -181,7 +181,7 @@ class MessageController extends Controller
                 return response()->json(['message' => 'The audio field is required.'], 422);
             }
 
-            $transcription = $this->transcribeUploadedAudio($chatAIClient, $audio);
+            $transcription = $transcriptionService->transcribe($audio);
 
             if ($transcription->isFailed()) {
                 return response()->json([
@@ -323,36 +323,6 @@ class MessageController extends Controller
     private function userCanMessageProfile(User $user, Profile $profile): bool
     {
         return in_array($user->role, ['admin', 'api'], true) || (int) $profile->user_id === (int) $user->id;
-    }
-
-    private function transcribeUploadedAudio(ChatAIClient $chatAIClient, UploadedFile $audio): ChatAITextFromAudio
-    {
-        $tempBasePath = tempnam(sys_get_temp_dir(), 'message_audio_');
-
-        if ($tempBasePath === false) {
-            throw new RuntimeException('Unable to create temporary audio file for transcription.');
-        }
-
-        $extension = trim($audio->getClientOriginalExtension(), '.');
-        $tempAudioPath = $extension !== '' ? "{$tempBasePath}.{$extension}" : $tempBasePath;
-
-        if ($tempAudioPath !== $tempBasePath && ! rename($tempBasePath, $tempAudioPath)) {
-            @unlink($tempBasePath);
-            throw new RuntimeException('Unable to prepare temporary audio file for transcription.');
-        }
-
-        $sourcePath = $audio->getRealPath() ?: $audio->getPathname();
-
-        if (! is_string($sourcePath) || ! copy($sourcePath, $tempAudioPath)) {
-            @unlink($tempAudioPath);
-            throw new RuntimeException('Unable to copy audio file for transcription.');
-        }
-
-        try {
-            return $chatAIClient->getTextFromAudio($tempAudioPath);
-        } finally {
-            @unlink($tempAudioPath);
-        }
     }
 
     private function storeUploadedAudio(UploadedFile $audio, Profile $profile): string
