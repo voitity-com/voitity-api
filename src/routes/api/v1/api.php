@@ -56,6 +56,8 @@ Route::prefix('/voice')->group(function () {
 
 Route::prefix('/avatar')->group(function () {
     Route::post('/generate', [AvatarController::class, 'generateAvatar'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
+    Route::get('/{profile}/history', [AvatarController::class, 'history'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
+    Route::post('/{profile}/activate', [AvatarController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:avatar:write']);
     Route::get('/{profile}', [AvatarController::class, 'show'])->middleware(['auth:sanctum', 'abilities:avatar:read']);
 });
 

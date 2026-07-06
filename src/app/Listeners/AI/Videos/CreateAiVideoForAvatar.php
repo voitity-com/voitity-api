@@ -6,6 +6,7 @@ use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\AiVideo as AiVideoModel;
+use App\Models\ProfileAvatar;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
 use Illuminate\Queue\InteractsWithQueue;
@@ -88,6 +89,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
             if (!$video->id) {
                 $aiVideo->status = 'failed';
                 $aiVideo->save();
+                $this->markAvatarFailed($aiImage->id);
                 throw new RuntimeException('Video AI video generation did not return a source id.');
             }
 
@@ -115,6 +117,8 @@ class CreateAiVideoForAvatar implements ShouldQueue
 
     public function failed(AiImageForAvatarGenerated $event, Throwable $exception): void
     {
+        $this->markAvatarFailed($event->aiImage->id);
+
         Log::error('CreateAiVideoForAvatar listener failed', [
             'aiimage_id' => $event->aiImage->id,
             'error' => $exception->getMessage(),
@@ -126,5 +130,12 @@ class CreateAiVideoForAvatar implements ShouldQueue
     private function normalizeStatus(string $status): string
     {
         return strtolower($status);
+    }
+
+    private function markAvatarFailed(int|string $aiImageId): void
+    {
+        ProfileAvatar::where('aiimage_id', $aiImageId)
+            ->where('status', ProfileAvatar::STATUS_PROCESSING)
+            ->update(['status' => ProfileAvatar::STATUS_FAILED]);
     }
 }

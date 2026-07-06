@@ -1404,6 +1404,9 @@
                   "}",
                   "if (json.data && json.data.source_id) {",
                   "  pm.environment.set('aiimage_source_id', json.data.source_id);",
+                  "}",
+                  "if (json.data && json.data.avatar && json.data.avatar.id) {",
+                  "  pm.environment.set('profile_avatar_id', json.data.avatar.id);",
                   "}"
                 ]
               }
@@ -1469,6 +1472,83 @@
               ]
             },
             "description": "Gets the active avatar for profile_id. Requires avatar:read."
+          },
+          "response": []
+        },
+        {
+          "name": "List Avatar History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.active_avatar && json.data.active_avatar.id) {",
+                  "  pm.environment.set('profile_avatar_id', json.data.active_avatar.id);",
+                  "} else if (json.data && Array.isArray(json.data.avatars) && json.data.avatars[0] && json.data.avatars[0].id) {",
+                  "  pm.environment.set('profile_avatar_id', json.data.avatars[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/avatar/{{profile_id}}/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "avatar",
+                "{{profile_id}}",
+                "history"
+              ]
+            },
+            "description": "Lists previous avatars for profile_id, including active_avatar, processing_avatar, and all avatar rows ordered by latest update. Requires avatar:read. Non-admin users can only read their own profiles; admins can read any profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Avatar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"avatar_id\": \"{{profile_avatar_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/avatar/{{profile_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "avatar",
+                "{{profile_id}}",
+                "activate"
+              ]
+            },
+            "description": "Activates a previous avatar for profile_id and marks the previously active avatar inactive. Requires avatar:write. Returns 409 while a generation is processing and 422 when the selected avatar is not selectable."
           },
           "response": []
         }

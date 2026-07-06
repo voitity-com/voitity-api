@@ -10,6 +10,11 @@ class ProfileAvatar extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_FAILED = 'failed';
+    public const STATUS_INACTIVE = 'inactive';
+    public const STATUS_PROCESSING = 'processing';
+
     protected $fillable = [
         'user_id',
         'profile_id',
@@ -37,5 +42,16 @@ class ProfileAvatar extends Model
     public function aiVideo()
     {
         return $this->belongsTo(AiVideo::class, 'ai_video_id');
+    }
+
+    public function isProcessing(): bool
+    {
+        return $this->status === self::STATUS_PROCESSING;
+    }
+
+    public function isSelectable(): bool
+    {
+        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_INACTIVE], true)
+            && filled($this->file);
     }
 }

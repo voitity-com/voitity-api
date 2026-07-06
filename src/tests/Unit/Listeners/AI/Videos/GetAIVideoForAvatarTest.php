@@ -66,7 +66,7 @@ class GetAIVideoForAvatarTest extends TestCase
     }
 
     #[Test]
-    public function it_updates_only_video_and_file_when_avatar_exists(): void
+    public function it_activates_processing_avatar_and_inactivates_previous_avatar(): void
     {
         Storage::fake('profiles');
         Http::fake([
@@ -90,7 +90,15 @@ class GetAIVideoForAvatarTest extends TestCase
             'aiimage_id' => $existingAiImage->id,
             'ai_video_id' => null,
             'file' => 'old-file.mp4',
-            'status' => 'active',
+            'status' => ProfileAvatar::STATUS_ACTIVE,
+        ]);
+        $processingAvatar = ProfileAvatar::create([
+            'user_id' => $aiVideo->user_id,
+            'profile_id' => $aiVideo->profile_id,
+            'aiimage_id' => $aiImage->id,
+            'ai_video_id' => null,
+            'file' => null,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
 
         $service = Mockery::mock(VideoAIService::class);
@@ -107,11 +115,15 @@ class GetAIVideoForAvatarTest extends TestCase
         $listener->handle(new AiVideoForAvatarCreated($aiVideo, $aiImage));
 
         $avatar->refresh();
+        $processingAvatar->refresh();
         $aiVideo->refresh();
 
         $this->assertSame($existingAiImage->id, $avatar->aiimage_id);
-        $this->assertSame($aiVideo->id, $avatar->ai_video_id);
-        $this->assertSame($aiVideo->file, $avatar->file);
+        $this->assertSame(ProfileAvatar::STATUS_INACTIVE, $avatar->status);
+        $this->assertSame($aiImage->id, $processingAvatar->aiimage_id);
+        $this->assertSame($aiVideo->id, $processingAvatar->ai_video_id);
+        $this->assertSame($aiVideo->file, $processingAvatar->file);
+        $this->assertSame(ProfileAvatar::STATUS_ACTIVE, $processingAvatar->status);
     }
 
     private function aiImageAndVideo(): array

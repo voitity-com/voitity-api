@@ -6,6 +6,7 @@ use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
+use App\Models\ProfileAvatar;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -73,6 +74,7 @@ class GetAIImageForAvatar implements ShouldQueue
             if ($image->isFailed()) {
                 $aiImage->status = 'failed';
                 $aiImage->save();
+                $this->markAvatarFailed($aiImage->id);
 
                 Log::error('AI image generation failed at provider', [
                     'aiimage_id' => $aiImage->id,
@@ -103,6 +105,7 @@ class GetAIImageForAvatar implements ShouldQueue
         if ($aiImage) {
             $aiImage->status = 'failed';
             $aiImage->save();
+            $this->markAvatarFailed($aiImage->id);
         }
 
         Log::error('GetAIImageForAvatar listener failed', [
@@ -119,6 +122,7 @@ class GetAIImageForAvatar implements ShouldQueue
         if ($this->attempts() >= $this->tries) {
             $aiImage->status = 'failed';
             $aiImage->save();
+            $this->markAvatarFailed($aiImage->id);
 
             Log::error('AI image generation exceeded max attempts', [
                 'aiimage_id' => $aiImage->id,
@@ -143,5 +147,12 @@ class GetAIImageForAvatar implements ShouldQueue
     private function normalizeStatus(string $status): string
     {
         return strtolower($status);
+    }
+
+    private function markAvatarFailed(int|string $aiImageId): void
+    {
+        ProfileAvatar::where('aiimage_id', $aiImageId)
+            ->where('status', ProfileAvatar::STATUS_PROCESSING)
+            ->update(['status' => ProfileAvatar::STATUS_FAILED]);
     }
 }
