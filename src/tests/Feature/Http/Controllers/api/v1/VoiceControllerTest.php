@@ -123,6 +123,156 @@ class VoiceControllerTest extends TestAPI
         $response->assertJsonPath('data.id', $voice->id);
         $response->assertStatus(200);
         $this->assertSame(1, Voice::where('profile_id', $profile->id)->where('active', true)->count());
+        $voice->refresh();
+        $this->assertEquals($voice_data['name'], $voice->name);
+        $this->assertEquals($voice_data['description'], $voice->description);
+        $this->assertEquals($voice_data['language_code'], $voice->language_code);
+    }
+
+    public function test_admin_can_update_existing_voice_for_another_users_profile_via_store()
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'password' => Hash::make('test123'),
+        ]);
+        $owner = User::factory()->create();
+        $profile = $this->createProfileForUser($owner);
+        $voice = Voice::factory()->create([
+            'user_id' => $owner->id,
+            'profile_id' => $profile->id,
+            'name' => 'Old voice',
+            'description' => 'Old description',
+            'language_code' => 'es',
+            'active' => true,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($admin->email, 'test123'))
+            ->postJson(self::ENDPOINT_VOICE, [
+                'name' => 'Admin saved voice',
+                'description' => 'Admin saved description',
+                'language_code' => 'en',
+                'profile_id' => $profile->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice already exists for profile.');
+        $response->assertJsonPath('data.id', $voice->id);
+        $response->assertJsonPath('data.name', 'Admin saved voice');
+        $response->assertJsonPath('data.description', 'Admin saved description');
+        $response->assertJsonPath('data.language_code', 'en');
+
+        $voice->refresh();
+        $this->assertEquals($owner->id, $voice->user_id);
+        $this->assertEquals('Admin saved voice', $voice->name);
+        $this->assertEquals('Admin saved description', $voice->description);
+        $this->assertEquals('en', $voice->language_code);
+    }
+
+    public function test_admin_can_create_voice_for_another_users_profile()
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'password' => Hash::make('test123'),
+        ]);
+        $owner = User::factory()->create();
+        $profile = $this->createProfileForUser($owner);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($admin->email, 'test123'))
+            ->postJson(self::ENDPOINT_VOICE, [
+                'name' => 'Admin created voice',
+                'description' => 'Admin created description',
+                'language_code' => 'en',
+                'profile_id' => $profile->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice created successfully.');
+        $response->assertJsonPath('data.profile_id', $profile->id);
+        $response->assertJsonPath('data.user_id', $owner->id);
+        $response->assertJsonPath('data.language_code', 'en');
+    }
+
+    public function test_store_fails_with_unsupported_language_code()
+    {
+        $token = $this->getToken();
+        $user = User::where('email', 'voitity@gmail.com')->first();
+        $profile = $this->createProfileForUser($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_VOICE, [
+                'name' => 'Unsupported language voice',
+                'description' => 'Language should be validated',
+                'language_code' => 'fr',
+                'profile_id' => $profile->id,
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['language_code']);
+    }
+
+    public function test_user_can_update_his_voice()
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->createProfileForUser($user);
+        $voice = Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'name' => 'Old voice',
+            'description' => 'Old description',
+            'language_code' => 'es',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->patchJson(self::ENDPOINT_VOICE.'/'.$voice->id, [
+                'name' => 'Updated voice',
+                'description' => 'Updated description',
+                'language_code' => 'en',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Voice updated successfully.');
+        $response->assertJsonPath('data.id', $voice->id);
+        $response->assertJsonPath('data.name', 'Updated voice');
+        $response->assertJsonPath('data.description', 'Updated description');
+        $response->assertJsonPath('data.language_code', 'en');
+
+        $voice->refresh();
+        $this->assertEquals('Updated voice', $voice->name);
+        $this->assertEquals('Updated description', $voice->description);
+        $this->assertEquals('en', $voice->language_code);
+    }
+
+    public function test_user_can_not_update_another_users_voice()
+    {
+        $requestUser = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $owner = User::factory()->create();
+        $profile = $this->createProfileForUser($owner);
+        $voice = Voice::factory()->create([
+            'user_id' => $owner->id,
+            'profile_id' => $profile->id,
+            'name' => 'Owner voice',
+            'description' => 'Owner description',
+            'language_code' => 'es',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($requestUser->email, 'test123'))
+            ->patchJson(self::ENDPOINT_VOICE.'/'.$voice->id, [
+                'name' => 'Unauthorized update',
+                'description' => 'Should not persist',
+                'language_code' => 'en',
+            ]);
+
+        $response->assertStatus(403);
+        $voice->refresh();
+        $this->assertEquals('Owner voice', $voice->name);
+        $this->assertEquals('Owner description', $voice->description);
+        $this->assertEquals('es', $voice->language_code);
     }
 
     public function test_user_can_create_voice_for_second_profile_when_another_profile_has_active_voice()

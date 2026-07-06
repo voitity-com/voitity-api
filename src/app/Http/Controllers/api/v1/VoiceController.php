@@ -7,6 +7,7 @@ use App\Classes\VoiceService\VoiceService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Voice\StoreVoiceRequest;
 use App\Http\Requests\Voice\TestVoiceRequest;
+use App\Http\Requests\Voice\UpdateVoiceRequest;
 use App\Http\Responses\Voice\VoiceTestResponse;
 use App\Models\Profile;
 use App\Models\Voice;
@@ -74,7 +75,7 @@ class VoiceController extends Controller
                 $validatedData['profile_id'] = $activeProfile->id;
             }
 
-            $voice = DB::transaction(function () use ($user, $validatedData): Voice {
+            $voice = DB::transaction(function () use ($validatedData): Voice {
                 /** @var Profile $profile */
                 $profile = Profile::query()
                     ->whereKey($validatedData['profile_id'])
@@ -87,12 +88,20 @@ class VoiceController extends Controller
                     ->first();
 
                 if ($existingVoice) {
+                    $existingVoice->fill([
+                        'user_id' => $profile->user_id,
+                        'name' => $validatedData['name'],
+                        'description' => $validatedData['description'] ?? null,
+                        'language_code' => $validatedData['language_code'],
+                    ]);
+                    $existingVoice->save();
+
                     return $existingVoice;
                 }
 
                 /** @var Voice $voice */
                 $voice = $profile->voices()->create([
-                    'user_id' => $user->id,
+                    'user_id' => $profile->user_id,
                     'name' => $validatedData['name'],
                     'description' => $validatedData['description'] ?? null,
                     'language_code' => $validatedData['language_code'],
@@ -108,6 +117,41 @@ class VoiceController extends Controller
 
             return response()->json(['message' => $message, 'data' => $voice], 200);
 
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function update(UpdateVoiceRequest $request, Voice $voice): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (! $user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (! $this->userCanManageVoice($user, $voice)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
+
+            $payload = $request->validated();
+
+            $voice->fill([
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+            ]);
+
+            if (array_key_exists('language_code', $payload)) {
+                $voice->language_code = $payload['language_code'];
+            }
+
+            $voice->save();
+
+            return response()->json([
+                'message' => 'Voice updated successfully.',
+                'data' => $voice->refresh(),
+            ], 200);
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -251,5 +295,20 @@ class VoiceController extends Controller
     private function canUseAnyProfileVoice(string $role): bool
     {
         return in_array($role, ['admin', 'api'], true);
+    }
+
+    private function userCanManageVoice($user, Voice $voice): bool
+    {
+        if (in_array($user->role, ['admin', 'api'], true)) {
+            return true;
+        }
+
+        if ((int) $voice->user_id === (int) $user->id) {
+            return true;
+        }
+
+        $voice->loadMissing('profile:id,user_id');
+
+        return $voice->profile !== null && (int) $voice->profile->user_id === (int) $user->id;
     }
 }

@@ -21,6 +21,8 @@ class ProfileController extends Controller
 {
     private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
 
+    private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,name,description,language_code,source_voice_id,source,active';
+
     /**
      * @OA\Get(
      *     path="/api/profile",
@@ -79,7 +81,7 @@ class ProfileController extends Controller
             }
 
             $profiles = $user->profiles()
-                ->with('voices:id,profile_id,source_voice_id,source,active')
+                ->with(self::VOICE_RESPONSE_COLUMNS)
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -251,7 +253,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $profile->loadMissing('voices:id,profile_id,source_voice_id,source,active');
+            $profile->loadMissing(self::VOICE_RESPONSE_COLUMNS);
 
             return response()->json([
                 'message' => 'Profile retrieved successfully.',
@@ -320,7 +322,7 @@ class ProfileController extends Controller
     {
         try {
             $profile = Profile::where('alias', $alias)
-                ->with('voices:id,profile_id,source_voice_id,source,active')
+                ->with(self::VOICE_RESPONSE_COLUMNS)
                 ->first();
 
             if (! $profile) {
