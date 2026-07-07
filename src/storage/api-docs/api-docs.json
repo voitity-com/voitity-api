@@ -399,6 +399,9 @@
                     "422": {
                         "description": "Validation error"
                     },
+                    "502": {
+                        "description": "Answer generation failed"
+                    },
                     "500": {
                         "description": "Unexpected error"
                     }

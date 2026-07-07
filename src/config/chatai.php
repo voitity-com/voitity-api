@@ -49,6 +49,8 @@ return [
             'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
             'default_model' => env('OPENAI_DEFAULT_CHAT_MODEL', 'gpt-4o-mini'),
             'whisper_model' => env('OPENAI_DEFAULT_WHISPER_MODEL', 'whisper-1'),
+            'retry_attempts' => (int) env('OPENAI_CHAT_RETRY_ATTEMPTS', 3),
+            'retry_delay_ms' => (int) env('OPENAI_CHAT_RETRY_DELAY_MS', 200),
         ],
 
         // Additional drivers may be configured here.

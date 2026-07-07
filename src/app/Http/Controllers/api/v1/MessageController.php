@@ -71,6 +71,7 @@ class MessageController extends Controller
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="Profile or chat not found"),
      *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=502, description="Answer generation failed"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
@@ -147,6 +148,7 @@ class MessageController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=202, description="Audio message stored and processing pending"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="Profile or chat not found"),
@@ -263,8 +265,22 @@ class MessageController extends Controller
         event($event);
 
         $answer = $event->answer;
+        $message->refresh();
 
         if (! $answer) {
+            $failure = $this->messageProcessingFailurePayload($message);
+
+            if ($failure !== null) {
+                if ($includeRequestMetadata) {
+                    $failure = $this->appendRequestMetadata($failure, $message);
+                }
+
+                return response()->json([
+                    'message' => 'Message answer generation failed.',
+                    'data' => $failure,
+                ], 502);
+            }
+
             $data = [
                 'chat_id' => $chat->id,
                 'message_id' => $message->id,
@@ -292,6 +308,32 @@ class MessageController extends Controller
             'message' => 'Message processed successfully.',
             'data' => $data,
         ]);
+    }
+
+    private function messageProcessingFailurePayload(Message $message): ?array
+    {
+        $data = $message->data ?? [];
+        $chatAIError = isset($data['chat_ai_error']) && is_array($data['chat_ai_error'])
+            ? $data['chat_ai_error']
+            : null;
+        $processingError = isset($data['processing_error']) && is_string($data['processing_error'])
+            ? $data['processing_error']
+            : null;
+
+        if ($chatAIError === null && $processingError === null) {
+            return null;
+        }
+
+        return [
+            'chat_id' => $message->chat_id,
+            'message_id' => $message->id,
+            'text' => null,
+            'audio_url' => null,
+            'source' => $chatAIError['source'] ?? null,
+            'status' => $chatAIError['status'] ?? 'failed',
+            'error' => $processingError ?? 'Message answer generation failed.',
+            'chat_ai' => $chatAIError,
+        ];
     }
 
     private function appendRequestMetadata(array $data, Message $message): array

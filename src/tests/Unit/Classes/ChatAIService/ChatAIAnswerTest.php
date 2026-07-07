@@ -99,6 +99,9 @@ class ChatAIAnswerTest extends TestCase
         $emptyAnswer = new ChatAIAnswer(source: 'openai', answer: '');
         $this->assertFalse($emptyAnswer->hasAnswer());
 
+        $blankAnswer = new ChatAIAnswer(source: 'openai', answer: '   ');
+        $this->assertFalse($blankAnswer->hasAnswer());
+
         $withAnswer = new ChatAIAnswer(source: 'openai', answer: 'Ready to help!');
         $this->assertTrue($withAnswer->hasAnswer());
     }

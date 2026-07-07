@@ -7,6 +7,7 @@ use App\Http\Controllers\api\v1\PaymentController;
 use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
+use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
 use App\Http\Controllers\api\v1\TestController;
@@ -33,11 +34,18 @@ Route::prefix('/auth')->group(function () {
 Route::prefix('/profile')->group(function () {
     Route::get('', [ProfileController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('', [ProfileController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/professions', [ProfileKnowledgeController::class, 'professions'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/chats', [ProfileChatController::class, 'listChats'])->middleware(['auth:sanctum', 'abilities:chat:read']);
     Route::get('/chats/messages', [ProfileChatController::class, 'getChatMessages'])->middleware(['auth:sanctum', 'abilities:chat:read']);
     Route::get('/social-networks', [ProfileController::class, 'socialNetworks'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/alias/{alias}', [ProfileController::class, 'getProfileByAlias'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/transcriptions/audio', [ProfileAudioTranscriptionController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:transcribe']);
+    Route::get('/{profile}/sources', [ProfileKnowledgeController::class, 'sources'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/sources/cv', [ProfileKnowledgeController::class, 'storeCv'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/sources/{source}/approve', [ProfileKnowledgeController::class, 'approveSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
