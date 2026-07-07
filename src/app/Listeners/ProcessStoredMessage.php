@@ -4,13 +4,12 @@ namespace App\Listeners;
 
 use App\Classes\ChatAIService\AnswerBuilder;
 use App\Events\MessageStored;
+use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use Illuminate\Support\Facades\Log;
 
 class ProcessStoredMessage
 {
-    public function __construct(private readonly AnswerBuilder $answerBuilder)
-    {
-    }
+    public function __construct(private readonly AnswerBuilder $answerBuilder) {}
 
     public function handle(MessageStored $event): void
     {
@@ -20,7 +19,7 @@ class ProcessStoredMessage
             return;
         }
 
-        if (!$message->profile) {
+        if (! $message->profile) {
             Log::warning('Message profile relation missing, skipping answer build.', [
                 'message_id' => $message->id,
             ]);
@@ -49,6 +48,22 @@ class ProcessStoredMessage
 
             $message->data = $data;
             $message->save();
+        } catch (ChatAIAnswerGenerationFailed $e) {
+            $chatAIError = $e->context();
+            $data = $message->fresh()->data ?? [];
+            $data['processing'] = false;
+            $data['processing_error'] = $e->getMessage();
+            $data['chat_ai_error'] = $chatAIError;
+
+            $message->data = $data;
+            $message->save();
+
+            Log::warning('Failed to build message answer from chat AI provider.', [
+                'message_id' => $message->id,
+                'source' => $chatAIError['source'] ?? null,
+                'status' => $chatAIError['status'] ?? null,
+                'request_url' => $chatAIError['request_url'] ?? null,
+            ]);
         } catch (\Throwable $e) {
             $data = $message->fresh()->data ?? [];
             $data['processing'] = false;

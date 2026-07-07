@@ -18,19 +18,21 @@ use Tests\TestCase;
 
 class OpenAIClientTest extends TestCase
 {
-    private function makeClient(): OpenAIClient
+    private function makeClient(int $retryAttempts = 1, int $retryDelayMs = 0): OpenAIClient
     {
         return new OpenAIClient(
             apiKey: 'test-api-key',
             baseUrl: 'https://fake-openai.test/v1',
             defaultModel: 'gpt-4o-mini',
-            whisperModel: 'whisper-1'
+            whisperModel: 'whisper-1',
+            retryAttempts: $retryAttempts,
+            retryDelayMs: $retryDelayMs,
         );
     }
 
     private function makeProfile(): Profile
     {
-        $profile = new Profile();
+        $profile = new Profile;
         $profile->name = 'Lex';
         $profile->description = 'Lawyer assistant';
         $profile->genre = 'legal';
@@ -91,9 +93,9 @@ class OpenAIClientTest extends TestCase
             return $request->url() === 'https://fake-openai.test/v1/chat/completions'
                 && $payload['model'] === 'gpt-4o-mini'
                 && $payload['messages'][0]['role'] === 'system'
-                && str_starts_with($systemPrompt, 'Your name is: ' . $profile->name)
-                && str_contains($systemPrompt, '. ' . $profile->description)
-                && str_contains($systemPrompt, 'Your personality is ' . $profile->personality)
+                && str_starts_with($systemPrompt, 'Your name is: '.$profile->name)
+                && str_contains($systemPrompt, '. '.$profile->description)
+                && str_contains($systemPrompt, 'Your personality is '.$profile->personality)
                 && str_contains($systemPrompt, 'Profile data:')
                 && str_contains($systemPrompt, '"company":"Voitity"')
                 && str_contains($systemPrompt, 'Only answer using the information in this prompt')
@@ -101,8 +103,8 @@ class OpenAIClientTest extends TestCase
                 && str_contains($systemPrompt, 'Make the conversation feel natural and progressive')
                 && str_contains($systemPrompt, 'decide whether a short or detailed answer is appropriate')
                 && str_contains($systemPrompt, 'Do not reveal all profile information at once')
-                && !str_contains($systemPrompt, 'Provide legal advice')
-                && !str_contains($systemPrompt, 'Always maintain a warm, approachable tone');
+                && ! str_contains($systemPrompt, 'Provide legal advice')
+                && ! str_contains($systemPrompt, 'Always maintain a warm, approachable tone');
         });
     }
 
@@ -175,9 +177,57 @@ class OpenAIClientTest extends TestCase
                 && str_contains($systemPrompt, 'prior-message-7')
                 && str_contains($systemPrompt, '"role":"assistant"')
                 && str_contains($systemPrompt, '"role":"user"')
-                && !str_contains($systemPrompt, 'prior-message-1')
-                && !str_contains($systemPrompt, 'current-question')
-                && !str_contains($systemPrompt, 'other-chat-message');
+                && ! str_contains($systemPrompt, 'prior-message-1')
+                && ! str_contains($systemPrompt, 'current-question')
+                && ! str_contains($systemPrompt, 'other-chat-message');
+        });
+    }
+
+    #[Test]
+    public function it_includes_authoritative_profile_networks_in_the_system_prompt(): void
+    {
+        Log::spy();
+
+        Http::fake([
+            'https://fake-openai.test/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => 'My Instagram is https://www.instagram.com/lifetaps/.'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 120,
+                    'completion_tokens' => 60,
+                    'total_tokens' => 180,
+                ],
+            ], 200),
+        ]);
+
+        $profile = $this->makeProfile();
+        $profile->data = array_merge($profile->data, [
+            'networks' => [
+                ['name' => 'linkedin', 'url' => 'https://www.linkedin.com/in/old-link/'],
+            ],
+        ]);
+        $profile->networks = [
+            'instagram' => 'https://www.instagram.com/lifetaps/',
+            'github' => 'https://github.com/aosmorac',
+            'linkedin' => 'https://www.linkedin.com/in/abelmoreno/',
+        ];
+
+        $client = $this->makeClient();
+        $client->getAnswer($profile, 'What is your Instagram?');
+
+        Http::assertSent(function ($request) {
+            $systemPrompt = $request->data()['messages'][0]['content'];
+
+            return str_contains($systemPrompt, 'Public social links (authoritative):')
+                && str_contains($systemPrompt, 'Instagram: https://www.instagram.com/lifetaps/')
+                && str_contains($systemPrompt, 'GitHub: https://github.com/aosmorac')
+                && str_contains($systemPrompt, 'LinkedIn: https://www.linkedin.com/in/abelmoreno/')
+                && str_contains($systemPrompt, 'answer using these exact links')
+                && str_contains($systemPrompt, 'do not say you do not have them');
         });
     }
 
@@ -206,6 +256,45 @@ class OpenAIClientTest extends TestCase
         $this->assertEquals('Something went wrong', $answer->response['error']['message']);
 
         Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function it_retries_transient_chat_request_exceptions(): void
+    {
+        Log::spy();
+
+        $attempts = 0;
+
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            if ($attempts < 3) {
+                throw new \RuntimeException('Could not resolve host: api.openai.com');
+            }
+
+            return Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => 'Recovered response.'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 50,
+                    'completion_tokens' => 20,
+                    'total_tokens' => 70,
+                ],
+            ], 200);
+        });
+
+        $client = $this->makeClient(retryAttempts: 3);
+        $profile = $this->makeProfile();
+
+        $answer = $client->getAnswer($profile, 'Test message');
+
+        $this->assertSame(3, $attempts);
+        $this->assertSame('success', $answer->status);
+        $this->assertSame('Recovered response.', $answer->answer);
     }
 
     #[Test]

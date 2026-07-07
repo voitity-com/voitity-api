@@ -28,6 +28,8 @@ class ChatAIManager extends Manager
             baseUrl: $config['base_url'] ?? null,
             defaultModel: $config['default_model'] ?? null,
             whisperModel: $config['whisper_model'] ?? null,
+            retryAttempts: $config['retry_attempts'] ?? null,
+            retryDelayMs: $config['retry_delay_ms'] ?? null,
         );
     }
 
@@ -42,11 +44,11 @@ class ChatAIManager extends Manager
     /**
      * Create a custom Chat AI driver instance.
      *
-     * @param array{via:mixed} $config
+     * @param  array{via:mixed}  $config
      */
     protected function createCustomDriver(array $config): ChatAIClient
     {
-        if (!isset($config['via'])) {
+        if (! isset($config['via'])) {
             throw new InvalidArgumentException('Custom chat AI driver must specify a "via" callable.');
         }
 

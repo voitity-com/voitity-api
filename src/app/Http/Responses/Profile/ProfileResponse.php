@@ -21,6 +21,8 @@ class ProfileResponse
             'description' => $this->profile->description,
             'genre' => $this->profile->genre,
             'personality' => $this->profile->personality,
+            'profession_key' => $this->profile->profession_key,
+            'profession_template_version' => $this->profile->profession_template_version,
             'active' => (bool) $this->profile->active,
             'status' => $this->profile->status?->value,
             'voice' => $this->hasConfiguredVoice($activeVoice),

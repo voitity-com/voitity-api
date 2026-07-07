@@ -48,13 +48,6 @@ class ChatAIAnswer
 
     /**
      * Create a new ChatAIAnswer instance.
-     *
-     * @param string $source
-     * @param string $answer
-     * @param string $status
-     * @param array $response
-     * @param string|null $requestUrl
-     * @param float|null $confidence
      */
     public function __construct(
         string $source,
@@ -74,8 +67,6 @@ class ChatAIAnswer
 
     /**
      * Check if the answer generation was successful.
-     *
-     * @return bool
      */
     public function isSuccessful(): bool
     {
@@ -84,8 +75,6 @@ class ChatAIAnswer
 
     /**
      * Check if the answer generation failed.
-     *
-     * @return bool
      */
     public function isFailed(): bool
     {
@@ -94,8 +83,6 @@ class ChatAIAnswer
 
     /**
      * Check if the answer generation is pending.
-     *
-     * @return bool
      */
     public function isPending(): bool
     {
@@ -104,18 +91,14 @@ class ChatAIAnswer
 
     /**
      * Check if the answer has content.
-     *
-     * @return bool
      */
     public function hasAnswer(): bool
     {
-        return !empty($this->answer);
+        return trim($this->answer) !== '';
     }
 
     /**
      * Convert the answer to an array.
-     *
-     * @return array
      */
     public function toArray(): array
     {

@@ -299,6 +299,53 @@ class MessageControllerTest extends TestAPI
         Event::assertDispatched(\App\Events\MessageStored::class);
     }
 
+    public function test_store_returns_bad_gateway_when_chat_ai_generation_fails(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->withArgs(function (Profile $boundProfile, string $message) use ($profile): bool {
+                return $boundProfile->is($profile) && $message === 'Pregunta que falla';
+            })
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: '',
+                status: 'error',
+                response: ['error' => 'Could not resolve host: api.openai.com'],
+                requestUrl: 'https://api.openai.com/v1/chat/completions'
+            ));
+
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->postJson(self::ENDPOINT.'/'.$profile->id.'/messages', [
+                'message' => 'Pregunta que falla',
+            ]);
+
+        $response->assertStatus(502);
+        $response->assertJsonPath('message', 'Message answer generation failed.');
+        $response->assertJsonPath('data.text', null);
+        $response->assertJsonPath('data.audio_url', null);
+        $response->assertJsonPath('data.source', 'openai');
+        $response->assertJsonPath('data.status', 'error');
+        $response->assertJsonPath('data.chat_ai.response.error', 'Could not resolve host: api.openai.com');
+
+        $question = Message::where('profile_id', $profile->id)->where('type', 'question')->firstOrFail();
+
+        $this->assertSame('Message answer generation failed.', $question->data['processing_error']);
+        $this->assertSame('error', $question->data['chat_ai_error']['status']);
+        $this->assertSame(0, Message::where('profile_id', $profile->id)->where('type', 'answer')->count());
+    }
+
     public function test_store_audio_validates_audio_field(): void
     {
         $user = User::factory()->create(['role' => 'user']);

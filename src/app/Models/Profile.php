@@ -19,6 +19,8 @@ class Profile extends Model
         'description',
         'genre',
         'personality',
+        'profession_key',
+        'profession_template_version',
         'active',
         'status',
         'data',
@@ -27,6 +29,8 @@ class Profile extends Model
 
     protected $attributes = [
         'status' => ProfileStatus::Draft->value,
+        'profession_key' => 'custom',
+        'profession_template_version' => '2026-07',
         'networks' => '{}',
     ];
 
@@ -69,6 +73,16 @@ class Profile extends Model
     public function avatars(): HasMany
     {
         return $this->hasMany(ProfileAvatar::class);
+    }
+
+    public function sources(): HasMany
+    {
+        return $this->hasMany(ProfileSource::class);
+    }
+
+    public function facts(): HasMany
+    {
+        return $this->hasMany(ProfileFact::class);
     }
 
     public function subscriptionUses(): HasMany

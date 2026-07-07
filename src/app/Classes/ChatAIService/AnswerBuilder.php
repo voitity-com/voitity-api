@@ -7,6 +7,7 @@ use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
+use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Voice;
@@ -44,6 +45,10 @@ class AnswerBuilder
             ));
         }
 
+        if (! $chatAIAnswer->isSuccessful() || ! $chatAIAnswer->hasAnswer()) {
+            throw new ChatAIAnswerGenerationFailed($chatAIAnswer);
+        }
+
         $audio = $this->getAudio($profile, $chatAIAnswer->answer);
 
         $audioUrl = $audio?->getAudioUrl();
@@ -72,6 +77,10 @@ class AnswerBuilder
 
     public function getAudio(Profile $profile, string $text): ?VoiceClientGeneratedAudio
     {
+        if (trim($text) === '') {
+            return null;
+        }
+
         /** @var Voice|null $voice */
         $voice = $profile->voices()->where('active', true)->first();
 

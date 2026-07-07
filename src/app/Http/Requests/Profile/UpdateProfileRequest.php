@@ -23,6 +23,8 @@ class UpdateProfileRequest extends FormRequest
             'personality' => 'sometimes|string|max:200',
             'active' => 'sometimes|boolean',
             'status' => ['sometimes', Rule::enum(ProfileStatus::class)],
+            'profession_key' => ['sometimes', 'string', 'max:80', Rule::in(array_keys(config('profile-professions.templates', [])))],
+            'profession_template_version' => ['sometimes', 'string', 'max:40'],
         ];
     }
 }

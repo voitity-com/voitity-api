@@ -641,7 +641,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}}\",\n  \"alias\": \"{{profile_alias}}\",\n  \"description\": \"{{profile_description}}\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"{{profile_personality}}\"\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}}\",\n  \"alias\": \"{{profile_alias}}\",\n  \"description\": \"{{profile_description}}\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"{{profile_personality}}\",\n  \"profession_key\": \"{{profile_profession_key}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile",
@@ -796,7 +796,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"active\": true,\n  \"status\": \"{{profile_status}}\"\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"profession_key\": \"{{profile_profession_key}}\",\n  \"active\": true,\n  \"status\": \"{{profile_status}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile/{{profile_id}}",
@@ -881,6 +881,243 @@
             "description": "Replaces the profile networks JSON field. Supported keys come from social-networks.php. Send { \"networks\": {} } to remove all networks. Requires token ability: profile:write."
           },
           "response": []
+        },
+        {
+          "name": "Profile Knowledge",
+          "item": [
+            {
+              "name": "List Profile Professions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/professions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "professions"
+                  ]
+                },
+                "description": "Lists selectable profile profession templates, including developer and model. Requires token ability: profile:read."
+              },
+              "response": []
+            },
+            {
+              "name": "List Profile Sources",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources"
+                  ]
+                },
+                "description": "Lists imported knowledge sources for a profile. Requires token ability: profile:read."
+              },
+              "response": []
+            },
+            {
+              "name": "Import CV Source",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": "{{profile_cv_file_path}}"
+                    },
+                    {
+                      "key": "name",
+                      "type": "text",
+                      "value": "{{profile_cv_source_name}}"
+                    },
+                    {
+                      "key": "text",
+                      "type": "text",
+                      "value": "{{profile_cv_text}}"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources/cv",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources",
+                    "cv"
+                  ]
+                },
+                "description": "Imports a CV file and/or pasted CV text as a profile knowledge source. Requires token ability: profile:write. If the parser cannot extract PDF text, paste profile_cv_text so facts can be created immediately."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let json = {};",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "if (json.data && json.data.id) {",
+                      "  pm.environment.set('profile_source_id', json.data.id);",
+                      "}",
+                      "const firstFact = json.data && json.data.items && json.data.items[0] && json.data.items[0].facts && json.data.items[0].facts[0];",
+                      "if (firstFact && firstFact.id) {",
+                      "  pm.environment.set('profile_fact_id', firstFact.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approve Profile Source",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources/{{profile_source_id}}/approve",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources",
+                    "{{profile_source_id}}",
+                    "approve"
+                  ]
+                },
+                "description": "Approves and indexes an imported profile source plus its generated items and facts. Requires token ability: profile:write."
+              },
+              "response": []
+            },
+            {
+              "name": "List Profile Facts",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/facts",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "facts"
+                  ]
+                },
+                "description": "Lists profile facts with default pagination of 20. Optional query params: category, approved, indexed, page, per_page. Requires token ability: profile:read."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Profile Fact",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/facts/{{profile_fact_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "facts",
+                    "{{profile_fact_id}}"
+                  ]
+                },
+                "description": "Updates a generated profile fact. Setting indexed=true also approves the fact. Requires token ability: profile:write.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"text\": \"Updated fact text for the profile conversation.\",\n  \"visibility\": \"public\",\n  \"approved\": true,\n  \"indexed\": true\n}"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Profile Quality",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/quality",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "quality"
+                  ]
+                },
+                "description": "Returns quality score, checks, and counts for profile knowledge readiness. Requires token ability: profile:read."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -1040,7 +1277,51 @@
             },
             "description": "Creates a new chat for the profile when chat_id is omitted."
           },
-          "response": []
+          "response": [
+            {
+              "name": "Answer Generation Failed",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"{{message_text}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "messages"
+                  ]
+                }
+              },
+              "status": "Bad Gateway",
+              "code": 502,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Message answer generation failed.\",\n  \"data\": {\n    \"chat_id\": 42,\n    \"message_id\": 1050,\n    \"text\": null,\n    \"audio_url\": null,\n    \"source\": \"openai\",\n    \"status\": \"error\",\n    \"error\": \"Message answer generation failed.\",\n    \"chat_ai\": {\n      \"source\": \"openai\",\n      \"answer\": \"\",\n      \"status\": \"error\",\n      \"request_url\": \"https://api.openai.com/v1/chat/completions\",\n      \"response\": {\n        \"error\": \"Could not resolve host: api.openai.com\"\n      },\n      \"confidence\": null\n    }\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Send Message - Existing Chat",
@@ -1586,6 +1867,38 @@
           "response": []
         }
       ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "profile_profession_key",
+      "value": "developer",
+      "type": "string"
+    },
+    {
+      "key": "profile_cv_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "profile_cv_source_name",
+      "value": "LinkedIn CV",
+      "type": "string"
+    },
+    {
+      "key": "profile_cv_text",
+      "value": "Experience\nSenior developer building Laravel and React apps.\nProjects\nVoitity admin profile knowledge.\nSkills\nPHP, Laravel, React, TypeScript.",
+      "type": "string"
+    },
+    {
+      "key": "profile_source_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "profile_fact_id",
+      "value": "",
+      "type": "string"
     }
   ]
 }

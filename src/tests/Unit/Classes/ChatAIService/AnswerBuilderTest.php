@@ -10,6 +10,7 @@ use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
+use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
@@ -127,6 +128,75 @@ class AnswerBuilderTest extends TestCase
                 && $event->sourceId === (string) $voice->id
                 && $event->amounts === ['tts_characters' => strlen('Doing great!')];
         });
+    }
+
+    public function test_get_answer_throws_without_creating_answer_or_audio_when_chat_ai_fails(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'active' => true,
+        ]);
+
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'How are you?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        Voice::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'name' => 'Primary voice',
+            'description' => 'desc',
+            'source_voice_id' => 'voice_123',
+            'source' => 'elevenlabs',
+            'is_verified' => true,
+            'active' => true,
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: '',
+            status: 'error',
+            response: ['error' => 'Could not resolve host: api.openai.com']
+        );
+
+        /** @var MockInterface&ChatAIClient $chatAiClient */
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'How are you?', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+
+        /** @var MockInterface&VoiceManager $voiceManager */
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $builder = new AnswerBuilder($chatAiClient, $voiceManager);
+
+        $this->expectException(ChatAIAnswerGenerationFailed::class);
+
+        try {
+            $builder->getAnswer($profile, $question);
+        } finally {
+            $this->assertSame(0, Message::where('chat_id', $chat->id)->where('type', 'answer')->count());
+            Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $question) {
+                return $event->usageType === SubscriptionUsageType::ChatOpenAiCall
+                    && $event->userId === $profile->user_id
+                    && $event->profileId === $profile->id
+                    && $event->sourceId === (string) $question->id;
+            });
+        }
     }
 
     public function test_get_answer_without_active_voice_returns_null_audio(): void
