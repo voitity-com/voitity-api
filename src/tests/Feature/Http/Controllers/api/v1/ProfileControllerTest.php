@@ -144,6 +144,9 @@ class ProfileControllerTest extends TestAPI
         Voice::factory()->create([
             'user_id' => $user->id,
             'profile_id' => $profileA->id,
+            'name' => 'Profile A voice',
+            'description' => 'Profile A voice description',
+            'language_code' => 'en',
             'source_voice_id' => 'provider-voice-id',
             'source' => 'elevenlabs',
         ]);
@@ -177,6 +180,9 @@ class ProfileControllerTest extends TestAPI
         $this->assertSame(ProfileStatus::Draft->value, $profilesById[$profileB->id]['status']);
         $this->assertTrue($profilesById[$profileA->id]['voice']);
         $this->assertFalse($profilesById[$profileB->id]['voice']);
+        $this->assertSame('Profile A voice', $profilesById[$profileA->id]['voice_name']);
+        $this->assertSame('Profile A voice description', $profilesById[$profileA->id]['voice_description']);
+        $this->assertSame('en', $profilesById[$profileA->id]['voice_language_code']);
     }
 
     public function test_unauthorized_user_can_not_show_a_profile()
@@ -221,6 +227,9 @@ class ProfileControllerTest extends TestAPI
         Voice::factory()->create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
+            'name' => 'Show profile voice',
+            'description' => 'Show profile voice description',
+            'language_code' => 'en',
             'source_voice_id' => 'provider-voice-id',
             'source' => 'elevenlabs',
         ]);
@@ -235,6 +244,9 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.description', $profile->description);
         $response->assertJsonPath('data.status', ProfileStatus::Hidden->value);
         $response->assertJsonPath('data.voice', true);
+        $response->assertJsonPath('data.voice_name', 'Show profile voice');
+        $response->assertJsonPath('data.voice_description', 'Show profile voice description');
+        $response->assertJsonPath('data.voice_language_code', 'en');
         $response->assertStatus(200);
     }
 
@@ -254,6 +266,9 @@ class ProfileControllerTest extends TestAPI
         Voice::factory()->create([
             'user_id' => $owner->id,
             'profile_id' => $profile->id,
+            'name' => 'Alias profile voice',
+            'description' => 'Alias profile voice description',
+            'language_code' => 'en',
             'source_voice_id' => 'provider-voice-id',
             'source' => 'elevenlabs',
         ]);
@@ -268,6 +283,9 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.id', $profile->id);
         $response->assertJsonPath('data.user_id', $owner->id);
         $response->assertJsonPath('data.alias', $profile->alias);
+        $response->assertJsonPath('data.voice_name', 'Alias profile voice');
+        $response->assertJsonPath('data.voice_description', 'Alias profile voice description');
+        $response->assertJsonPath('data.voice_language_code', 'en');
         $response->assertJsonPath('data.status', ProfileStatus::Published->value);
         $response->assertJsonPath('data.voice', true);
     }

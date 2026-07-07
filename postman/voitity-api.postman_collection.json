@@ -1256,6 +1256,39 @@
           "response": []
         },
         {
+          "name": "Update Voice",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{voice_name}}\",\n  \"description\": \"{{voice_description}}\",\n  \"language_code\": \"{{language_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/voice/{{voice_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "voice",
+                "{{voice_id}}"
+              ]
+            },
+            "description": "Updates the selected voice metadata. Requires voice:write and ownership of the voice, or an admin/api role."
+          },
+          "response": []
+        },
+        {
           "name": "Upload Voice Sample",
           "event": [
             {
