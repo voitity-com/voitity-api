@@ -50,7 +50,7 @@ class ProfileKnowledgeControllerTest extends TestAPI
 
     public function test_user_can_import_cv_source_and_list_sources_and_facts(): void
     {
-        Storage::fake('local');
+        $this->fakeProfileSourcesDisk();
 
         $user = User::factory()->create(['role' => 'user', 'password' => Hash::make('test123')]);
         $profile = Profile::factory()->for($user)->create(['profession_key' => 'developer']);
@@ -83,7 +83,9 @@ class ProfileKnowledgeControllerTest extends TestAPI
 
         $storagePath = $response->json('data.storage_path');
         $this->assertNotEmpty($storagePath);
-        Storage::disk('local')->assertExists($storagePath);
+        $this->assertStringStartsWith('sources/'.$profile->id.'/', $storagePath);
+        $response->assertJsonPath('data.file.available', true);
+        Storage::disk('profiles')->assertExists($storagePath);
 
         $sourcesResponse = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources');
@@ -104,7 +106,7 @@ class ProfileKnowledgeControllerTest extends TestAPI
 
     public function test_user_can_import_pdf_cv_without_pasting_text(): void
     {
-        Storage::fake('local');
+        $this->fakeProfileSourcesDisk();
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = Profile::factory()->for($user)->create(['profession_key' => 'developer']);
@@ -125,6 +127,40 @@ class ProfileKnowledgeControllerTest extends TestAPI
         $this->assertContains('experience', $categories);
         $this->assertContains('skills', $categories);
         $this->assertContains('projects', $categories);
+        Storage::disk('profiles')->assertExists($response->json('data.storage_path'));
+    }
+
+    public function test_user_can_preview_imported_source_file(): void
+    {
+        $this->fakeProfileSourcesDisk();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create(['profession_key' => 'developer']);
+        $token = $user->createToken('test-token', ['profile:read', 'profile:write'])->plainTextToken;
+        $file = UploadedFile::fake()->createWithContent('developer-cv.txt', 'Source CV file contents');
+
+        $importResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'file' => $file,
+                'text' => implode("\n", [
+                    'Experience',
+                    'Senior developer building Laravel APIs.',
+                    'Skills',
+                    'PHP, Laravel, React.',
+                ]),
+            ]);
+
+        $importResponse->assertStatus(201);
+
+        $fileResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->get(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/'.$importResponse->json('data.id').'/file');
+
+        $fileResponse->assertStatus(200);
+        $this->assertStringContainsString(
+            'developer-cv.txt',
+            (string) $fileResponse->headers->get('content-disposition')
+        );
+        $this->assertStringContainsString('Source CV file contents', $fileResponse->streamedContent());
     }
 
     public function test_cv_import_validation_requires_file_or_text(): void
@@ -388,6 +424,14 @@ class ProfileKnowledgeControllerTest extends TestAPI
             'JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDcgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgNiAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDYgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9BdXRob3IgKGFub255bW91cykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDcwNjIwMDM0Ni0wNScwMCcpIC9DcmVhdG9yIChhbm9ueW1vdXMpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDcwNjIwMDM0Ni0wNScwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0ICh1bnNwZWNpZmllZCkgL1RpdGxlICh1bnRpdGxlZCkgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgMyAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMjc2Cj4+CnN0cmVhbQpHYXJvPDV1Myt1JjtCVE8oJTgoQi5TRT11US4iMXEkK24mMkhKUlJPZiJkUyZYJUU/KTchZT5GUjpIZWttc1VCXkpTNXRsXTowa28mYWdfRTZrJnBCOENlKkdKPkNfOyhLWVx0QSVSUl80YDNmJkxKZWxQLkA5XVprUyYoNCYiTGtKNSVrWU1SckBea1oiWDonMTJ1Jm8zcz1kPShnPjhZOTxtaT9CMj1aQEtORC86NmJbODtqZyora0VbW0FEXS5fbkJVY0tUK2djR3JAbz51LmExQ1VLP0U5ZzYmWShbZUhWPjVHYltzPT9oRWR1OzJiI1B1Rz85Pi8/QSlNZmhGS0tdMEllclVfS0BMTCtVTEVyfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA4CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMDkyIDAwMDAwIG4gCjAwMDAwMDAxOTkgMDAwMDAgbiAKMDAwMDAwMDQwMiAwMDAwMCBuIAowMDAwMDAwNDcwIDAwMDAwIG4gCjAwMDAwMDA3MzEgMDAwMDAgbiAKMDAwMDAwMDc5MCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzxlYzE0NDA2MDM5MTA4ZGEwMWY0MjZhODkwMzU4NmQxMj48ZWMxNDQwNjAzOTEwOGRhMDFmNDI2YTg5MDM1ODZkMTI+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDUgMCBSCi9Sb290IDQgMCBSCi9TaXplIDgKPj4Kc3RhcnR4cmVmCjExNTYKJSVFT0YK',
             true
         );
+    }
+
+    private function fakeProfileSourcesDisk(): void
+    {
+        Storage::fake('profiles');
+        config()->set('profile-knowledge-ai.sources.disk', 'profiles');
+        config()->set('profile-knowledge-ai.sources.folder', 'sources');
+        config()->set('profile-knowledge-ai.sources.visibility', 'private');
     }
 
     private function abelWorkExperienceText(): string

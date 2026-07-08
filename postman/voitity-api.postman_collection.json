@@ -1003,6 +1003,34 @@
               ]
             },
             {
+              "name": "Preview Profile Source File",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources/{{profile_source_id}}/file",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources",
+                    "{{profile_source_id}}",
+                    "file"
+                  ]
+                },
+                "description": "Streams the original file attached to an imported profile source for preview or download. Requires token ability: profile:read."
+              },
+              "response": []
+            },
+            {
               "name": "Approve Profile Source",
               "request": {
                 "method": "POST",

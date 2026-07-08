@@ -15,6 +15,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Smalot\PdfParser\Parser as PdfParser;
 use Throwable;
 
@@ -29,7 +30,7 @@ class ProfileCvImporter
      */
     public function import(Profile $profile, User $user, ?UploadedFile $file, ?string $text, ?string $name, array $metadata = []): ProfileSource
     {
-        $storagePath = $file?->store("profile-sources/{$profile->id}", 'local');
+        $storedFile = $file ? $this->storeSourceFile($profile, $file) : null;
         $fileText = $file ? $this->extractTextFromFile($file) : '';
         $extractedText = $this->normalizeText($text ?: $fileText);
         $status = $extractedText !== '' ? ProfileSourceStatus::Parsed : ProfileSourceStatus::NeedsReview;
@@ -37,7 +38,7 @@ class ProfileCvImporter
             ? $this->profileKnowledgeAIService->structureCv($profile, $extractedText)
             : null;
 
-        return DB::transaction(function () use ($profile, $user, $file, $storagePath, $extractedText, $status, $name, $metadata, $structure): ProfileSource {
+        return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $status, $name, $metadata, $structure): ProfileSource {
             $source = ProfileSource::create([
                 'profile_id' => $profile->id,
                 'user_id' => $user->id,
@@ -45,14 +46,15 @@ class ProfileCvImporter
                 'name' => $name ?: ($file?->getClientOriginalName() ?: 'CV'),
                 'original_filename' => $file?->getClientOriginalName(),
                 'mime_type' => $file?->getClientMimeType(),
-                'storage_path' => $storagePath,
+                'storage_path' => $storedFile['path'] ?? null,
                 'status' => $status,
                 'extracted_text' => $extractedText !== '' ? $extractedText : null,
                 'parser_version' => self::PARSER_VERSION,
                 'metadata' => array_filter([
                     ...$metadata,
                     'text_provided' => filled($extractedText),
-                    'file_size' => $file?->getSize(),
+                    'file' => $storedFile,
+                    'file_size' => $storedFile['size'] ?? null,
                     'structuring' => $structure ? [
                         'source' => $structure->source,
                         'status' => $structure->status,
@@ -69,6 +71,51 @@ class ProfileCvImporter
 
             return $source->load(['items.facts']);
         });
+    }
+
+    /**
+     * @return array{disk: string, path: string, folder: string, visibility: string, original_filename: string, mime_type: string|null, size: int|null}
+     */
+    private function storeSourceFile(Profile $profile, UploadedFile $file): array
+    {
+        $diskName = $this->sourceFilesDisk();
+        $visibility = $this->sourceFilesVisibility();
+        $folder = trim($this->sourceFilesFolder().'/'.$profile->id, '/');
+        $path = $file->store($folder, [
+            'disk' => $diskName,
+            'visibility' => $visibility,
+        ]);
+
+        if (! is_string($path)) {
+            throw new RuntimeException('Unable to store profile source file.');
+        }
+
+        return [
+            'disk' => $diskName,
+            'path' => $path,
+            'folder' => $folder,
+            'visibility' => $visibility,
+            'original_filename' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+        ];
+    }
+
+    private function sourceFilesDisk(): string
+    {
+        return (string) config('profile-knowledge-ai.sources.disk', 'profiles');
+    }
+
+    private function sourceFilesFolder(): string
+    {
+        $folder = trim((string) config('profile-knowledge-ai.sources.folder', 'sources'), '/');
+
+        return $folder !== '' ? $folder : 'sources';
+    }
+
+    private function sourceFilesVisibility(): string
+    {
+        return (string) config('profile-knowledge-ai.sources.visibility', 'private');
     }
 
     private function extractTextFromFile(UploadedFile $file): string
