@@ -19,6 +19,12 @@ return [
 
     'fallback_driver' => env('PROFILE_KNOWLEDGE_AI_FALLBACK_DRIVER', 'local'),
 
+    'sources' => [
+        'disk' => env('PROFILE_SOURCES_DISK', 'profiles'),
+        'folder' => env('PROFILE_SOURCES_FOLDER', 'sources'),
+        'visibility' => env('PROFILE_SOURCES_VISIBILITY', 'private'),
+    ],
+
     'drivers' => [
         'openai' => [
             'driver' => 'openai',

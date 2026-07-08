@@ -42,6 +42,7 @@ Route::prefix('/profile')->group(function () {
     Route::post('/{profile}/transcriptions/audio', [ProfileAudioTranscriptionController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:transcribe']);
     Route::get('/{profile}/sources', [ProfileKnowledgeController::class, 'sources'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/sources/cv', [ProfileKnowledgeController::class, 'storeCv'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/sources/{source}/file', [ProfileKnowledgeController::class, 'sourceFile'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/sources/{source}/approve', [ProfileKnowledgeController::class, 'approveSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);

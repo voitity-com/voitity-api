@@ -19,6 +19,12 @@ class ProfileSourceResponse
             'original_filename' => $this->source->original_filename,
             'mime_type' => $this->source->mime_type,
             'storage_path' => $this->source->storage_path,
+            'file' => [
+                'available' => filled($this->source->storage_path),
+                'name' => $this->source->original_filename ?: $this->source->name,
+                'mime_type' => $this->source->mime_type,
+                'size' => data_get($this->source->metadata, 'file.size', data_get($this->source->metadata, 'file_size')),
+            ],
             'status' => $this->source->status?->value,
             'extracted_text' => $this->source->extracted_text,
             'parser_version' => $this->source->parser_version,

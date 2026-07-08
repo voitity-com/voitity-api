@@ -21,6 +21,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProfileKnowledgeController extends Controller
 {
@@ -64,6 +66,35 @@ class ProfileKnowledgeController extends Controller
             'message' => 'Profile sources retrieved successfully.',
             'data' => (new ProfileSourceListResponse($sources))->toArray(),
         ]);
+    }
+
+    public function sourceFile(Request $request, Profile $profile, ProfileSource $source): JsonResponse|StreamedResponse
+    {
+        if ($response = $this->authorizeProfileAccess($request, $profile)) {
+            return $response;
+        }
+
+        if ((int) $source->profile_id !== (int) $profile->id) {
+            return response()->json(['message' => 'Profile source not found.'], 404);
+        }
+
+        $path = trim((string) $source->storage_path);
+
+        if ($path === '') {
+            return response()->json(['message' => 'Profile source file not found.'], 404);
+        }
+
+        $diskName = $this->resolveSourceFileDisk($source, $path);
+
+        if (! $diskName) {
+            return response()->json(['message' => 'Profile source file not found.'], 404);
+        }
+
+        $headers = array_filter([
+            'Content-Type' => $source->mime_type,
+        ]);
+
+        return Storage::disk($diskName)->response($path, $this->sourceFileName($source), $headers, 'inline');
     }
 
     public function storeCv(
@@ -220,5 +251,35 @@ class ProfileKnowledgeController extends Controller
         }
 
         return response()->json(['message' => 'Profile not found.'], 404);
+    }
+
+    private function resolveSourceFileDisk(ProfileSource $source, string $path): ?string
+    {
+        $candidateDisks = [
+            data_get($source->metadata, 'file.disk'),
+            config('profile-knowledge-ai.sources.disk', 'profiles'),
+            'profiles',
+            'public',
+            'local',
+        ];
+
+        foreach (array_unique(array_filter($candidateDisks)) as $diskName) {
+            try {
+                if (Storage::disk((string) $diskName)->exists($path)) {
+                    return (string) $diskName;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private function sourceFileName(ProfileSource $source): string
+    {
+        $fileName = trim((string) ($source->original_filename ?: $source->name));
+
+        return $fileName !== '' ? $fileName : 'profile-source-'.$source->id;
     }
 }
