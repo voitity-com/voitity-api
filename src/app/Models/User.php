@@ -104,6 +104,16 @@ class User extends Authenticatable
         return $this->hasMany(ProfileAvatar::class);
     }
 
+    public function profileSources()
+    {
+        return $this->hasMany(ProfileSource::class);
+    }
+
+    public function profileChats()
+    {
+        return $this->hasManyThrough(Chat::class, Profile::class);
+    }
+
     public function subscriptions()
     {
         return $this->hasMany(Subscription::class);
