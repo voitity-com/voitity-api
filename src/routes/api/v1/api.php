@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\api\v1\AdminUserController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\MessageController;
@@ -23,6 +24,13 @@ Route::get('health', function () {
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
+
+Route::prefix('/admin')->group(function () {
+    Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum', 'abilities:admin.users.view']);
+    Route::get('/users/{user}', [AdminUserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:admin.users.view']);
+    Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->middleware(['auth:sanctum', 'abilities:admin.users.impersonate']);
+    Route::post('/impersonation/stop', [AdminUserController::class, 'stopImpersonation'])->middleware(['auth:sanctum']);
+});
 
 Route::prefix('/auth')->group(function () {
     Route::post('/get-token', [AuthController::class, 'getToken']);

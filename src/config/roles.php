@@ -31,6 +31,8 @@ return [
             'subscription-plans:read',
             'payments:create',
             'payments:read',
+            'admin.users.view',
+            'admin.users.impersonate',
         ],
     ],
     'user' => [
