@@ -19,10 +19,13 @@ class PaymentOrderResponse
             'id' => $order->id,
             'user_id' => $order->user_id,
             'subscription_id' => $order->subscription_id,
+            'payment_source_id' => $order->payment_source_id,
             'provider' => $order->provider->value,
             'reference' => $order->reference,
             'provider_transaction_id' => $order->provider_transaction_id,
             'plan' => $order->plan->value,
+            'recurring' => (bool) $order->recurring,
+            'billing_reason' => $order->billing_reason,
             'amounts' => [
                 'display_amount_usd' => $order->display_amount_usd,
                 'display_currency' => $order->display_currency->value,

@@ -177,6 +177,61 @@
           "response": []
         },
         {
+          "name": "Email Sign Up",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.access_token) {",
+                  "  pm.environment.set('access_token', json.access_token);",
+                  "}",
+                  "if (json.user && json.user.email) {",
+                  "  pm.environment.set('email', json.user.email);",
+                  "  pm.environment.set('password', pm.environment.get('signup_password'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/sign-up",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sign-up"
+              ]
+            },
+            "description": "Creates an email/password user and stores access_token, email, and password in the active environment."
+          },
+          "response": []
+        },
+        {
           "name": "Google Sign Up",
           "event": [
             {
@@ -374,7 +429,7 @@
                 }
               ]
             },
-            "description": "Lists users with profile, source, avatar, voice, AI media, and chat counts. Requires the authenticated user to have role admin."
+            "description": "Lists users with profile, source, avatar, voice, AI media, and chat counts. The response includes active assignable subscription plans, including admin; inactive plans are omitted. Requires the authenticated user to have role admin."
           },
           "response": []
         },
@@ -401,6 +456,46 @@
               ]
             },
             "description": "Returns one user with profile summaries and resource counts. Requires the authenticated user to have role admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Admin User Subscription",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"{{admin_subscription_plan}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{admin_user_id}}/subscription",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{admin_user_id}}",
+                "subscription"
+              ]
+            },
+            "description": "Assigns an active assignable subscription plan to admin_user_id. Use admin_subscription_plan=admin for the unlimited USD 0 admin grant; inactive plans are rejected. Requires the authenticated user to have role admin."
           },
           "response": []
         },
@@ -531,6 +626,26 @@
       "item": [
         {
           "name": "Get Subscription Plans",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "const plans = (json.data && json.data.plans) || [];",
+                  "const planIds = plans.map((plan) => plan.id);",
+                  "pm.test('public plans only expose active visible plans', function () {",
+                  "  pm.expect(planIds).to.include('starter');",
+                  "  pm.expect(planIds).to.not.include('admin');",
+                  "  pm.expect(planIds).to.not.include('pro');",
+                  "  pm.expect(planIds).to.not.include('business');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -550,7 +665,7 @@
                 "plans"
               ]
             },
-            "description": "Lists subscription plans, purchasable status, display currency, processing currency, and the USD/COP exchange rate. Requires token ability: subscription-plans:read."
+            "description": "Lists only active visible subscription plans, purchasable status, display currency, processing currency, and the USD/COP exchange rate. The admin plan is hidden here because it is only assignable by an admin. Requires token ability: subscription-plans:read."
           },
           "response": []
         },
@@ -577,7 +692,76 @@
             },
             "description": "Gets the active subscription for the authenticated user, remaining limits including credits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
           },
-          "response": []
+          "response": [
+            {
+              "name": "Starter Annual - Monthly Usage Period",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/limits",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "limits"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 15,\n      \"user_id\": 7,\n      \"plan\": \"starter_annual\",\n      \"plan_name\": \"Starter Annual\",\n      \"unlimited\": false,\n      \"price_usd\": 80,\n      \"currency\": \"USD\",\n      \"interval\": \"annual\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"recurring\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2027-07-09T00:00:00.000000Z\",\n      \"next_billing_at\": \"2027-07-09T00:00:00.000000Z\"\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": 1000,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 500\n      },\n      \"profiles\": {\n        \"included\": 1,\n        \"remaining\": 0,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"avatar_images\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": 5,\n        \"remaining\": 5,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": 10000,\n        \"remaining\": 10000,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": 1000,\n        \"remaining\": 999,\n        \"unlimited\": false,\n        \"used\": 1\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 500,\n        \"profiles\": 1,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 1\n      },\n      \"by_type\": [\n        {\n          \"usage_type\": \"profile_created\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 0,\n            \"profiles\": 1,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:20:00.000000Z\"\n        },\n        {\n          \"usage_type\": \"chat_message\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 500,\n            \"profiles\": 0,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 1\n          },\n          \"last_used_at\": \"2026-07-09T13:35:00.000000Z\"\n        }\n      ]\n    }\n  }\n}"
+            },
+            {
+              "name": "Admin Unlimited",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/limits",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "limits"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 1,\n      \"user_id\": 1,\n      \"plan\": \"admin\",\n      \"plan_name\": \"Admin\",\n      \"unlimited\": true,\n      \"price_usd\": 0,\n      \"currency\": \"USD\",\n      \"interval\": \"monthly\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"free\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2026-08-09T00:00:00.000000Z\",\n      \"next_billing_at\": null\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"profiles\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_images\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 0,\n        \"profiles\": 0,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 0\n      },\n      \"by_type\": []\n    }\n  }\n}"
+            }
+          ]
         }
       ]
     },
@@ -607,7 +791,11 @@
                   "if (json.data && json.data.checkout) {",
                   "  pm.environment.set(\"wompi_checkout_url\", json.data.checkout.checkout_url);",
                   "}",
-                  "pm.environment.set(\"wompi_event_status\", pm.environment.get(\"wompi_event_status\") || \"APPROVED\");"
+                  "pm.environment.set(\"wompi_event_status\", pm.environment.get(\"wompi_event_status\") || \"APPROVED\");",
+                  "pm.test('checkout creates a recurring payment order', function () {",
+                  "  pm.expect(json.data.payment_order.recurring).to.eql(true);",
+                  "  pm.expect(json.data.payment_order.billing_reason).to.eql('subscription_initial');",
+                  "});"
                 ]
               }
             }
@@ -626,7 +814,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"starter\"\n}"
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/payments/wompi/checkout",
@@ -640,7 +828,54 @@
                 "checkout"
               ]
             },
-            "description": "Creates a pending local payment order and returns Wompi Web Checkout URL plus Widget config. Requires token ability: payments:create. Open wompi_checkout_url to pay in Sandbox."
+            "description": "Creates a pending recurring local payment order and returns Wompi Web Checkout URL plus Widget config. Only active purchasable paid plans are accepted. Requires token ability: payments:create. Open wompi_checkout_url to pay in Sandbox."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Wompi Checkout - Admin Plan Should Fail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin plan is not purchasable', function () {",
+                  "  pm.expect(pm.response.code).to.eql(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/wompi/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "wompi",
+                "checkout"
+              ]
+            },
+            "description": "Negative check: the admin plan is active and assignable by admins, but it is not purchasable through checkout."
           },
           "response": []
         },
@@ -692,7 +927,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"{{wompi_event_id}}\",\n  \"event\": \"transaction.updated\",\n  \"data\": {\n    \"transaction\": {\n      \"id\": \"{{wompi_transaction_id}}\",\n      \"amount_in_cents\": {{wompi_event_amount_in_cents}},\n      \"reference\": \"{{payment_reference}}\",\n      \"currency\": \"COP\",\n      \"status\": \"{{wompi_event_status}}\"\n    }\n  },\n  \"environment\": \"test\",\n  \"signature\": {\n    \"properties\": [\n      \"transaction.id\",\n      \"transaction.status\",\n      \"transaction.amount_in_cents\"\n    ],\n    \"checksum\": \"{{wompi_event_checksum}}\"\n  },\n  \"timestamp\": {{wompi_event_timestamp}},\n  \"sent_at\": \"{{wompi_event_sent_at}}\"\n}"
+              "raw": "{\n  \"id\": \"{{wompi_event_id}}\",\n  \"event\": \"transaction.updated\",\n  \"data\": {\n    \"transaction\": {\n      \"id\": \"{{wompi_transaction_id}}\",\n      \"amount_in_cents\": {{wompi_event_amount_in_cents}},\n      \"reference\": \"{{payment_reference}}\",\n      \"currency\": \"COP\",\n      \"status\": \"{{wompi_event_status}}\",\n      \"payment_source_id\": \"{{wompi_payment_source_id}}\",\n      \"payment_method_type\": \"CARD\"\n    }\n  },\n  \"environment\": \"test\",\n  \"signature\": {\n    \"properties\": [\n      \"transaction.id\",\n      \"transaction.status\",\n      \"transaction.amount_in_cents\"\n    ],\n    \"checksum\": \"{{wompi_event_checksum}}\"\n  },\n  \"timestamp\": {{wompi_event_timestamp}},\n  \"sent_at\": \"{{wompi_event_sent_at}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/payments/wompi/events",
@@ -706,7 +941,7 @@
                 "events"
               ]
             },
-            "description": "Local webhook endpoint for Wompi events. For manual Postman testing, set wompi_events_secret to the local WOMPI_EVENTS_SECRET value, run Create Wompi Checkout first, then send this request. The pre-request script computes X-Event-Checksum as SHA256(transaction.id + transaction.status + transaction.amount_in_cents + timestamp + WOMPI_EVENTS_SECRET)."
+            "description": "Local webhook endpoint for Wompi events. For manual Postman testing, set wompi_events_secret to the local WOMPI_EVENTS_SECRET value, run Create Wompi Checkout first, then send this request. The sample payload includes payment_source_id so the backend can store the reusable payment source for recurring subscriptions. The pre-request script computes X-Event-Checksum as SHA256(transaction.id + transaction.status + transaction.amount_in_cents + timestamp + WOMPI_EVENTS_SECRET)."
           },
           "response": [],
           "event": [
@@ -728,12 +963,14 @@
                   "const timestamp = String(pm.environment.get(\"wompi_event_timestamp\") || Math.floor(Date.now() / 1000));",
                   "const transactionId = pm.environment.get(\"wompi_transaction_id\") || `trx_${reference}`;",
                   "const eventId = pm.environment.get(\"wompi_event_id\") || `evt_${reference}`;",
+                  "const paymentSourceId = pm.environment.get(\"wompi_payment_source_id\") || `ps_${reference}`;",
                   "const sentAt = pm.environment.get(\"wompi_event_sent_at\") || new Date().toISOString();",
                   "pm.environment.set(\"wompi_event_amount_in_cents\", amountInCents);",
                   "pm.environment.set(\"wompi_event_status\", status);",
                   "pm.environment.set(\"wompi_event_timestamp\", timestamp);",
                   "pm.environment.set(\"wompi_transaction_id\", transactionId);",
                   "pm.environment.set(\"wompi_event_id\", eventId);",
+                  "pm.environment.set(\"wompi_payment_source_id\", paymentSourceId);",
                   "pm.environment.set(\"wompi_event_sent_at\", sentAt);",
                   "const checksumPayload = `${transactionId}${status}${amountInCents}${timestamp}${eventsSecret}`;",
                   "pm.environment.set(\"wompi_event_checksum\", CryptoJS.SHA256(checksumPayload).toString(CryptoJS.enc.Hex));"
@@ -1360,6 +1597,53 @@
               ]
             },
             "description": "Lists chats for profile_id, ordered by last update descending and paginated by 20. Includes api/openai message counts and last_message_at. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles."
+          },
+          "response": []
+        },
+        {
+          "name": "List Chats By Profile Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && Array.isArray(json.data.chats) && json.data.chats.length) {",
+                  "  pm.environment.set('chat_id', json.data.chats[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/chats?page={{chat_page}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "chats"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{chat_page}}"
+                }
+              ]
+            },
+            "description": "Lists chats for the profile route parameter, ordered by last update descending and paginated by 20. This covers GET /api/profile/{profile}/chats. Requires chat:read. Admin users can read any profile; non-admin users can only read their own profiles."
           },
           "response": []
         },

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Repositories\AvatarRepository;
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Avatar\GenerateAvatarRequest;
 use App\Models\AiImage;
@@ -24,39 +26,53 @@ class AvatarController extends Controller
      *     summary="Generate an avatar from a profile image",
      *     tags={"Avatar"},
      *     security={{"sanctum":{"avatar:write"}}},
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\MediaType(
      *             mediaType="multipart/form-data",
+     *
      *             @OA\Schema(
      *                 required={"profile_id","image"},
+     *
      *                 @OA\Property(property="profile_id", type="integer", example=1),
      *                 @OA\Property(property="image", type="string", format="binary")
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=200, description="Avatar generation started successfully."),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile not found"),
+     *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=422, description="Validation error"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
-    public function generateAvatar(GenerateAvatarRequest $request, AvatarRepository $avatarRepository): JsonResponse
-    {
+    public function generateAvatar(
+        GenerateAvatarRequest $request,
+        AvatarRepository $avatarRepository,
+        SubscriptionEntitlementService $entitlements
+    ): JsonResponse {
         try {
             $user = $request->user();
 
-            if (!$user instanceof User) {
+            if (! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
             $profile = Profile::find((int) $request->validated('profile_id'));
 
-            if (!$profile || !$this->userCanGenerateAvatarForProfile($user, $profile)) {
+            if (! $profile || ! $this->userCanGenerateAvatarForProfile($user, $profile)) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
+
+            $entitlements->assertCanUse($profile->user_id ?: $user->id, [
+                'avatar_images' => 1,
+                'avatar_video_seconds' => $this->avatarVideoSeconds(),
+            ]);
 
             $aiImage = $avatarRepository->generateAvatar($user, $profile, $request->file('image'));
             $avatar = ProfileAvatar::with(['aiImage', 'aiVideo'])
@@ -69,6 +85,11 @@ class AvatarController extends Controller
             ], 200);
         } catch (AvatarGenerationInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             Log::error('Error generating avatar.', [
                 'user_id' => $request->user()?->id,
@@ -86,12 +107,15 @@ class AvatarController extends Controller
      *     summary="Get active profile avatar",
      *     tags={"Avatar"},
      *     security={{"sanctum":{"avatar:read"}}},
+     *
      *     @OA\Parameter(
      *         name="profile",
      *         in="path",
      *         required=true,
+     *
      *         @OA\Schema(type="integer")
      *     ),
+     *
      *     @OA\Response(response=200, description="Avatar retrieved successfully."),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized"),
@@ -104,14 +128,14 @@ class AvatarController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user instanceof User) {
+            if (! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
             $avatar = $avatarRepository->getActiveAvatarForProfile($profile);
             $processingAvatar = $avatarRepository->getProcessingAvatarForProfile($profile);
 
-            if (!$avatar) {
+            if (! $avatar) {
                 return response()->json(['message' => 'Avatar not found.'], 404);
             }
 
@@ -139,11 +163,11 @@ class AvatarController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user instanceof User) {
+            if (! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$this->userCanGenerateAvatarForProfile($user, $profile)) {
+            if (! $this->userCanGenerateAvatarForProfile($user, $profile)) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
@@ -179,11 +203,11 @@ class AvatarController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user instanceof User) {
+            if (! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$this->userCanGenerateAvatarForProfile($user, $profile)) {
+            if (! $this->userCanGenerateAvatarForProfile($user, $profile)) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
@@ -195,7 +219,7 @@ class AvatarController extends Controller
                 ->where('profile_id', $profile->id)
                 ->find((int) $validated['avatar_id']);
 
-            if (!$avatar) {
+            if (! $avatar) {
                 return response()->json(['message' => 'Avatar not found.'], 404);
             }
 
@@ -226,6 +250,13 @@ class AvatarController extends Controller
     private function userCanGenerateAvatarForProfile(User $user, Profile $profile): bool
     {
         return $user->role === 'admin' || $profile->user_id === $user->id;
+    }
+
+    private function avatarVideoSeconds(): int
+    {
+        $driver = (string) config('videoai.default', 'runway');
+
+        return max(1, (int) config("videoai.drivers.{$driver}.default_duration", 5));
     }
 
     /**

@@ -23,6 +23,7 @@ class PaymentWebhook
         public readonly string $status,
         public readonly array $payload,
         public readonly array $transaction = [],
+        public readonly ?string $paymentSourceProviderId = null,
     ) {}
 
     public function isPending(): bool
@@ -58,6 +59,7 @@ class PaymentWebhook
             'currency' => $this->currency,
             'provider_status' => $this->providerStatus,
             'status' => $this->status,
+            'payment_source_provider_id' => $this->paymentSourceProviderId,
             'transaction' => $this->transaction,
             'payload' => $this->payload,
         ];

@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileStatus;
+use App\Enums\ProfileSourceStatus;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Profile;
+use App\Models\ProfileAvatar;
+use App\Models\ProfileSource;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
@@ -45,8 +50,6 @@ class ProfileControllerTest extends TestAPI
 
     public function test_user_can_create_a_profile()
     {
-        Event::fake([SubscriptionUsageRequested::class]);
-
         $profile_data = [
             'name' => $this->faker->name,
             'alias' => 'Demo Alias',
@@ -55,7 +58,11 @@ class ProfileControllerTest extends TestAPI
             'personality' => $this->faker->text(100),
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+        $token = $this->getToken();
+        $user = User::where('email', 'voitity@gmail.com')->firstOrFail();
+        $this->createActiveSubscriptionFor($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson(self::ENDPOINT_PROFILE, $profile_data);
 
         $response->assertJsonPath('message', 'Profile created successfully.');
@@ -70,7 +77,7 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($profile_data['name'], $new_profile->name);
         $this->assertEquals($profile_data['alias'], $new_profile->alias);
         $this->assertEquals($profile_data['description'], $new_profile->description);
-        $this->assertTrue((bool) $new_profile->active);
+        $this->assertFalse((bool) $new_profile->active);
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $this->assertSame($new_profile->user_id, $baseVoice->user_id);
         $this->assertSame($new_profile->name, $baseVoice->name);
@@ -80,16 +87,33 @@ class ProfileControllerTest extends TestAPI
         $this->assertNull($baseVoice->source);
         $this->assertNull($baseVoice->source_voice_id);
         $response->assertJsonPath('data.alias', $profile_data['alias']);
+        $response->assertJsonPath('data.active', false);
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
         $response->assertJsonPath('data.voice', false);
         $response->assertJsonPath('data.voice_id', $baseVoice->id);
-        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($new_profile) {
-            return $event->usageType === SubscriptionUsageType::ProfileCreated
-                && $event->userId === $new_profile->user_id
-                && $event->profileId === $new_profile->id
-                && $event->amounts === ['profiles' => 1]
-                && $event->idempotencyKey === "profile-created:{$new_profile->id}";
-        });
+        $response->assertJsonPath('data.publication.can_activate', false);
+        $response->assertJsonPath('data.publication.is_published', false);
+        $this->assertDatabaseHas('subscription_uses', [
+            'user_id' => $new_profile->user_id,
+            'profile_id' => $new_profile->id,
+            'usage_type' => SubscriptionUsageType::ProfileCreated->value,
+            'profiles_used' => 1,
+            'idempotency_key' => "profile-created:{$new_profile->id}",
+        ]);
+        $this->assertSame(0, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->profiles_remaining);
+
+        $secondResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE, array_merge($profile_data, [
+                'name' => $this->faker->name,
+                'alias' => 'Second Alias',
+            ]));
+
+        $secondResponse->assertStatus(402);
+        $secondResponse->assertJsonPath('message', 'Subscription limit exceeded.');
+        $this->assertDatabaseMissing('profiles', [
+            'user_id' => $user->id,
+            'alias' => 'Second Alias',
+        ]);
     }
 
     public function test_unauthorized_user_can_not_list_profiles()
@@ -124,6 +148,7 @@ class ProfileControllerTest extends TestAPI
             'description' => $this->faker->text(200),
             'genre' => 'male',
             'personality' => $this->faker->text(100),
+            'active' => true,
             'status' => ProfileStatus::Published,
         ]);
         $profileB = Profile::create([
@@ -261,6 +286,7 @@ class ProfileControllerTest extends TestAPI
             'description' => $this->faker->text(200),
             'genre' => 'male',
             'personality' => $this->faker->text(100),
+            'active' => true,
             'status' => ProfileStatus::Published,
         ]);
         Voice::factory()->create([
@@ -288,6 +314,43 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.voice_language_code', 'en');
         $response->assertJsonPath('data.status', ProfileStatus::Published->value);
         $response->assertJsonPath('data.voice', true);
+    }
+
+    public function test_user_can_not_show_profile_by_alias_when_profile_is_not_public()
+    {
+        $owner = User::factory()->create(['role' => 'admin']);
+        $reader = User::factory()->create(['role' => 'api']);
+        $draftProfile = Profile::create([
+            'user_id' => $owner->id,
+            'alias' => 'draft-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Draft,
+            'active' => true,
+        ]);
+        $inactivePublishedProfile = Profile::create([
+            'user_id' => $owner->id,
+            'alias' => 'inactive-published-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Published,
+            'active' => false,
+        ]);
+        $token = $reader->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$draftProfile->alias)
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Profile not found.');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$inactivePublishedProfile->alias)
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Profile not found.');
     }
 
     public function test_user_without_profile_read_ability_can_not_show_profile_by_alias()
@@ -392,8 +455,6 @@ class ProfileControllerTest extends TestAPI
             'alias' => 'Updated Alias',
             'description' => $this->faker->text(200),
             'genre' => 'female',
-            'active' => false,
-            'status' => ProfileStatus::Published->value,
         ];
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
@@ -408,9 +469,9 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($new_data['description'], $new_profile->description);
         $this->assertEquals($new_data['genre'], $new_profile->genre);
         $this->assertFalse((bool) $new_profile->active);
-        $this->assertSame(ProfileStatus::Published, $new_profile->status);
+        $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $response->assertJsonPath('data.alias', $new_data['alias']);
-        $response->assertJsonPath('data.status', ProfileStatus::Published->value);
+        $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
     }
 
     public function test_user_can_not_update_profile_with_invalid_status()
@@ -429,6 +490,117 @@ class ProfileControllerTest extends TestAPI
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['status']);
+    }
+
+    public function test_user_can_not_update_profile_publication_state_through_patch()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
+                'active' => true,
+                'status' => ProfileStatus::Published->value,
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['active', 'status']);
+    }
+
+    public function test_user_can_not_activate_profile_without_required_publication_data()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('POST', self::ENDPOINT_PROFILE.'/'.$profile->id.'/activate');
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Profile cannot be activated because required information is missing.');
+
+        $missing = $response->json('data.publication.missing');
+
+        $this->assertContains('alias', $missing);
+        $this->assertContains('avatar', $missing);
+        $this->assertContains('voice', $missing);
+        $this->assertContains('source', $missing);
+        $this->assertFalse((bool) $profile->fresh()->active);
+    }
+
+    public function test_user_can_activate_profile_when_required_publication_data_exists()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = $this->createPublishableProfile($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('POST', self::ENDPOINT_PROFILE.'/'.$profile->id.'/activate');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Profile activated successfully.');
+        $response->assertJsonPath('data.active', true);
+        $response->assertJsonPath('data.status', ProfileStatus::Published->value);
+        $response->assertJsonPath('data.publication.can_activate', true);
+        $response->assertJsonPath('data.publication.is_published', true);
+
+        $profile->refresh();
+        $this->assertTrue((bool) $profile->active);
+        $this->assertSame(ProfileStatus::Published, $profile->status);
+    }
+
+    public function test_user_can_not_activate_profile_with_uploaded_source_that_is_not_approved_and_synced()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = $this->createPublishableProfile($user);
+
+        $profile->sources()->update([
+            'status' => ProfileSourceStatus::Uploaded->value,
+            'approved_at' => null,
+            'indexed_at' => null,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('POST', self::ENDPOINT_PROFILE.'/'.$profile->id.'/activate');
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('data.publication.can_activate', false);
+        $this->assertContains('source', $response->json('data.publication.missing'));
+        $this->assertFalse((bool) $profile->fresh()->active);
+    }
+
+    public function test_user_can_deactivate_published_profile()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = $this->createPublishableProfile($user);
+        $profile->update([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('POST', self::ENDPOINT_PROFILE.'/'.$profile->id.'/deactivate');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Profile deactivated successfully.');
+        $response->assertJsonPath('data.active', false);
+        $response->assertJsonPath('data.status', ProfileStatus::Hidden->value);
+        $response->assertJsonPath('data.publication.can_activate', true);
+        $response->assertJsonPath('data.publication.is_published', false);
+
+        $profile->refresh();
+        $this->assertFalse((bool) $profile->active);
+        $this->assertSame(ProfileStatus::Hidden, $profile->status);
     }
 
     public function test_unauthorized_user_can_not_update_a_profile_data()
@@ -669,5 +841,77 @@ class ProfileControllerTest extends TestAPI
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    private function createPublishableProfile(User $user): Profile
+    {
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'alias' => 'publishable-'.$this->faker->unique()->slug(2),
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'active' => false,
+            'status' => ProfileStatus::Draft,
+        ]);
+
+        Voice::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'name' => $profile->name,
+            'description' => $profile->description,
+            'language_code' => 'es',
+            'source_voice_id' => 'voice-provider-id',
+            'source' => 'elevenlabs',
+            'active' => true,
+        ]);
+
+        ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'file' => 'aivideos/profile-avatar.mp4',
+            'status' => ProfileAvatar::STATUS_ACTIVE,
+        ]);
+
+        ProfileSource::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'type' => 'manual',
+            'name' => 'Profile source',
+            'status' => ProfileSourceStatus::Indexed->value,
+            'approved_at' => now(),
+            'indexed_at' => now(),
+        ]);
+
+        return $profile;
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

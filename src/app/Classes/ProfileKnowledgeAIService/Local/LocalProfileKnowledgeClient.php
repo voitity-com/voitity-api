@@ -21,6 +21,13 @@ class LocalProfileKnowledgeClient implements ProfileKnowledgeAIClient
         'director',
         'specialist',
         'administrator',
+        'desarrollador',
+        'ingeniero',
+        'programador',
+        'arquitecto',
+        'lider',
+        'analista',
+        'consultor',
         'model',
         'creator',
     ];
@@ -266,14 +273,28 @@ class LocalProfileKnowledgeClient implements ProfileKnowledgeAIClient
             'AWARDS AND RECOGNITIONS',
             'TECHNOLOGIES',
             'TECHNOLOGY',
+            'TECNOLOGIAS',
+            'TECNOLOGÍAS',
             'EXPERIENCE',
+            'EXPERIENCIA',
             'EDUCATION',
+            'EDUCACION',
+            'EDUCACIÓN',
+            'FORMACION',
+            'FORMACIÓN',
             'PROJECTS',
+            'PROYECTOS',
             'SKILLS',
+            'HABILIDADES',
             'ADDRESS',
+            'DIRECCION',
+            'DIRECCIÓN',
             'CONTACT',
+            'CONTACTO',
             'LANGUAGES',
+            'IDIOMAS',
             'REFERENCES',
+            'REFERENCIAS',
         ];
 
         usort($headings, fn (string $first, string $second): int => mb_strlen($second) <=> mb_strlen($first));
@@ -299,12 +320,12 @@ class LocalProfileKnowledgeClient implements ProfileKnowledgeAIClient
         }
 
         $headings = [
-            'experience' => ['experience', 'work experience', 'last work experience', 'employment', 'historial laboral', 'trabajo'],
+            'experience' => ['experience', 'experiencia', 'work experience', 'last work experience', 'employment', 'historial laboral', 'trabajo'],
             'education' => ['education', 'educacion', 'formacion', 'studies', 'estudios'],
             'projects' => ['projects', 'proyectos', 'portfolio projects'],
-            'skills' => ['skills', 'technologies', 'technology', 'tecnologias', 'stack'],
+            'skills' => ['skills', 'habilidades', 'technologies', 'technology', 'tecnologias', 'stack'],
             'achievements' => ['awards', 'awards recognitions', 'awards and recognitions', 'reconocimientos', 'premios'],
-            '_ignore' => ['address', 'contact', 'languages', 'references', 'referencias'],
+            '_ignore' => ['address', 'direccion', 'contact', 'contacto', 'languages', 'idiomas', 'references', 'referencias'],
         ];
 
         foreach ($headings as $category => $variants) {

@@ -9,6 +9,7 @@ use App\Enums\PaymentProvider;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
+use App\Models\PaymentSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +77,25 @@ class WompiWebhookController extends Controller
             $order->wompi_status = $webhook->providerStatus;
             $order->raw_provider_payload = $webhook->payload;
             $order->status = PaymentOrderStatus::from($webhook->status);
+
+            if ($webhook->paymentSourceProviderId) {
+                $paymentSource = PaymentSource::updateOrCreate([
+                    'provider' => PaymentProvider::Wompi->value,
+                    'provider_source_id' => $webhook->paymentSourceProviderId,
+                ], [
+                    'user_id' => $order->user_id,
+                    'type' => is_scalar($webhook->transaction['payment_method_type'] ?? null)
+                        ? (string) $webhook->transaction['payment_method_type']
+                        : null,
+                    'status' => $order->status === PaymentOrderStatus::Approved ? 'active' : 'pending',
+                    'reusable' => true,
+                    'metadata' => ['transaction' => $webhook->transaction],
+                    'verified_at' => $order->status === PaymentOrderStatus::Approved ? now() : null,
+                    'last_used_at' => now(),
+                ]);
+
+                $order->payment_source_id = $paymentSource->id;
+            }
 
             if ($order->status === PaymentOrderStatus::Approved && ! $order->paid_at) {
                 $order->paid_at = now();

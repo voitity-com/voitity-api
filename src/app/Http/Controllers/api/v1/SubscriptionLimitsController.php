@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
+use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Subscription\SubscriptionLimitsResponse;
 use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,8 +60,11 @@ class SubscriptionLimitsController extends Controller
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
-    public function show(Request $request): JsonResponse
-    {
+    public function show(
+        Request $request,
+        SubscriptionRenewalService $renewalService,
+        SubscriptionLimitPeriodService $limitPeriods
+    ): JsonResponse {
         try {
             $user = $request->user();
 
@@ -76,7 +82,18 @@ class SubscriptionLimitsController extends Controller
                 return response()->json(['message' => 'Active subscription not found.'], 404);
             }
 
-            $usageBreakdown = $this->usageBreakdown($subscription);
+            $subscription = $renewalService->renewIfFree($subscription)->load('limit');
+
+            if ($subscription->renews_at->isPast()) {
+                $subscription->active = false;
+                $subscription->save();
+
+                return response()->json(['message' => 'Active subscription not found.'], 404);
+            }
+
+            $limit = $limitPeriods->syncCurrentPeriod($subscription);
+            $subscription->setRelation('limit', $limit);
+            $usageBreakdown = $this->usageBreakdown($subscription, $limit);
 
             return response()->json([
                 'message' => 'Subscription limits retrieved successfully.',
@@ -112,7 +129,7 @@ class SubscriptionLimitsController extends Controller
         ];
     }
 
-    private function usageBreakdown(Subscription $subscription): Collection
+    private function usageBreakdown(Subscription $subscription, SubscriptionLimit $limit): Collection
     {
         return $subscription->uses()
             ->select('usage_type')
@@ -125,6 +142,8 @@ class SubscriptionLimitsController extends Controller
             ->selectRaw('SUM(tts_characters_used) as tts_characters_used')
             ->selectRaw('SUM(chat_messages_used) as chat_messages_used')
             ->selectRaw('MAX(used_at) as last_used_at')
+            ->where('used_at', '>=', $limit->period_started_at)
+            ->where('used_at', '<', $limit->period_renews_at)
             ->groupBy('usage_type')
             ->orderBy('usage_type')
             ->get();

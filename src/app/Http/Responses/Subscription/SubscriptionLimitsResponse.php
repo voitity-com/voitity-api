@@ -72,29 +72,36 @@ class SubscriptionLimitsResponse
             'user_id' => $this->subscription->user_id,
             'plan' => $plan,
             'plan_name' => $planConfig['name'] ?? null,
+            'unlimited' => $this->isUnlimitedPlan(),
             'price_usd' => $planConfig['price_usd'] ?? null,
             'currency' => $planConfig['currency'] ?? null,
             'interval' => $planConfig['interval'] ?? null,
             'status' => $this->enumValue($this->subscription->status),
             'active' => (bool) $this->subscription->active,
+            'billing_mode' => $this->subscription->billing_mode,
+            'cancel_at_period_end' => (bool) $this->subscription->cancel_at_period_end,
             'started_at' => $this->subscription->started_at?->toJSON(),
             'renews_at' => $this->subscription->renews_at?->toJSON(),
+            'next_billing_at' => $this->subscription->next_billing_at?->toJSON(),
         ];
     }
 
     private function limitsData(): array
     {
         $limit = $this->subscription->limit;
+        $unlimited = $this->isUnlimitedPlan();
+        $plan = $this->enumValue($this->subscription->plan);
 
         return collect(self::METRICS)
-            ->mapWithKeys(function (array $columns, string $metric) use ($limit): array {
+            ->mapWithKeys(function (array $columns, string $metric) use ($limit, $plan, $unlimited): array {
                 $remaining = $this->usageValue($metric, $limit?->{$columns['remaining']} ?? 0);
                 $used = $this->usageValue($metric, $this->usageTotals[$metric] ?? 0);
 
                 return [
                     $metric => [
-                        'included' => $this->sumUsageValues($metric, $remaining, $used),
-                        'remaining' => $remaining,
+                        'included' => $unlimited ? null : $this->includedValue($metric, $plan),
+                        'remaining' => $unlimited ? null : $remaining,
+                        'unlimited' => $unlimited,
                         'used' => $used,
                     ],
                 ];
@@ -135,6 +142,13 @@ class SubscriptionLimitsResponse
             ->all();
     }
 
+    private function isUnlimitedPlan(): bool
+    {
+        $plan = $this->enumValue($this->subscription->plan);
+
+        return (bool) config("subscriptions.plans.{$plan}.unlimited", false);
+    }
+
     private function usageValue(string $metric, mixed $value): int|float
     {
         if ((bool) (self::METRICS[$metric]['decimal'] ?? false)) {
@@ -144,15 +158,13 @@ class SubscriptionLimitsResponse
         return (int) $value;
     }
 
-    private function sumUsageValues(string $metric, int|float $remaining, int|float $used): int|float
+    private function includedValue(string $metric, ?string $plan): int|float
     {
-        $total = $remaining + $used;
-
-        if ((bool) (self::METRICS[$metric]['decimal'] ?? false)) {
-            return round((float) $total, 2);
+        if ($metric === 'credits') {
+            return $this->usageValue($metric, config("subscriptions.plans.{$plan}.credits.total", 0));
         }
 
-        return (int) $total;
+        return $this->usageValue($metric, config("subscriptions.plans.{$plan}.limits.{$metric}", 0));
     }
 
     private function dateTimeToJson(mixed $value): ?string

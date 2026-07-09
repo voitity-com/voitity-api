@@ -3,6 +3,9 @@
 namespace Tests\Unit\Listeners\Subscriptions;
 
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
+use App\Enums\SubscriptionUsageType;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Listeners\Subscriptions\TrackAvatarImageUsage;
@@ -10,7 +13,10 @@ use App\Listeners\Subscriptions\TrackAvatarVideoUsage;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
+use App\Models\ProfileAvatar;
+use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use Tests\TestCase;
 
@@ -20,6 +26,7 @@ class TrackAvatarUsageTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->profileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $aiImage = AiImage::create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -47,6 +54,7 @@ class TrackAvatarUsageTest extends TestCase
 
         $user = User::factory()->create();
         $profile = $this->profileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $aiVideo = AiVideo::create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -68,6 +76,195 @@ class TrackAvatarUsageTest extends TestCase
         ]);
     }
 
+    public function test_it_reuses_profile_avatar_reservations_when_avatar_events_are_processed(): void
+    {
+        config()->set('videoai.drivers.runway.default_duration', 5);
+
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $aiImage = AiImage::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'image-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $aiVideo = AiVideo::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'source_id' => 'video-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'ai_video_id' => $aiVideo->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarImageCreated,
+            amounts: ['avatar_images' => 1],
+            idempotencyKey: "avatar-image:profile-avatar:{$avatar->id}",
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: (string) $avatar->id,
+        );
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarVideoCreated,
+            amounts: ['avatar_video_seconds' => 5],
+            idempotencyKey: "avatar-video:profile-avatar:{$avatar->id}",
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: (string) $avatar->id,
+        );
+
+        (new TrackAvatarImageUsage($recorder))->handle(new AiImageForAvatarCreated($aiImage));
+        (new TrackAvatarVideoUsage($recorder))->handle(new AiVideoForAvatarCreated($aiVideo, $aiImage));
+
+        $this->assertSame(1, SubscriptionUse::where('idempotency_key', "avatar-image:profile-avatar:{$avatar->id}")->count());
+        $this->assertSame(1, SubscriptionUse::where('idempotency_key', "avatar-video:profile-avatar:{$avatar->id}")->count());
+        $this->assertSame(2, SubscriptionUse::where('user_id', $user->id)->count());
+
+        $limit = $subscription->limit()->firstOrFail();
+        $this->assertSame(0, (int) $limit->avatar_images_remaining);
+        $this->assertSame(0, (int) $limit->avatar_video_seconds_remaining);
+    }
+
+    public function test_it_does_not_create_fallback_avatar_image_usage_when_profile_avatar_reservation_exists(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $this->createActiveSubscriptionFor($user);
+        $aiImage = AiImage::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'image-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarImageCreated,
+            amounts: ['avatar_images' => 1],
+            idempotencyKey: 'avatar-image:profile-avatar:999999',
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: '999999',
+        );
+
+        (new TrackAvatarImageUsage($recorder))->handle(new AiImageForAvatarCreated($aiImage));
+
+        $this->assertSame(1, SubscriptionUse::where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-image:{$aiImage->id}",
+        ]);
+    }
+
+    public function test_it_does_not_create_fallback_avatar_video_usage_when_profile_avatar_reservation_exists(): void
+    {
+        config()->set('videoai.drivers.runway.default_duration', 5);
+
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $this->createActiveSubscriptionFor($user);
+        $aiVideo = AiVideo::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'video-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarVideoCreated,
+            amounts: ['avatar_video_seconds' => 5],
+            idempotencyKey: 'avatar-video:profile-avatar:999999',
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: '999999',
+        );
+
+        (new TrackAvatarVideoUsage($recorder))->handle(new AiVideoForAvatarCreated($aiVideo));
+
+        $this->assertSame(1, SubscriptionUse::where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-video:{$aiVideo->id}",
+        ]);
+    }
+
+    public function test_it_reuses_processing_profile_avatar_reservations_when_avatar_links_are_not_visible_yet(): void
+    {
+        config()->set('videoai.drivers.runway.default_duration', 5);
+
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $this->createActiveSubscriptionFor($user);
+        $aiImage = AiImage::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'image-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $aiVideo = AiVideo::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'video-source-id',
+            'source' => 'runway',
+            'status' => 'pending',
+        ]);
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => null,
+            'ai_video_id' => null,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarImageCreated,
+            amounts: ['avatar_images' => 1],
+            idempotencyKey: "avatar-image:profile-avatar:{$avatar->id}",
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: (string) $avatar->id,
+        );
+        $recorder->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarVideoCreated,
+            amounts: ['avatar_video_seconds' => 5],
+            idempotencyKey: "avatar-video:profile-avatar:{$avatar->id}",
+            profileId: $profile->id,
+            sourceType: ProfileAvatar::class,
+            sourceId: (string) $avatar->id,
+        );
+
+        (new TrackAvatarImageUsage($recorder))->handle(new AiImageForAvatarCreated($aiImage));
+        (new TrackAvatarVideoUsage($recorder))->handle(new AiVideoForAvatarCreated($aiVideo));
+
+        $this->assertSame(2, SubscriptionUse::where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-image:{$aiImage->id}",
+        ]);
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-video:{$aiVideo->id}",
+        ]);
+    }
+
     private function profileFor(User $user): Profile
     {
         return Profile::create([
@@ -78,5 +275,33 @@ class TrackAvatarUsageTest extends TestCase
             'personality' => 'friendly',
             'active' => true,
         ]);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

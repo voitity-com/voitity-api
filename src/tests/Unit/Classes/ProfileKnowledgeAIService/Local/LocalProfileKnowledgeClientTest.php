@@ -29,6 +29,40 @@ class LocalProfileKnowledgeClientTest extends TestCase
         $this->assertNotEmpty($result->items('projects'));
     }
 
+    #[Test]
+    public function it_keeps_spanish_sections_in_their_own_buckets(): void
+    {
+        $client = new LocalProfileKnowledgeClient;
+        $profile = new Profile(['profession_key' => 'developer']);
+
+        $result = $client->structureCv($profile, implode("\n", [
+            'Experiencia',
+            'Nu Image Medical Website',
+            'PHP SOFTWARE DEVELOPER',
+            'Jul 2023 - Jun 2025',
+            'Remote',
+            'I built Laravel APIs and payment integrations.',
+            'Proyectos',
+            'Chatbot on WhatsApp integrating OpenAI API.',
+            'Habilidades',
+            'PHP, Laravel, Vue.js, PostgreSQL',
+            'Educacion',
+            'Universidad Distrital',
+            'Ingenieria de Sistemas',
+        ]));
+
+        $this->assertCount(1, $result->items('work'));
+        $this->assertSame('Nu Image Medical', $result->items('work')[0]['company']);
+        $this->assertSame('Chatbot on WhatsApp integrating OpenAI API', $result->items('projects')[0]['name']);
+
+        $skillNames = collect($result->items('skills'))->pluck('name')->all();
+
+        $this->assertContains('PHP', $skillNames);
+        $this->assertContains('Laravel', $skillNames);
+        $this->assertSame('Universidad Distrital', $result->items('education')[0]['institution']);
+        $this->assertNotContains('Habilidades', collect($result->items('projects'))->pluck('name')->all());
+    }
+
     private function abelCvText(): string
     {
         return implode("\n", [

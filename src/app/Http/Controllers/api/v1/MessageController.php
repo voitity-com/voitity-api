@@ -4,7 +4,9 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\ChatAIService\AudioTranscriptionService;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Events\MessageStored;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Message\StoreAudioMessageRequest;
 use App\Http\Requests\Message\StoreMessageRequest;
@@ -69,14 +71,18 @@ class MessageController extends Controller
      *
      *     @OA\Response(response=202, description="Message stored and processing pending"),
      *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=404, description="Profile or chat not found"),
      *     @OA\Response(response=422, description="Validation error"),
      *     @OA\Response(response=502, description="Answer generation failed"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
-    public function store(StoreMessageRequest $request, Profile $profile): JsonResponse
-    {
+    public function store(
+        StoreMessageRequest $request,
+        Profile $profile,
+        SubscriptionEntitlementService $entitlements
+    ): JsonResponse {
         try {
             $payload = $request->validated();
             $user = $request->user();
@@ -90,7 +96,13 @@ class MessageController extends Controller
                 user: $user,
                 text: $payload['message'],
                 chatId: isset($payload['chat_id']) ? (int) $payload['chat_id'] : null,
+                entitlements: $entitlements,
             );
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -151,6 +163,7 @@ class MessageController extends Controller
      *
      *     @OA\Response(response=202, description="Audio message stored and processing pending"),
      *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=404, description="Profile or chat not found"),
      *     @OA\Response(response=422, description="Validation error or empty transcription"),
      *     @OA\Response(response=502, description="Audio transcription failed"),
@@ -160,7 +173,8 @@ class MessageController extends Controller
     public function storeAudio(
         StoreAudioMessageRequest $request,
         Profile $profile,
-        AudioTranscriptionService $transcriptionService
+        AudioTranscriptionService $transcriptionService,
+        SubscriptionEntitlementService $entitlements
     ): JsonResponse {
         try {
             $payload = $request->validated();
@@ -175,6 +189,10 @@ class MessageController extends Controller
 
             if ($targetError instanceof JsonResponse) {
                 return $targetError;
+            }
+
+            if ($profile->user_id) {
+                $entitlements->assertCanUse($profile->user_id, ['chat_messages' => 1]);
             }
 
             $audio = $payload['audio'] ?? null;
@@ -214,7 +232,13 @@ class MessageController extends Controller
                     'audio_url' => $audioUrl,
                     'transcription' => $this->transcriptionPayload($transcription),
                 ],
+                entitlements: $entitlements,
             );
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -224,6 +248,7 @@ class MessageController extends Controller
         Profile $profile,
         User $user,
         string $text,
+        SubscriptionEntitlementService $entitlements,
         ?int $chatId = null,
         ?string $audioUrl = null,
         bool $includeRequestMetadata = false,
@@ -233,6 +258,10 @@ class MessageController extends Controller
 
         if ($targetError instanceof JsonResponse) {
             return $targetError;
+        }
+
+        if ($profile->user_id) {
+            $entitlements->assertCanUse($profile->user_id, ['chat_messages' => 1]);
         }
 
         $chat = $chatId

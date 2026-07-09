@@ -5,6 +5,7 @@ namespace App\Classes\Subscriptions;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUse;
@@ -44,6 +45,8 @@ class SubscriptionUsageRecorder
         ],
     ];
 
+    public function __construct(private readonly ?SubscriptionLimitPeriodService $limitPeriods = null) {}
+
     /**
      * @param  array<string, int>  $amounts
      * @param  array<string, mixed>  $metadata
@@ -64,52 +67,118 @@ class SubscriptionUsageRecorder
             return $existingUse;
         }
 
-        return DB::transaction(function () use (
-            $userId,
-            $usageType,
-            $amounts,
-            $idempotencyKey,
-            $profileId,
-            $sourceType,
-            $sourceId,
-            $metadata
-        ) {
-            $existingUse = SubscriptionUse::where('idempotency_key', $idempotencyKey)
+        try {
+            return DB::transaction(function () use (
+                $userId,
+                $usageType,
+                $amounts,
+                $idempotencyKey,
+                $profileId,
+                $sourceType,
+                $sourceId,
+                $metadata
+            ) {
+                $existingUse = SubscriptionUse::where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existingUse) {
+                    return $existingUse;
+                }
+
+                /** @var User $user */
+                $user = User::whereKey($userId)->lockForUpdate()->firstOrFail();
+                $subscription = $this->currentSubscriptionFor($user);
+                $limit = $this->currentLimitFor($subscription);
+                $normalizedAmounts = $this->normalizeAmounts($amounts);
+                $creditsUsed = $this->creditsUsedForPlan($subscription->plan, $normalizedAmounts);
+                $unlimited = (bool) config("subscriptions.plans.{$subscription->plan->value}.unlimited", false);
+
+                if (! $unlimited) {
+                    $this->assertLimitCanRecord($limit, $normalizedAmounts, $creditsUsed);
+                }
+
+                $use = SubscriptionUse::create(array_merge([
+                    'subscription_id' => $subscription->id,
+                    'user_id' => $user->id,
+                    'profile_id' => $profileId,
+                    'usage_type' => $usageType,
+                    'source_type' => $sourceType,
+                    'source_id' => $sourceId,
+                    'idempotency_key' => $idempotencyKey,
+                    'metadata' => $metadata,
+                    'used_at' => now(),
+                ], $this->usageColumns($normalizedAmounts, $creditsUsed)));
+
+                if (! $unlimited) {
+                    foreach ($normalizedAmounts as $metric => $amount) {
+                        $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
+                        $limit->{$limitColumn} = max(0, ((int) $limit->{$limitColumn}) - $amount);
+                    }
+
+                    $limit->credits_remaining = round(max(0, ((float) $limit->credits_remaining) - $creditsUsed), 2);
+                    $limit->save();
+                }
+
+                return $use;
+            });
+        } catch (SubscriptionEntitlementException $exception) {
+            if ($exception->getMessage() === 'Active subscription has expired.') {
+                $this->expireDueSubscriptionsFor((int) $userId);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function release(string $idempotencyKey): bool
+    {
+        return DB::transaction(function () use ($idempotencyKey): bool {
+            /** @var SubscriptionUse|null $use */
+            $use = SubscriptionUse::where('idempotency_key', $idempotencyKey)
                 ->lockForUpdate()
                 ->first();
 
-            if ($existingUse) {
-                return $existingUse;
+            if (! $use) {
+                return false;
             }
 
-            /** @var User $user */
-            $user = User::whereKey($userId)->lockForUpdate()->firstOrFail();
-            $subscription = $this->currentSubscriptionFor($user);
-            $limit = $this->currentLimitFor($subscription);
-            $normalizedAmounts = $this->normalizeAmounts($amounts);
-            $creditsUsed = $this->creditsUsedForPlan($subscription->plan, $normalizedAmounts);
+            /** @var Subscription|null $subscription */
+            $subscription = Subscription::whereKey($use->subscription_id)
+                ->lockForUpdate()
+                ->first();
+            /** @var SubscriptionLimit|null $limit */
+            $limit = SubscriptionLimit::where('subscription_id', $use->subscription_id)
+                ->lockForUpdate()
+                ->first();
+            $unlimited = $subscription
+                ? (bool) config("subscriptions.plans.{$subscription->plan->value}.unlimited", false)
+                : false;
 
-            $use = SubscriptionUse::create(array_merge([
-                'subscription_id' => $subscription->id,
-                'user_id' => $user->id,
-                'profile_id' => $profileId,
-                'usage_type' => $usageType,
-                'source_type' => $sourceType,
-                'source_id' => $sourceId,
-                'idempotency_key' => $idempotencyKey,
-                'metadata' => $metadata,
-                'used_at' => now(),
-            ], $this->usageColumns($normalizedAmounts, $creditsUsed)));
+            if ($subscription && $limit && ! $unlimited && $this->useBelongsToLimitPeriod($use, $limit)) {
+                foreach (self::METRIC_COLUMNS as $metric => $columns) {
+                    $used = max(0, (int) $use->{$columns['use']});
 
-            foreach ($normalizedAmounts as $metric => $amount) {
-                $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
-                $limit->{$limitColumn} = max(0, ((int) $limit->{$limitColumn}) - $amount);
+                    if ($used <= 0) {
+                        continue;
+                    }
+
+                    $limit->{$columns['limit']} = min(
+                        $this->includedLimitFor($subscription, $metric),
+                        ((int) $limit->{$columns['limit']}) + $used
+                    );
+                }
+
+                $limit->credits_remaining = min(
+                    $this->includedCreditsFor($subscription),
+                    round(((float) $limit->credits_remaining) + ((float) $use->credits_used), 2)
+                );
+                $limit->save();
             }
 
-            $limit->credits_remaining = round(max(0, ((float) $limit->credits_remaining) - $creditsUsed), 2);
-            $limit->save();
+            $use->delete();
 
-            return $use;
+            return true;
         });
     }
 
@@ -122,69 +191,71 @@ class SubscriptionUsageRecorder
             ->lockForUpdate()
             ->first();
 
-        if ($subscription && $subscription->renews_at->isFuture()) {
-            return $subscription;
-        }
-
-        $previousPlan = $subscription?->plan ?? $this->defaultPlan();
-
         if ($subscription) {
+            if ($subscription->renews_at->isFuture()) {
+                return $subscription;
+            }
+
             $subscription->status = SubscriptionStatus::Expired;
             $subscription->active = false;
             $subscription->save();
+
+            throw new SubscriptionEntitlementException(
+                'Active subscription has expired.',
+                ['subscription' => ['Active subscription has expired.']]
+            );
         }
 
-        return $this->createSubscription(
-            user: $user,
-            plan: $previousPlan,
-            status: $subscription ? SubscriptionStatus::Renewed : SubscriptionStatus::First
+        throw new SubscriptionEntitlementException(
+            'Active subscription not found.',
+            ['subscription' => ['Active subscription not found.']]
         );
+    }
+
+    private function expireDueSubscriptionsFor(int $userId): void
+    {
+        Subscription::query()
+            ->where('user_id', $userId)
+            ->where('active', true)
+            ->where('renews_at', '<=', now())
+            ->update([
+                'status' => SubscriptionStatus::Expired->value,
+                'active' => false,
+                'updated_at' => now(),
+            ]);
     }
 
     private function currentLimitFor(Subscription $subscription): SubscriptionLimit
     {
-        /** @var SubscriptionLimit|null $limit */
-        $limit = $subscription->limit()->lockForUpdate()->first();
+        return $this->limitPeriods()->syncCurrentPeriod($subscription);
+    }
 
-        if ($limit) {
-            return $limit;
+    /**
+     * @param  array<string, int>  $amounts
+     */
+    private function assertLimitCanRecord(SubscriptionLimit $limit, array $amounts, float $creditsUsed): void
+    {
+        $errors = [];
+
+        foreach ($amounts as $metric => $amount) {
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
+
+            if ((int) $limit->{$limitColumn} < $amount) {
+                $errors[$metric] = ["Insufficient {$metric} quota."];
+            }
         }
 
-        return $this->createLimit($subscription);
-    }
+        if ($creditsUsed > 0 && (float) $limit->credits_remaining < $creditsUsed) {
+            $errors['credits'] = ['Insufficient credits quota.'];
+        }
 
-    private function createSubscription(
-        User $user,
-        SubscriptionPlan $plan,
-        SubscriptionStatus $status
-    ): Subscription {
-        $startedAt = now();
-        $renewsAt = $startedAt->copy()->addMonth();
-
-        /** @var Subscription $subscription */
-        $subscription = $user->subscriptions()->create([
-            'plan' => $plan,
-            'started_at' => $startedAt,
-            'renews_at' => $renewsAt,
-            'status' => $status,
-            'active' => true,
-        ]);
-
-        $this->createLimit($subscription);
-
-        return $subscription;
-    }
-
-    private function createLimit(Subscription $subscription): SubscriptionLimit
-    {
-        $limits = $this->limitsForPlan($subscription->plan);
-
-        return SubscriptionLimit::create(array_merge([
-            'subscription_id' => $subscription->id,
-            'user_id' => $subscription->user_id,
-            'period_started_at' => Carbon::parse($subscription->started_at),
-            'period_renews_at' => Carbon::parse($subscription->renews_at),
-        ], $this->limitColumns($subscription->plan, $limits)));
+        if ($errors !== []) {
+            throw new SubscriptionEntitlementException('Subscription limit exceeded.', $errors);
+        }
     }
 
     /**
@@ -219,23 +290,6 @@ class SubscriptionUsageRecorder
     }
 
     /**
-     * @param  array<string, int>  $limits
-     * @return array<string, int|float>
-     */
-    private function limitColumns(SubscriptionPlan $plan, array $limits): array
-    {
-        $columns = [];
-
-        foreach (array_keys(self::METRIC_COLUMNS) as $metric) {
-            $columns[self::METRIC_COLUMNS[$metric]['limit']] = max(0, (int) ($limits[$metric] ?? 0));
-        }
-
-        $columns['credits_remaining'] = $this->creditTotalForPlan($plan);
-
-        return $columns;
-    }
-
-    /**
      * @param  array<string, int>  $amounts
      */
     private function creditsUsedForPlan(SubscriptionPlan $plan, array $amounts): float
@@ -261,23 +315,30 @@ class SubscriptionUsageRecorder
         return round($creditsUsed, 2);
     }
 
-    private function creditTotalForPlan(SubscriptionPlan $plan): float
+    private function useBelongsToLimitPeriod(SubscriptionUse $use, SubscriptionLimit $limit): bool
     {
-        return round((float) config("subscriptions.plans.{$plan->value}.credits.total", 0), 2);
+        if (! $use->used_at || ! $limit->period_started_at || ! $limit->period_renews_at) {
+            return false;
+        }
+
+        $usedAt = Carbon::parse($use->used_at);
+
+        return $usedAt->greaterThanOrEqualTo($limit->period_started_at)
+            && $usedAt->lessThan($limit->period_renews_at);
     }
 
-    /**
-     * @return array<string, int>
-     */
-    private function limitsForPlan(SubscriptionPlan $plan): array
+    private function includedLimitFor(Subscription $subscription, string $metric): int
     {
-        return config("subscriptions.plans.{$plan->value}.limits", []);
+        return max(0, (int) config("subscriptions.plans.{$subscription->plan->value}.limits.{$metric}", 0));
     }
 
-    private function defaultPlan(): SubscriptionPlan
+    private function includedCreditsFor(Subscription $subscription): float
     {
-        $plan = config('subscriptions.default_plan', SubscriptionPlan::Starter->value);
+        return round(max(0, (float) config("subscriptions.plans.{$subscription->plan->value}.credits.total", 0)), 2);
+    }
 
-        return SubscriptionPlan::tryFrom((string) $plan) ?? SubscriptionPlan::Starter;
+    private function limitPeriods(): SubscriptionLimitPeriodService
+    {
+        return $this->limitPeriods ?? app(SubscriptionLimitPeriodService::class);
     }
 }

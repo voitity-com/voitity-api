@@ -10,14 +10,18 @@ class VoiceProviderRequest extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_PROCESSING = 'processing';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_FAILED = 'failed';
 
     protected $fillable = [
         'voice_id',
         'voice_sample_id',
         'source',
+        'source_voice_id',
         'request_url',
         'response',
         'status',

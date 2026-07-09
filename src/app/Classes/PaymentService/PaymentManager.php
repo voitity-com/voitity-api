@@ -19,10 +19,12 @@ class PaymentManager extends Manager
 
         return new WompiPaymentClient(
             publicKey: $config['public_key'] ?? null,
+            privateKey: $config['private_key'] ?? null,
             integritySecret: $config['integrity_secret'] ?? null,
             eventsSecret: $config['events_secret'] ?? null,
             checkoutUrl: $config['checkout_url'] ?? null,
             widgetUrl: $config['widget_url'] ?? null,
+            apiUrl: $config['api_url'] ?? null,
             environment: $config['environment'] ?? null,
         );
     }

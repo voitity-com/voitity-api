@@ -28,12 +28,14 @@ Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum'
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
     Route::get('/users/{user}', [AdminUserController::class, 'show'])->middleware(['auth:sanctum']);
+    Route::patch('/users/{user}/subscription', [AdminUserController::class, 'updateSubscription'])->middleware(['auth:sanctum']);
     Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->middleware(['auth:sanctum']);
     Route::post('/impersonation/stop', [AdminUserController::class, 'stopImpersonation'])->middleware(['auth:sanctum']);
 });
 
 Route::prefix('/auth')->group(function () {
     Route::post('/get-token', [AuthController::class, 'getToken']);
+    Route::post('/sign-up', [AuthController::class, 'signUp']);
     Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
     Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);
@@ -55,6 +57,8 @@ Route::prefix('/profile')->group(function () {
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/activate', [ProfileController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/deactivate', [ProfileController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);

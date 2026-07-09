@@ -72,6 +72,108 @@
                 }
             }
         },
+        "/api/auth/sign-up": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Sign up with email and password",
+                "operationId": "406f2460c299dc0ad9dd269ee8059ff8",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Abel Moreno"
+                                    },
+                                    "first_name": {
+                                        "type": "string",
+                                        "example": "Abel",
+                                        "nullable": true
+                                    },
+                                    "last_name": {
+                                        "type": "string",
+                                        "example": "Moreno",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "example": "abel@example.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "example": "Test12345!"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "example": "Test12345!"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful email sign up",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "user": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "email": {
+                                                    "type": "string"
+                                                },
+                                                "first_name": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "last_name": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "avatar": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "provider": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                }
+            }
+        },
         "/api/auth/google/sign-in": {
             "post": {
                 "tags": [
@@ -396,11 +498,11 @@
                     "404": {
                         "description": "Profile not found"
                     },
+                    "402": {
+                        "description": "Subscription limit exceeded"
+                    },
                     "422": {
                         "description": "Validation error"
-                    },
-                    "502": {
-                        "description": "Answer generation failed"
                     },
                     "500": {
                         "description": "Unexpected error"
@@ -554,11 +656,17 @@
                     "401": {
                         "description": "Unauthenticated"
                     },
+                    "402": {
+                        "description": "Subscription limit exceeded"
+                    },
                     "404": {
                         "description": "Profile or chat not found"
                     },
                     "422": {
                         "description": "Validation error"
+                    },
+                    "502": {
+                        "description": "Answer generation failed"
                     },
                     "500": {
                         "description": "Unexpected error"
@@ -676,6 +784,9 @@
                     },
                     "401": {
                         "description": "Unauthenticated"
+                    },
+                    "402": {
+                        "description": "Subscription limit exceeded"
                     },
                     "404": {
                         "description": "Profile or chat not found"
@@ -1228,6 +1339,9 @@
                     },
                     "401": {
                         "description": "Unauthenticated"
+                    },
+                    "402": {
+                        "description": "Subscription limit exceeded"
                     },
                     "422": {
                         "description": "Validation error"
@@ -2224,6 +2338,9 @@
                     "401": {
                         "description": "Unauthenticated"
                     },
+                    "402": {
+                        "description": "Subscription limit exceeded"
+                    },
                     "403": {
                         "description": "Unauthorized"
                     },
@@ -2450,6 +2567,22 @@
                                         "message": {
                                             "type": "string",
                                             "example": "Voice not found."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Subscription limit exceeded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription limit exceeded."
                                         }
                                     },
                                     "type": "object"

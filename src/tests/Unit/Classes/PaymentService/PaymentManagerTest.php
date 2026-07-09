@@ -131,6 +131,7 @@ class PaymentManagerTest extends TestCase
             'events_secret' => 'test_events_key',
             'checkout_url' => 'https://checkout.wompi.co/p/',
             'widget_url' => 'https://checkout.wompi.co/widget.js',
+            'api_url' => 'https://sandbox.wompi.co/v1',
         ];
     }
 }

@@ -28,6 +28,7 @@ class Profile extends Model
     ];
 
     protected $attributes = [
+        'active' => false,
         'status' => ProfileStatus::Draft->value,
         'profession_key' => 'custom',
         'profession_template_version' => '2026-07',

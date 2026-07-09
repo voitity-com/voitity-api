@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreProfileDataRequest;
 use App\Http\Requests\Profile\StoreProfileRequest;
@@ -22,6 +26,10 @@ class ProfileController extends Controller
     private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
 
     private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,name,description,language_code,source_voice_id,source,active';
+
+    private const AVATAR_RESPONSE_COLUMNS = 'avatars:id,profile_id,file,status';
+
+    private const SOURCE_RESPONSE_COLUMNS = 'sources:id,profile_id,status,approved_at,indexed_at';
 
     /**
      * @OA\Get(
@@ -81,7 +89,7 @@ class ProfileController extends Controller
             }
 
             $profiles = $user->profiles()
-                ->with(self::VOICE_RESPONSE_COLUMNS)
+                ->with([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS])
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -134,11 +142,15 @@ class ProfileController extends Controller
      *     ),
      *
      *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
-    public function store(StoreProfileRequest $request): JsonResponse
-    {
+    public function store(
+        StoreProfileRequest $request,
+        SubscriptionEntitlementService $entitlements,
+        SubscriptionUsageRecorder $usageRecorder
+    ): JsonResponse {
         try {
             $user = $request->user();
 
@@ -146,30 +158,40 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            [$profile] = DB::transaction(function () use ($request, $user): array {
-                $profile = $user->profiles()->create($request->validated());
+            $entitlements->assertCanUse($user, ['profiles' => 1]);
+
+            [$profile] = DB::transaction(function () use ($request, $usageRecorder, $user): array {
+                $profile = $user->profiles()->create(array_merge($request->validated(), [
+                    'active' => false,
+                    'status' => ProfileStatus::Draft,
+                ]));
                 $voice = $this->createBaseVoiceForProfile($profile);
+
+                $usageRecorder->record(
+                    userId: $user->id,
+                    usageType: SubscriptionUsageType::ProfileCreated,
+                    amounts: ['profiles' => 1],
+                    idempotencyKey: "profile-created:{$profile->id}",
+                    profileId: $profile->id,
+                    sourceType: Profile::class,
+                    sourceId: (string) $profile->id,
+                );
 
                 $profile->setRelation('voices', collect([$voice]));
 
                 return [$profile, $voice];
             });
 
-            event(new SubscriptionUsageRequested(
-                userId: $user->id,
-                usageType: SubscriptionUsageType::ProfileCreated,
-                amounts: ['profiles' => 1],
-                profileId: $profile->id,
-                sourceType: Profile::class,
-                sourceId: (string) $profile->id,
-                idempotencyKey: "profile-created:{$profile->id}"
-            ));
-
             return response()->json([
                 'message' => 'Profile created successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
             ], 200);
 
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -253,7 +275,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $profile->loadMissing(self::VOICE_RESPONSE_COLUMNS);
+            $this->loadProfileResponseRelations($profile);
 
             return response()->json([
                 'message' => 'Profile retrieved successfully.',
@@ -322,7 +344,9 @@ class ProfileController extends Controller
     {
         try {
             $profile = Profile::where('alias', $alias)
-                ->with(self::VOICE_RESPONSE_COLUMNS)
+                ->where('active', true)
+                ->where('status', ProfileStatus::Published->value)
+                ->with([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS])
                 ->first();
 
             if (! $profile) {
@@ -463,6 +487,7 @@ class ProfileController extends Controller
             }
 
             $profile->update($request->validated());
+            $this->loadProfileResponseRelations($profile);
 
             return response()->json([
                 'message' => 'Profile updated successfully.',
@@ -470,6 +495,94 @@ class ProfileController extends Controller
             ], 200);
 
         } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function activate(
+        Request $request,
+        Profile $profile,
+        ProfilePublicationReadinessService $readiness
+    ): JsonResponse {
+        try {
+            $user = $request->user();
+
+            if (! $user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (! $profile || $profile->user_id !== $user->id) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            $this->loadProfileResponseRelations($profile);
+            $publication = $readiness->evaluate($profile);
+
+            if (! $publication['can_activate']) {
+                return response()->json([
+                    'message' => 'Profile cannot be activated because required information is missing.',
+                    'data' => [
+                        'publication' => $publication,
+                    ],
+                    'errors' => [
+                        'publication' => $publication['missing'],
+                    ],
+                ], 422);
+            }
+
+            $profile->forceFill([
+                'active' => true,
+                'status' => ProfileStatus::Published,
+            ])->save();
+
+            $this->loadProfileResponseRelations($profile);
+
+            return response()->json([
+                'message' => 'Profile activated successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
+        } catch (\Throwable $e) {
+            Log::error('Error activating profile.', [
+                'profile_id' => $profile->id ?? null,
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function deactivate(Request $request, Profile $profile): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (! $user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (! $profile || $profile->user_id !== $user->id) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            $profile->forceFill([
+                'active' => false,
+                'status' => ProfileStatus::Hidden,
+            ])->save();
+
+            $this->loadProfileResponseRelations($profile);
+
+            return response()->json([
+                'message' => 'Profile deactivated successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
+        } catch (\Throwable $e) {
+            Log::error('Error deactivating profile.', [
+                'profile_id' => $profile->id ?? null,
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
@@ -584,6 +697,8 @@ class ProfileController extends Controller
                 $profile->update($request->validated());
             }
 
+            $this->loadProfileResponseRelations($profile);
+
             return response()->json([
                 'message' => 'Profile updated successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
@@ -592,5 +707,10 @@ class ProfileController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    private function loadProfileResponseRelations(Profile $profile): void
+    {
+        $profile->loadMissing([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS]);
     }
 }

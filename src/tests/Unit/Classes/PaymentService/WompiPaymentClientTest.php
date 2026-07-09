@@ -3,7 +3,9 @@
 namespace Tests\Unit\Classes\PaymentService;
 
 use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Classes\PaymentService\Wompi\WompiPaymentClient;
+use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -72,6 +74,70 @@ class WompiPaymentClientTest extends TestCase
     }
 
     #[Test]
+    public function it_charges_wompi_payment_source_as_recurring_transaction(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/transactions' => Http::response([
+                'data' => [
+                    'id' => 'trx_renewal_1',
+                    'reference' => 'VOI-REN-1-TEST',
+                    'status' => 'APPROVED',
+                    'amount_in_cents' => 3200000,
+                    'currency' => 'COP',
+                ],
+            ], 201),
+        ]);
+
+        $charge = $this->client()->chargePaymentSource(new PaymentSourceChargeRequest(
+            reference: 'VOI-REN-1-TEST',
+            amountInCents: 3200000,
+            currency: 'COP',
+            customerEmail: 'user@example.com',
+            paymentSourceProviderId: '3891',
+            installments: 1,
+            recurrent: true,
+        ));
+
+        $this->assertTrue($charge->isSuccessful());
+        $this->assertSame('approved', $charge->status);
+        $this->assertSame('trx_renewal_1', $charge->providerTransactionId);
+        $this->assertSame('APPROVED', $charge->providerStatus);
+
+        Http::assertSent(function ($request): bool {
+            return $request->url() === 'https://sandbox.wompi.co/v1/transactions'
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
+                && $request['payment_source_id'] === 3891
+                && $request['recurrent'] === true
+                && $request['payment_method']['installments'] === 1
+                && $request['customer_email'] === 'user@example.com'
+                && $request['signature'] === hash('sha256', 'VOI-REN-1-TEST3200000COPtest_integrity_key');
+        });
+    }
+
+    #[Test]
+    public function it_requires_private_key_api_url_and_integrity_secret_for_payment_source_charges(): void
+    {
+        $client = new WompiPaymentClient(
+            publicKey: 'pub_test_key',
+            integritySecret: 'test_integrity_key',
+            eventsSecret: 'test_events_key',
+            privateKey: null,
+            apiUrl: 'https://sandbox.wompi.co/v1',
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Wompi private key, API URL and integrity secret are required.');
+
+        $client->chargePaymentSource(new PaymentSourceChargeRequest(
+            reference: 'VOI-REN-1-TEST',
+            amountInCents: 3200000,
+            currency: 'COP',
+            customerEmail: 'user@example.com',
+            paymentSourceProviderId: '3891',
+        ));
+    }
+
+    #[Test]
     public function it_parses_valid_webhook_checksum_from_header(): void
     {
         $client = $this->client();
@@ -125,6 +191,8 @@ class WompiPaymentClientTest extends TestCase
             eventsSecret: 'test_events_key',
             checkoutUrl: 'https://checkout.wompi.co/p/',
             widgetUrl: 'https://checkout.wompi.co/widget.js',
+            privateKey: 'prv_test_key',
+            apiUrl: 'https://sandbox.wompi.co/v1',
             environment: 'sandbox',
         );
     }

@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Classes\Repositories\AvatarRepository;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Mockery;
@@ -27,6 +31,7 @@ class AvatarControllerTest extends TestAPI
     {
         $user = User::factory()->create();
         $profile = $this->profileForUser($user);
+        $this->createActiveSubscriptionFor($user);
         $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
         $aiImage = $this->aiImageForProfile($profile);
         $processingAvatar = ProfileAvatar::create([
@@ -47,7 +52,7 @@ class AvatarControllerTest extends TestAPI
                 ->andReturn($aiImage);
         });
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT_GENERATE, [
                 'profile_id' => $profile->id,
                 'image' => $this->validImageUpload(),
@@ -72,7 +77,7 @@ class AvatarControllerTest extends TestAPI
             $mock->shouldNotReceive('generateAvatar');
         });
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT_GENERATE, [
                 'profile_id' => $profile->id,
                 'image' => $this->validImageUpload(),
@@ -87,6 +92,7 @@ class AvatarControllerTest extends TestAPI
         $admin = User::factory()->create(['role' => 'admin']);
         $owner = User::factory()->create(['role' => 'user']);
         $profile = $this->profileForUser($owner);
+        $this->createActiveSubscriptionFor($owner);
         $token = $admin->createToken('test-token', ['avatar:write'])->plainTextToken;
         $aiImage = $this->aiImageForProfile($profile);
 
@@ -101,7 +107,7 @@ class AvatarControllerTest extends TestAPI
                 ->andReturn($aiImage);
         });
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT_GENERATE, [
                 'profile_id' => $profile->id,
                 'image' => $this->validImageUpload(),
@@ -117,7 +123,7 @@ class AvatarControllerTest extends TestAPI
         $profile = $this->profileForUser($user);
         $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT_GENERATE, [
                 'profile_id' => $profile->id,
                 'image' => UploadedFile::fake()->create('avatar.txt', 1, 'text/plain'),
@@ -133,7 +139,7 @@ class AvatarControllerTest extends TestAPI
         $profile = $this->profileForUser($user);
         $token = $user->createToken('test-token', ['avatar:read'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT_GENERATE, [
                 'profile_id' => $profile->id,
                 'image' => $this->validImageUpload(),
@@ -171,8 +177,8 @@ class AvatarControllerTest extends TestAPI
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->get('/api/avatar/' . $profile->id);
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->get('/api/avatar/'.$profile->id);
 
         $response->assertStatus(200);
         $response->assertJsonPath('message', 'Avatar retrieved successfully.');
@@ -196,7 +202,7 @@ class AvatarControllerTest extends TestAPI
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->get("/api/avatar/{$profile->id}/history");
 
         $response->assertStatus(200);
@@ -216,7 +222,7 @@ class AvatarControllerTest extends TestAPI
         $profile = $this->profileForUser($otherUser);
         $token = $user->createToken('test-token', ['avatar:read'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->get("/api/avatar/{$profile->id}/history");
 
         $response->assertStatus(404);
@@ -231,7 +237,7 @@ class AvatarControllerTest extends TestAPI
         $active = $this->avatarForProfile($profile, ProfileAvatar::STATUS_ACTIVE, 'aivideos/active.mp4');
         $inactive = $this->avatarForProfile($profile, ProfileAvatar::STATUS_INACTIVE, 'aivideos/old.mp4');
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $inactive->id,
             ]);
@@ -257,7 +263,7 @@ class AvatarControllerTest extends TestAPI
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $inactive->id,
             ]);
@@ -273,7 +279,7 @@ class AvatarControllerTest extends TestAPI
         $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
         $failed = $this->avatarForProfile($profile, ProfileAvatar::STATUS_FAILED, null);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $failed->id,
             ]);
@@ -308,12 +314,12 @@ class AvatarControllerTest extends TestAPI
 
     private function avatarForProfile(Profile $profile, string $status, ?string $file): ProfileAvatar
     {
-        $aiImage = $this->aiImageForProfile($profile, 'succeeded', $file ? str_replace('aivideos/', 'aiimages/', $file) . '.png' : null);
+        $aiImage = $this->aiImageForProfile($profile, 'succeeded', $file ? str_replace('aivideos/', 'aiimages/', $file).'.png' : null);
         $aiVideo = AiVideo::create([
             'user_id' => $profile->user_id,
             'profile_id' => $profile->id,
             'aiimage_id' => $aiImage->id,
-            'source_id' => 'video-source-id-' . uniqid(),
+            'source_id' => 'video-source-id-'.uniqid(),
             'source' => 'runway',
             'status' => $file ? 'succeeded' : 'failed',
             'file' => $file,
@@ -337,5 +343,33 @@ class AvatarControllerTest extends TestAPI
         ));
 
         return new UploadedFile($path, 'avatar.png', 'image/png', null, true);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

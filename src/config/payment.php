@@ -7,6 +7,7 @@ return [
     'processing_currency' => env('PAYMENTS_PROCESSING_CURRENCY', 'COP'),
     'usd_cop_rate' => (float) env('PAYMENTS_USD_COP_RATE', 4000),
     'redirect_url' => env('PAYMENTS_REDIRECT_URL'),
+    'checkout_expires_in_minutes' => (int) env('PAYMENTS_CHECKOUT_EXPIRES_IN_MINUTES', 60),
 
     'drivers' => [
         'wompi' => [

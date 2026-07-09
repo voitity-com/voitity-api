@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\Subscriptions\SubscriptionPlanCatalog;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -32,7 +33,8 @@ class PaymentController extends Controller
      */
     public function createWompiCheckout(
         CreateWompiCheckoutRequest $request,
-        PaymentService $paymentService
+        PaymentService $paymentService,
+        SubscriptionPlanCatalog $planCatalog
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -40,7 +42,7 @@ class PaymentController extends Controller
         $planConfig = config("subscriptions.plans.{$plan->value}", []);
         $priceUsd = $planConfig['price_usd'] ?? null;
 
-        if (! is_numeric($priceUsd) || (float) $priceUsd <= 0) {
+        if (! $planCatalog->isPurchasable($plan) || ! is_numeric($priceUsd) || (float) $priceUsd <= 0) {
             return response()->json([
                 'message' => 'Selected plan is not available for checkout.',
                 'errors' => ['plan' => ['Selected plan is not available for checkout.']],
@@ -59,12 +61,15 @@ class PaymentController extends Controller
         $amountInCents = (int) round($displayAmountUsd * $exchangeRate * 100);
         $amountCop = round($amountInCents / 100, 2);
         $reference = $this->uniqueReference($user->id);
+        $expiresAt = now()->addMinutes(max(1, (int) config('payment.checkout_expires_in_minutes', 60)));
 
         $paymentOrder = PaymentOrder::create([
             'user_id' => $user->id,
             'provider' => PaymentProvider::Wompi,
             'reference' => $reference,
             'plan' => $plan,
+            'recurring' => true,
+            'billing_reason' => 'subscription_initial',
             'display_amount_usd' => $displayAmountUsd,
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $exchangeRate,
@@ -72,6 +77,7 @@ class PaymentController extends Controller
             'amount_in_cents' => $amountInCents,
             'currency' => PaymentCurrency::Cop,
             'status' => PaymentOrderStatus::Pending,
+            'expires_at' => $expiresAt,
         ]);
 
         $intent = $paymentService->createPayment(new PaymentRequest(
@@ -79,6 +85,7 @@ class PaymentController extends Controller
             amountInCents: $paymentOrder->amount_in_cents,
             currency: $paymentOrder->currency->value,
             redirectUrl: config('payment.redirect_url'),
+            expirationTime: $expiresAt,
             customerData: $this->customerDataFor($user),
         ));
 

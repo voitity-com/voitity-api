@@ -22,7 +22,7 @@ class ProfileFactory extends Factory
             'personality' => $this->faker->sentence(),
             'profession_key' => 'custom',
             'profession_template_version' => '2026-07',
-            'active' => true,
+            'active' => false,
             'status' => ProfileStatus::Draft,
             'data' => [
                 'me' => new \stdClass,

@@ -106,6 +106,9 @@ class OpenAIProfileKnowledgeClient implements ProfileKnowledgeAIClient
             'Return only valid JSON.',
             'Do not invent companies, dates, projects, skills, education, awards, links, or locations.',
             'Split work experience into separate jobs when the CV lists multiple employers or roles.',
+            'Respect section boundaries in English and Spanish; never place Skills/Habilidades, Education/Educacion, or Projects/Proyectos headings as project or work items.',
+            'If a section is only a list of technologies, return those values under skills, not projects.',
+            'If a work item description contains another company heading, split it into another work item.',
             'Use this JSON shape: {"summary":"","work":[{"company":"","role":"","start_date":"","end_date":"","date_range":"","duration":"","location":"","description":"","highlights":[],"technologies":[]}],"projects":[{"name":"","description":"","url":"","technologies":[],"source_work":""}],"skills":[{"name":"","category":"","description":""}],"education":[{"institution":"","degree":"","start_date":"","end_date":"","description":""}],"achievements":[{"name":"","description":"","date":""}]}.',
             'Use empty strings or empty arrays when a value is not present.',
         ]);

@@ -2,12 +2,14 @@
 
 namespace App\Listeners\Voices;
 
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Models\Voice;
+use App\Models\VoiceProviderRequest;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -137,5 +139,25 @@ class CloneVoice implements ShouldQueue
             'exception_class' => get_class($exception),
             'attempts' => $this->attempts(),
         ]);
+
+        app(SubscriptionUsageRecorder::class)->release("voice-clone:{$voice->id}");
+
+        $providerRequest = VoiceProviderRequest::query()
+            ->where('voice_id', $voice->id)
+            ->where('voice_sample_id', $voiceSample->id)
+            ->latest('id')
+            ->first();
+
+        if ($providerRequest) {
+            $providerRequest->forceFill([
+                'status' => VoiceProviderRequest::STATUS_FAILED,
+                'response' => json_encode([
+                    'error' => $exception->getMessage(),
+                    'exception' => get_class($exception),
+                ]),
+                'processed_at' => now(),
+            ])
+                ->save();
+        }
     }
 }

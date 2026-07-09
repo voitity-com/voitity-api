@@ -3,6 +3,7 @@
 namespace App\Http\Responses\Admin;
 
 use App\Models\Profile;
+use App\Models\Subscription;
 use App\Models\User;
 
 class AdminUserResponse
@@ -32,6 +33,7 @@ class AdminUserResponse
                 'ai_videos' => (int) ($this->user->ai_videos_count ?? 0),
                 'chats' => (int) ($this->user->profile_chats_count ?? 0),
             ],
+            'subscription' => $this->subscriptionData(),
             'created_at' => $this->user->created_at?->toJSON(),
             'updated_at' => $this->user->updated_at?->toJSON(),
         ];
@@ -60,5 +62,33 @@ class AdminUserResponse
         }
 
         return $data;
+    }
+
+    private function subscriptionData(): ?array
+    {
+        $subscription = $this->user->relationLoaded('activeSubscription')
+            ? $this->user->activeSubscription
+            : $this->user->activeSubscription()->first();
+
+        if (! $subscription instanceof Subscription) {
+            return null;
+        }
+
+        $plan = $subscription->plan->value;
+        $planConfig = config("subscriptions.plans.{$plan}", []);
+
+        return [
+            'id' => $subscription->id,
+            'plan' => $plan,
+            'plan_name' => $planConfig['name'] ?? $plan,
+            'status' => $subscription->status->value,
+            'active' => (bool) $subscription->active,
+            'unlimited' => (bool) ($planConfig['unlimited'] ?? false),
+            'billing_mode' => $subscription->billing_mode,
+            'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
+            'started_at' => $subscription->started_at?->toJSON(),
+            'renews_at' => $subscription->renews_at?->toJSON(),
+            'next_billing_at' => $subscription->next_billing_at?->toJSON(),
+        ];
     }
 }

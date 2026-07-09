@@ -7,9 +7,13 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -72,6 +76,7 @@ class MessageControllerTest extends TestAPI
             'genre' => 'male',
             'personality' => $this->faker->text(100),
         ]);
+        $this->createActiveSubscriptionFor($user);
 
         $chat = Chat::create([
             'profile_id' => $profile->id,
@@ -182,6 +187,7 @@ class MessageControllerTest extends TestAPI
         $apiUser = User::factory()->create(['role' => 'api']);
         $owner = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($owner);
+        $this->createActiveSubscriptionFor($owner);
         $token = $apiUser->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $chatAiClient = Mockery::mock(ChatAIClient::class);
@@ -223,6 +229,7 @@ class MessageControllerTest extends TestAPI
             'genre' => 'male',
             'personality' => $this->faker->text(100),
         ]);
+        $this->createActiveSubscriptionFor($user);
 
         $chatAiAnswer = new ChatAIAnswer(
             source: 'openai',
@@ -279,6 +286,7 @@ class MessageControllerTest extends TestAPI
             'genre' => 'male',
             'personality' => $this->faker->text(100),
         ]);
+        $this->createActiveSubscriptionFor($user);
 
         Event::fake([\App\Events\MessageStored::class]);
 
@@ -309,6 +317,7 @@ class MessageControllerTest extends TestAPI
             'genre' => 'male',
             'personality' => $this->faker->text(100),
         ]);
+        $this->createActiveSubscriptionFor($user);
 
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getAnswer')
@@ -379,6 +388,7 @@ class MessageControllerTest extends TestAPI
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $chat = Chat::create(['profile_id' => $profile->id]);
         $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
 
@@ -422,6 +432,7 @@ class MessageControllerTest extends TestAPI
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $this->mockAudioChatClient(
@@ -455,6 +466,7 @@ class MessageControllerTest extends TestAPI
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $this->mockAudioChatClient(
@@ -536,6 +548,7 @@ class MessageControllerTest extends TestAPI
         $admin = User::factory()->create(['role' => 'admin']);
         $owner = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($owner);
+        $this->createActiveSubscriptionFor($owner);
         $token = $admin->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $this->mockAudioChatClient(
@@ -566,6 +579,7 @@ class MessageControllerTest extends TestAPI
         $apiUser = User::factory()->create(['role' => 'api']);
         $owner = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($owner);
+        $this->createActiveSubscriptionFor($owner);
         $token = $apiUser->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $this->mockAudioChatClient(
@@ -595,6 +609,7 @@ class MessageControllerTest extends TestAPI
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileFor($user);
+        $this->createActiveSubscriptionFor($user);
         $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
 
         $chatAiClient = Mockery::mock(ChatAIClient::class);
@@ -630,6 +645,34 @@ class MessageControllerTest extends TestAPI
             'genre' => 'male',
             'personality' => $this->faker->text(100),
         ]);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 
     private function validAudioUpload(): UploadedFile

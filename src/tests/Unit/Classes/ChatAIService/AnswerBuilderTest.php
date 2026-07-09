@@ -8,12 +8,16 @@ use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\VoiceService\VoiceClient;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
 use Illuminate\Support\Facades\Event;
@@ -34,6 +38,7 @@ class AnswerBuilderTest extends TestCase
         Event::fake([SubscriptionUsageRequested::class]);
 
         $user = User::factory()->create(['role' => 'admin']);
+        $this->createActiveSubscriptionFor($user);
         $profile = Profile::create([
             'user_id' => $user->id,
             'name' => 'Profile',
@@ -201,6 +206,8 @@ class AnswerBuilderTest extends TestCase
 
     public function test_get_answer_without_active_voice_returns_null_audio(): void
     {
+        Event::fake([SubscriptionUsageRequested::class]);
+
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
             'user_id' => $user->id,
@@ -243,6 +250,8 @@ class AnswerBuilderTest extends TestCase
 
     public function test_get_answer_handles_voice_driver_failure(): void
     {
+        Event::fake([SubscriptionUsageRequested::class]);
+
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
             'user_id' => $user->id,
@@ -295,5 +304,33 @@ class AnswerBuilderTest extends TestCase
         $response = $builder->getAnswer($profile, $question)->toArray();
 
         $this->assertNull($response['audio_url']);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

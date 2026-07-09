@@ -16,6 +16,7 @@ class AdminUserListResponse
                 ->map(fn (User $user) => (new AdminUserResponse($user))->toArray())
                 ->values()
                 ->all(),
+            'subscription_plans' => $this->subscriptionPlans(),
             'pagination' => [
                 'current_page' => $this->users->currentPage(),
                 'per_page' => $this->users->perPage(),
@@ -23,5 +24,21 @@ class AdminUserListResponse
                 'total' => $this->users->total(),
             ],
         ];
+    }
+
+    private function subscriptionPlans(): array
+    {
+        return collect(config('subscriptions.plans', []))
+            ->filter(fn (array $plan): bool => ($plan['active'] ?? false) === true && ($plan['assignable'] ?? true) !== false)
+            ->map(fn (array $plan, string $id): array => [
+                'id' => $id,
+                'name' => $plan['name'] ?? $id,
+                'price_usd' => $plan['price_usd'] ?? null,
+                'currency' => $plan['currency'] ?? 'USD',
+                'interval' => $plan['interval'] ?? 'monthly',
+                'unlimited' => (bool) ($plan['unlimited'] ?? false),
+            ])
+            ->values()
+            ->all();
     }
 }

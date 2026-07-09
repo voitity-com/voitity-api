@@ -3,8 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\Voice;
-use App\Models\VoiceSample;
 use App\Models\VoiceProviderRequest;
+use App\Models\VoiceSample;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -30,10 +30,11 @@ class VoiceProviderRequestFactory extends Factory
             'voice_id' => Voice::factory(),
             'voice_sample_id' => VoiceSample::factory(),
             'source' => $this->faker->randomElement(['elevenlabs', 'openai', 'aws-polly']),
+            'source_voice_id' => $this->faker->optional()->bothify('voice-########'),
             'request_url' => $this->faker->url(),
             'response' => json_encode([
                 'status' => 'success',
-                'message' => 'Voice sample processed successfully'
+                'message' => 'Voice sample processed successfully',
             ]),
             'status' => $this->faker->randomElement(['pending', 'processing', 'completed', 'failed']),
             'processed_at' => $this->faker->optional(0.7)->dateTimeBetween('-1 week', 'now'),

@@ -2,15 +2,20 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Classes\VoiceSampleFileManager;
+use App\Enums\SubscriptionUsageType;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Voice\StoreVoiceSampleRequest;
 use App\Models\User;
 use App\Models\Voice;
-use App\Models\VoiceSample;
-use App\Classes\VoiceSampleFileManager;
 use App\Models\VoiceProviderRequest;
+use App\Models\VoiceSample;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class VoiceSampleController extends Controller
 {
@@ -20,19 +25,25 @@ class VoiceSampleController extends Controller
      *     summary="Upload a voice sample for a specific voice",
      *     tags={"Voice Sample"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(
      *         name="voice",
      *         in="path",
      *         required=true,
      *         description="Voice ID",
+     *
      *         @OA\Schema(type="integer")
      *     ),
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\MediaType(
      *             mediaType="multipart/form-data",
+     *
      *             @OA\Schema(
      *                 required={"file"},
+     *
      *                 @OA\Property(
      *                     property="file",
      *                     type="file",
@@ -56,14 +67,18 @@ class VoiceSampleController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Voice sample uploaded successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Voice sample created successfully."),
      *             @OA\Property(property="data", type="object")
      *         )
      *     ),
+     *
      *     @OA\Response(response=400, description="Failed to process file"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="Voice not found or user not authorized"),
@@ -75,11 +90,11 @@ class VoiceSampleController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$voice || !$this->userCanManageVoice($user, $voice)) {
+            if (! $voice || ! $this->userCanManageVoice($user, $voice)) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
 
@@ -91,7 +106,7 @@ class VoiceSampleController extends Controller
                 $voice->save();
                 unset($validated['language_code']);
             }
-            
+
             if ($fileManager->processSampleFile($request->file('file'))) {
                 $validated['file'] = $fileManager->getFileName();
                 $validated['duration'] = $fileManager->getFileDuration();
@@ -103,7 +118,7 @@ class VoiceSampleController extends Controller
 
             return response()->json([
                 'message' => 'Voice sample created successfully.',
-                'data' => $voiceSample
+                'data' => $voiceSample,
             ], 200);
 
         } catch (\Throwable $e) {
@@ -119,28 +134,35 @@ class VoiceSampleController extends Controller
      *     description="Initiates the processing of a voice sample to clone or enhance a voice. This endpoint triggers the voice cloning workflow which includes audio analysis, voice profile creation, and integration with external voice providers like ElevenLabs.",
      *     operationId="processVoiceSample",
      *     security={{"sanctum": {"voice:write"}}},
+     *
      *     @OA\Parameter(
      *         name="voice",
      *         in="path",
      *         required=true,
      *         description="The ID of the voice to process the sample for",
+     *
      *         @OA\Schema(type="integer", example=1)
      *     ),
+     *
      *     @OA\Parameter(
      *         name="voice_sample",
      *         in="path",
      *         required=true,
      *         description="The ID of the voice sample to process",
+     *
      *         @OA\Schema(type="integer", example=5)
      *     ),
+     *
      *     @OA\Response(
      *         response=200,
      *         description="Voice sample processing initiated successfully",
+     *
      *         @OA\JsonContent(
      *             type="object",
+     *
      *             @OA\Property(property="message", type="string", example="Voice sample is processing successfully."),
      *             @OA\Property(
-     *                 property="data", 
+     *                 property="data",
      *                 type="object",
      *                 @OA\Property(property="id", type="integer", example=10),
      *                 @OA\Property(property="voice_id", type="integer", example=1),
@@ -153,55 +175,94 @@ class VoiceSampleController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=400,
      *         description="Voice sample already processed",
+     *
      *         @OA\JsonContent(
      *             type="object",
+     *
      *             @OA\Property(property="message", type="string", example="Voice sample was already processed.")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=404,
      *         description="Voice or voice sample not found",
+     *
      *         @OA\JsonContent(
      *             type="object",
+     *
      *             @OA\Property(property="message", type="string", example="Voice not found.")
      *         )
      *     ),
+     *
+     *     @OA\Response(
+     *         response=402,
+     *         description="Subscription limit exceeded",
+     *
+     *         @OA\JsonContent(
+     *             type="object",
+     *
+     *             @OA\Property(property="message", type="string", example="Subscription limit exceeded.")
+     *         )
+     *     ),
+     *
      *     @OA\Response(
      *         response=401,
      *         description="Unauthenticated",
+     *
      *         @OA\JsonContent(
      *             type="object",
+     *
      *             @OA\Property(property="message", type="string", example="Unauthenticated.")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=500,
      *         description="Internal server error",
+     *
      *         @OA\JsonContent(
      *             type="object",
+     *
      *             @OA\Property(property="message", type="string", example="Internal server error occurred.")
      *         )
      *     )
      * )
      */
-    public function process(Request $request, Voice $voice, VoiceSample $voiceSample): JsonResponse
-    {
+    public function process(
+        Request $request,
+        Voice $voice,
+        VoiceSample $voiceSample,
+        SubscriptionEntitlementService $entitlements,
+        SubscriptionUsageRecorder $usageRecorder
+    ): JsonResponse {
         try {
             $user = $request->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (!$this->userCanManageVoice($user, $voice)) {
+            if (! $this->userCanManageVoice($user, $voice)) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
 
             if ((int) $voiceSample->voice_id !== (int) $voice->id) {
                 return response()->json(['message' => 'Voice sample not found.'], 404);
+            }
+
+            $minimumDuration = $this->minimumCloneSampleDurationSeconds();
+
+            if ((int) $voiceSample->duration < $minimumDuration) {
+                return response()->json([
+                    'message' => "Voice sample must be at least {$minimumDuration} seconds long.",
+                    'errors' => [
+                        'duration' => ["Voice sample must be at least {$minimumDuration} seconds long."],
+                    ],
+                ], 422);
             }
 
             // Check if voice sample was already processed
@@ -213,23 +274,50 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'Voice sample was already processed.'], 400);
             }
 
-            // Create voiceProviderRequest record 
-            $voiceProviderRequest = VoiceProviderRequest::create([
-                'voice_id'          => $voice->id,
-                'voice_sample_id'   => $voiceSample->id,
-                'source'            => '',
-                'request_url'       => '',
-                'status'            => VoiceProviderRequest::STATUS_PENDING
-            ]);
+            $ownerId = (int) ($voice->user_id ?: $user->id);
+
+            $entitlements->assertCanUse($ownerId, ['voice_clones' => 1]);
+
+            $voiceProviderRequest = DB::transaction(function () use ($ownerId, $usageRecorder, $voice, $voiceSample): VoiceProviderRequest {
+                $voiceProviderRequest = VoiceProviderRequest::create([
+                    'voice_id' => $voice->id,
+                    'voice_sample_id' => $voiceSample->id,
+                    'source' => '',
+                    'request_url' => '',
+                    'status' => VoiceProviderRequest::STATUS_PENDING,
+                ]);
+
+                $usageRecorder->record(
+                    userId: $ownerId,
+                    usageType: SubscriptionUsageType::VoiceCloned,
+                    amounts: ['voice_clones' => 1],
+                    idempotencyKey: "voice-clone:{$voice->id}",
+                    profileId: $voice->profile_id,
+                    sourceType: Voice::class,
+                    sourceId: (string) $voice->id,
+                    metadata: [
+                        'reservation' => 'voice_clone',
+                        'voice_provider_request_id' => $voiceProviderRequest->id,
+                        'voice_sample_id' => $voiceSample->id,
+                    ],
+                );
+
+                return $voiceProviderRequest;
+            });
 
             // Call to event or service to process the voice sample
             event(new \App\Events\Voices\VoiceSampleAdded($voice, $voiceSample));
 
             return response()->json([
                 'message' => 'Voice sample is processing successfully.',
-                'data' => $voiceProviderRequest
+                'data' => $voiceProviderRequest,
             ], 200);
 
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -248,5 +336,12 @@ class VoiceSampleController extends Controller
         $voice->loadMissing('profile:id,user_id');
 
         return $voice->profile !== null && (int) $voice->profile->user_id === (int) $user->id;
+    }
+
+    private function minimumCloneSampleDurationSeconds(): int
+    {
+        $driver = (string) config('voice.default', 'elevenlabs');
+
+        return max(1, (int) config("voice.drivers.{$driver}.min_clone_sample_duration_seconds", 5));
     }
 }
