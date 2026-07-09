@@ -374,7 +374,7 @@
                 }
               ]
             },
-            "description": "Lists users with profile, source, avatar, voice, AI media, and chat counts. Requires an admin token with admin.users.view."
+            "description": "Lists users with profile, source, avatar, voice, AI media, and chat counts. Requires the authenticated user to have role admin."
           },
           "response": []
         },
@@ -400,7 +400,7 @@
                 "{{admin_user_id}}"
               ]
             },
-            "description": "Returns one user with profile summaries and resource counts. Requires an admin token with admin.users.view."
+            "description": "Returns one user with profile summaries and resource counts. Requires the authenticated user to have role admin."
           },
           "response": []
         },
@@ -442,7 +442,7 @@
                 "impersonate"
               ]
             },
-            "description": "Creates an admin impersonation token for admin_user_id and stores it as admin_impersonation_token. Requires an admin token with admin.users.impersonate."
+            "description": "Creates an admin impersonation token for admin_user_id and stores it as admin_impersonation_token. Requires the authenticated user to have role admin."
           },
           "response": []
         },
