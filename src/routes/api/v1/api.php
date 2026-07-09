@@ -56,6 +56,8 @@ Route::prefix('/profile')->group(function () {
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/activate', [ProfileController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/deactivate', [ProfileController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
