@@ -254,6 +254,17 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'Voice sample not found.'], 404);
             }
 
+            $minimumDuration = $this->minimumCloneSampleDurationSeconds();
+
+            if ((int) $voiceSample->duration < $minimumDuration) {
+                return response()->json([
+                    'message' => "Voice sample must be at least {$minimumDuration} seconds long.",
+                    'errors' => [
+                        'duration' => ["Voice sample must be at least {$minimumDuration} seconds long."],
+                    ],
+                ], 422);
+            }
+
             // Check if voice sample was already processed
             $existingRequest = \App\Models\VoiceProviderRequest::where('voice_id', $voice->id)
                 ->where('voice_sample_id', $voiceSample->id)
@@ -325,5 +336,12 @@ class VoiceSampleController extends Controller
         $voice->loadMissing('profile:id,user_id');
 
         return $voice->profile !== null && (int) $voice->profile->user_id === (int) $user->id;
+    }
+
+    private function minimumCloneSampleDurationSeconds(): int
+    {
+        $driver = (string) config('voice.default', 'elevenlabs');
+
+        return max(1, (int) config("voice.drivers.{$driver}.min_clone_sample_duration_seconds", 5));
     }
 }

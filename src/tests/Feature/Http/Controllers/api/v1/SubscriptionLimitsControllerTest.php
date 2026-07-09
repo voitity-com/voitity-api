@@ -211,6 +211,37 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.credits.unlimited', true);
     }
 
+    public function test_included_limits_come_from_plan_configuration_not_usage_plus_remaining(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->createActiveStarterSubscriptionFor($user);
+
+        SubscriptionUse::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profile_id' => null,
+            'usage_type' => SubscriptionUsageType::AvatarImageCreated,
+            'idempotency_key' => 'avatar-image:duplicate-count',
+            'avatar_images_used' => 2,
+            'credits_used' => 0,
+            'used_at' => '2026-06-17 10:00:00',
+        ]);
+
+        $subscription->limit()->firstOrFail()->update([
+            'avatar_images_remaining' => 0,
+        ]);
+
+        $token = $user->createToken('test-token', ['subscription-limits:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.limits.avatar_images.included', 1);
+        $response->assertJsonPath('data.limits.avatar_images.remaining', 0);
+        $response->assertJsonPath('data.limits.avatar_images.used', 2);
+    }
+
     public function test_annual_subscription_limits_are_reset_monthly_and_usage_is_period_scoped(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-02-16 10:00:00'));

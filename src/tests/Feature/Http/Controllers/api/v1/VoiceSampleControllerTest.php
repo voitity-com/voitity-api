@@ -314,6 +314,44 @@ class VoiceSampleControllerTest extends TestAPI
         ]);
     }
 
+    public function test_user_can_not_process_voice_sample_shorter_than_provider_minimum(): void
+    {
+        Event::fake();
+        config()->set('voice.drivers.elevenlabs.min_clone_sample_duration_seconds', 5);
+
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $this->createActiveSubscriptionFor($user);
+        $voice = Voice::factory()->create([
+            'user_id' => $user->id,
+            'source_voice_id' => null,
+        ]);
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'short-sample.mp3',
+            'duration' => 3,
+            'active' => true,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Voice sample must be at least 5 seconds long.');
+        $response->assertJsonPath('errors.duration.0', 'Voice sample must be at least 5 seconds long.');
+        Event::assertNotDispatched(\App\Events\Voices\VoiceSampleAdded::class);
+        $this->assertDatabaseMissing('voice_provider_requests', [
+            'voice_id' => $voice->id,
+            'voice_sample_id' => $voiceSample->id,
+        ]);
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "voice-clone:{$voice->id}",
+        ]);
+        $this->assertSame(1, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
+    }
+
     public function test_user_can_not_process_a_voice_sample_if_it_was_processed_previously()
     {
         // Get token and create user first

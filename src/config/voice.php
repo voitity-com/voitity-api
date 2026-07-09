@@ -36,9 +36,10 @@ return [
 
         'elevenlabs' => [
             'driver' => 'elevenlabs',
-            'base_url'=> env('VOICE_DRIVERS_ELEVENLABS_BASE_URL', 'https://api.elevenlabs.io'),
+            'base_url' => env('VOICE_DRIVERS_ELEVENLABS_BASE_URL', 'https://api.elevenlabs.io'),
             'api_key' => env('VOICE_DRIVERS_ELEVENLABS_API_KEY'),
             'model_id' => env('VOICE_DRIVERS_ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2'),
+            'min_clone_sample_duration_seconds' => (int) env('VOICE_DRIVERS_ELEVENLABS_MIN_CLONE_SAMPLE_DURATION_SECONDS', 5),
             'default_voice_settings' => [
                 'stability' => 0.75,
                 'similarity_boost' => 1.0,
