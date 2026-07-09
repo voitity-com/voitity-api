@@ -35,6 +35,7 @@ Route::prefix('/admin')->group(function () {
 
 Route::prefix('/auth')->group(function () {
     Route::post('/get-token', [AuthController::class, 'getToken']);
+    Route::post('/sign-up', [AuthController::class, 'signUp']);
     Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
     Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);
