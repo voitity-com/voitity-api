@@ -26,9 +26,9 @@ Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
 
 Route::prefix('/admin')->group(function () {
-    Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum', 'abilities:admin.users.view']);
-    Route::get('/users/{user}', [AdminUserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:admin.users.view']);
-    Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->middleware(['auth:sanctum', 'abilities:admin.users.impersonate']);
+    Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
+    Route::get('/users/{user}', [AdminUserController::class, 'show'])->middleware(['auth:sanctum']);
+    Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->middleware(['auth:sanctum']);
     Route::post('/impersonation/stop', [AdminUserController::class, 'stopImpersonation'])->middleware(['auth:sanctum']);
 });
 

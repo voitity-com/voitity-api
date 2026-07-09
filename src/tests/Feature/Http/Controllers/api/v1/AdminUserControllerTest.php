@@ -31,7 +31,7 @@ class AdminUserControllerTest extends TestAPI
         }
     }
 
-    public function test_user_without_admin_users_view_ability_can_not_list_users(): void
+    public function test_admin_without_admin_users_view_ability_can_list_users(): void
     {
         $user = User::factory()->create(['role' => 'admin']);
         $token = $user->createToken('test-token', ['user:read'])->plainTextToken;
@@ -39,7 +39,8 @@ class AdminUserControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('GET', self::ENDPOINT_USERS);
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Users retrieved successfully.');
     }
 
     public function test_non_admin_user_with_admin_users_view_ability_can_not_list_users(): void
@@ -63,7 +64,7 @@ class AdminUserControllerTest extends TestAPI
             'role' => 'user',
         ]);
         $profile = $this->createProfileResources($user);
-        $token = $admin->createToken('test-token', ['admin.users.view'])->plainTextToken;
+        $token = $admin->createToken('test-token', ['user:read'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('GET', self::ENDPOINT_USERS.'?search=target');
@@ -88,7 +89,7 @@ class AdminUserControllerTest extends TestAPI
         $admin = User::factory()->create(['role' => 'admin']);
         $user = User::factory()->create(['role' => 'user']);
         $profile = $this->createProfileResources($user);
-        $token = $admin->createToken('test-token', ['admin.users.view'])->plainTextToken;
+        $token = $admin->createToken('test-token', ['user:read'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('GET', self::ENDPOINT_USERS.'/'.$user->id);
@@ -108,7 +109,7 @@ class AdminUserControllerTest extends TestAPI
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $user = User::factory()->create(['role' => 'user']);
-        $token = $admin->createToken('test-token', ['admin.users.impersonate'])->plainTextToken;
+        $token = $admin->createToken('test-token', ['user:read'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('POST', self::ENDPOINT_USERS.'/'.$user->id.'/impersonate');
@@ -149,7 +150,7 @@ class AdminUserControllerTest extends TestAPI
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $user = User::factory()->create(['role' => 'user']);
-        $adminToken = $admin->createToken('test-token', ['admin.users.impersonate'])->plainTextToken;
+        $adminToken = $admin->createToken('test-token', ['user:read'])->plainTextToken;
 
         $impersonationResponse = $this->withHeader('Authorization', 'Bearer '.$adminToken)
             ->json('POST', self::ENDPOINT_USERS.'/'.$user->id.'/impersonate');
