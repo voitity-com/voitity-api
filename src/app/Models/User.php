@@ -140,4 +140,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(PaymentOrder::class);
     }
+
+    public function paymentSources()
+    {
+        return $this->hasMany(PaymentSource::class);
+    }
 }

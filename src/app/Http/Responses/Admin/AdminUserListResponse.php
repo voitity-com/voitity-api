@@ -29,7 +29,7 @@ class AdminUserListResponse
     private function subscriptionPlans(): array
     {
         return collect(config('subscriptions.plans', []))
-            ->filter(fn (array $plan): bool => ($plan['assignable'] ?? true) !== false)
+            ->filter(fn (array $plan): bool => ($plan['active'] ?? false) === true && ($plan['assignable'] ?? true) !== false)
             ->map(fn (array $plan, string $id): array => [
                 'id' => $id,
                 'name' => $plan['name'] ?? $id,

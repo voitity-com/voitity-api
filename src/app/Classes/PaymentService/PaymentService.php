@@ -11,6 +11,11 @@ class PaymentService
         return $this->paymentClient->createPayment($request);
     }
 
+    public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
+    {
+        return $this->paymentClient->chargePaymentSource($request);
+    }
+
     /**
      * @param  array<string, mixed>  $headers
      */

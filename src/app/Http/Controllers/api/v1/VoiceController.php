@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Voice\StoreVoiceRequest;
 use App\Http\Requests\Voice\TestVoiceRequest;
@@ -199,6 +201,7 @@ class VoiceController extends Controller
      *     ),
      *
      *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=403, description="Unauthorized"),
      *     @OA\Response(response=404, description="Profile or voice not found"),
      *     @OA\Response(response=422, description="Validation error"),
@@ -206,8 +209,11 @@ class VoiceController extends Controller
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
-    public function test(TestVoiceRequest $request, VoiceManager $voiceManager): JsonResponse
-    {
+    public function test(
+        TestVoiceRequest $request,
+        VoiceManager $voiceManager,
+        SubscriptionEntitlementService $entitlements
+    ): JsonResponse {
         try {
             $user = $request->user();
 
@@ -241,6 +247,10 @@ class VoiceController extends Controller
             if (! $voice) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
+
+            $entitlements->assertCanUse($voice->user_id ?: $user->id, [
+                'tts_characters' => $this->characterCount($payload['text']),
+            ]);
 
             Log::info('Voice test audio generation started.', [
                 'user_id' => $user->id,
@@ -281,6 +291,11 @@ class VoiceController extends Controller
                 'data' => (new VoiceTestResponse($generatedAudio))->toArray(),
             ], 200);
 
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             Log::error('Error generating voice test audio.', [
                 'user_id' => $request->user()?->id,
@@ -295,6 +310,15 @@ class VoiceController extends Controller
     private function canUseAnyProfileVoice(string $role): bool
     {
         return in_array($role, ['admin', 'api'], true);
+    }
+
+    private function characterCount(string $text): int
+    {
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($text);
+        }
+
+        return strlen($text);
     }
 
     private function userCanManageVoice($user, Voice $voice): bool

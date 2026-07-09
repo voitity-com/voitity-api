@@ -3,10 +3,13 @@
 namespace Tests\Unit\Listeners\Subscriptions;
 
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Listeners\Subscriptions\RecordSubscriptionUsage;
 use App\Models\Profile;
+use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Tests\TestCase;
@@ -24,6 +27,7 @@ class RecordSubscriptionUsageTest extends TestCase
             'personality' => 'friendly',
             'active' => true,
         ]);
+        $this->createActiveSubscriptionFor($user);
 
         $event = new SubscriptionUsageRequested(
             userId: $user->id,
@@ -49,5 +53,33 @@ class RecordSubscriptionUsageTest extends TestCase
             'credits_used' => 7.5,
             'idempotency_key' => 'tts:test',
         ]);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

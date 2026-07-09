@@ -3,8 +3,6 @@
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use Faker\Factory;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TestAPI extends TestCase
@@ -19,7 +17,7 @@ class TestAPI extends TestCase
     /**
      * Set Up for endpoints tests
      */
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
 
@@ -28,11 +26,6 @@ class TestAPI extends TestCase
 
     /**
      * Get api token
-     *
-     * @param string $email
-     * @param string $password
-     *
-     * @return string
      */
     protected function getToken(string $email = 'voitity@gmail.com', string $password = 'qwerty123'): string
     {
@@ -53,8 +46,8 @@ class TestAPI extends TestCase
         $response_content = json_decode($response->getContent());
 
         // Debug response if access_token is missing
-        if (!isset($response_content->access_token)) {
-            throw new \Exception('Authentication failed. Response: ' . $response->getContent());
+        if (! isset($response_content->access_token)) {
+            throw new \Exception('Authentication failed. Response: '.$response->getContent());
         }
 
         return $response_content->access_token;

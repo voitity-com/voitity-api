@@ -26,7 +26,12 @@ class SubscriptionPlanActivator
                 throw new RuntimeException('Only approved payment orders can activate subscriptions.');
             }
 
-            $subscription = $this->subscriptionPlanAssigner->assign($order->user, $order->plan);
+            $subscription = $this->subscriptionPlanAssigner->assign($order->user, $order->plan, [
+                'payment_source_id' => $order->payment_source_id,
+                'source_payment_order_id' => $order->id,
+                'billing_mode' => $order->recurring ? 'recurring' : 'one_time',
+                'last_billed_at' => $order->paid_at ?? now(),
+            ]);
 
             $order->subscription_id = $subscription->id;
             $order->save();

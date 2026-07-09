@@ -2,6 +2,7 @@
 
 namespace App\Classes\VoiceService;
 
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Voice;
@@ -50,6 +51,7 @@ class VoiceService
         if ($clonedVoice) {
             $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
             $voiceProviderRequest->source = $clonedVoice->source;
+            $voiceProviderRequest->source_voice_id = $clonedVoice->getProviderVoiceId();
             $voiceProviderRequest->request_url = $clonedVoice->getRequestUrl();
             $voiceProviderRequest->response = json_encode($clonedVoice->getResponse());
             $voiceProviderRequest->processed_at = now();
@@ -79,6 +81,8 @@ class VoiceService
         if ($voiceProviderRequest) {
             $addedSample = $this->voiceClient->addVoice($this->voice, $voiceSample);
             $voiceProviderRequest->status = VoiceProviderRequest::STATUS_COMPLETED;
+            $voiceProviderRequest->source = $addedSample->source;
+            $voiceProviderRequest->source_voice_id = $this->voice->source_voice_id;
             $voiceProviderRequest->request_url = $addedSample->requestUrl;
             $voiceProviderRequest->response = json_encode($addedSample->response);
             $voiceProviderRequest->processed_at = now();
@@ -96,6 +100,12 @@ class VoiceService
      */
     public function generateAudio(string $text): VoiceClientGeneratedAudio
     {
+        if ($this->voice->user_id) {
+            app(SubscriptionEntitlementService::class)->assertCanUse($this->voice->user_id, [
+                'tts_characters' => $this->characterCount($text),
+            ]);
+        }
+
         $generatedAudio = $this->voiceClient->generateAudio($this->voice, $text);
 
         if ($generatedAudio->isSuccessful() && $this->voice->user_id) {
@@ -106,6 +116,7 @@ class VoiceService
                 profileId: $this->voice->profile_id,
                 sourceType: Voice::class,
                 sourceId: (string) $this->voice->id,
+                idempotencyKey: 'voice-tts:'.$this->voice->id.':'.sha1($text),
                 metadata: [
                     'provider' => $this->voice->source,
                     'voice_id' => $this->voice->id,

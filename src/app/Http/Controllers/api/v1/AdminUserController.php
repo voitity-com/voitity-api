@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\SubscriptionPlanAssigner;
+use App\Classes\Subscriptions\SubscriptionPlanCatalog;
 use App\Enums\SubscriptionPlan;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Admin\AdminUserListResponse;
@@ -81,7 +82,8 @@ class AdminUserController extends Controller
     public function updateSubscription(
         Request $request,
         User $user,
-        SubscriptionPlanAssigner $subscriptionPlanAssigner
+        SubscriptionPlanAssigner $subscriptionPlanAssigner,
+        SubscriptionPlanCatalog $planCatalog
     ): JsonResponse {
         $admin = $request->user();
 
@@ -93,16 +95,18 @@ class AdminUserController extends Controller
             'plan' => ['required', Rule::enum(SubscriptionPlan::class)],
         ]);
         $plan = SubscriptionPlan::from((string) $validated['plan']);
-        $planConfig = config("subscriptions.plans.{$plan->value}");
 
-        if (! is_array($planConfig) || ($planConfig['assignable'] ?? true) === false) {
+        if (! $planCatalog->isAssignable($plan)) {
             return response()->json([
                 'message' => 'Selected plan can not be assigned.',
                 'errors' => ['plan' => ['Selected plan can not be assigned.']],
             ], 422);
         }
 
-        $subscription = $subscriptionPlanAssigner->assign($user, $plan);
+        $subscription = $subscriptionPlanAssigner->assign($user, $plan, [
+            'billing_mode' => $plan === SubscriptionPlan::Admin ? 'admin_grant' : 'admin_assigned',
+            'last_billed_at' => null,
+        ]);
 
         Log::info('Admin user subscription updated.', [
             'admin_user_id' => $admin->id,

@@ -86,6 +86,9 @@ class AdminUserControllerTest extends TestAPI
         $response->assertJsonPath('data.users.0.counts.ai_videos', 1);
         $response->assertJsonPath('data.users.0.counts.chats', 1);
         $this->assertContains('admin', collect($response->json('data.subscription_plans'))->pluck('id')->all());
+        $this->assertNotContains('pro', collect($response->json('data.subscription_plans'))->pluck('id')->all());
+        $this->assertNotContains('business', collect($response->json('data.subscription_plans'))->pluck('id')->all());
+        $this->assertSame(0, collect($response->json('data.subscription_plans'))->firstWhere('id', 'admin')['price_usd']);
         $response->assertJsonPath('data.pagination.total', 1);
 
         $this->assertSame($user->id, $profile->user_id);
@@ -150,6 +153,7 @@ class AdminUserControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription.plan', 'admin');
         $response->assertJsonPath('data.subscription.plan_name', 'Admin');
         $response->assertJsonPath('data.subscription.unlimited', true);
+        $response->assertJsonPath('data.subscription.billing_mode', 'admin_grant');
 
         $previousSubscription->refresh();
         $this->assertFalse($previousSubscription->active);
@@ -160,6 +164,7 @@ class AdminUserControllerTest extends TestAPI
             ->firstOrFail();
         $this->assertSame(SubscriptionPlan::Admin, $subscription->plan);
         $this->assertSame(SubscriptionStatus::Renewed, $subscription->status);
+        $this->assertSame('admin_grant', $subscription->billing_mode);
 
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $subscription->id,

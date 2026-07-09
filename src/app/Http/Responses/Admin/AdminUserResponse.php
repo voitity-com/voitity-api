@@ -84,8 +84,11 @@ class AdminUserResponse
             'status' => $subscription->status->value,
             'active' => (bool) $subscription->active,
             'unlimited' => (bool) ($planConfig['unlimited'] ?? false),
+            'billing_mode' => $subscription->billing_mode,
+            'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
             'started_at' => $subscription->started_at?->toJSON(),
             'renews_at' => $subscription->renews_at?->toJSON(),
+            'next_billing_at' => $subscription->next_billing_at?->toJSON(),
         ];
     }
 }

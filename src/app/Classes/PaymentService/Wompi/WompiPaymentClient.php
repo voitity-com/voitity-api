@@ -5,9 +5,14 @@ namespace App\Classes\PaymentService\Wompi;
 use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
 use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceCharge;
+use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Classes\PaymentService\PaymentWebhook;
 use DateTimeInterface;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
+use Throwable;
 
 class WompiPaymentClient implements PaymentClient
 {
@@ -17,6 +22,8 @@ class WompiPaymentClient implements PaymentClient
         private readonly ?string $eventsSecret,
         private readonly ?string $checkoutUrl = 'https://checkout.wompi.co/p/',
         private readonly ?string $widgetUrl = 'https://checkout.wompi.co/widget.js',
+        private readonly ?string $privateKey = null,
+        private readonly ?string $apiUrl = 'https://sandbox.wompi.co/v1',
         private readonly ?string $environment = 'sandbox',
     ) {}
 
@@ -90,6 +97,72 @@ class WompiPaymentClient implements PaymentClient
         );
     }
 
+    public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
+    {
+        $this->ensureChargeConfig();
+
+        $requestUrl = $this->normalizedApiUrl().'/transactions';
+        $signature = self::createIntegritySignature(
+            reference: $request->reference,
+            amountInCents: $request->amountInCents,
+            currency: $request->currency,
+            integritySecret: (string) $this->integritySecret,
+        );
+        $payload = [
+            'amount_in_cents' => $request->amountInCents,
+            'currency' => $request->currency,
+            'signature' => $signature,
+            'customer_email' => $request->customerEmail,
+            'reference' => $request->reference,
+            'payment_source_id' => $this->normalizedPaymentSourceId($request->paymentSourceProviderId),
+            'recurrent' => $request->recurrent,
+        ];
+
+        if ($request->installments !== null) {
+            $payload['payment_method'] = ['installments' => $request->installments];
+        }
+
+        try {
+            $response = Http::withToken((string) $this->privateKey)
+                ->acceptJson()
+                ->asJson()
+                ->post($requestUrl, $payload);
+            $responseData = $this->responseData($response);
+            $transaction = is_array($responseData['data'] ?? null) ? $responseData['data'] : $responseData;
+            $providerStatus = $this->stringOrNull($transaction['status'] ?? null);
+            $status = $response->successful()
+                ? self::normalizeProviderStatus($providerStatus)
+                : 'error';
+
+            return new PaymentSourceCharge(
+                source: 'wompi',
+                reference: $request->reference,
+                amountInCents: $request->amountInCents,
+                currency: $request->currency,
+                providerTransactionId: $this->stringOrNull($transaction['id'] ?? null),
+                providerStatus: $providerStatus,
+                status: $status,
+                httpStatus: $response->status(),
+                requestUrl: $requestUrl,
+                requestPayload: $payload,
+                rawResponse: $responseData,
+            );
+        } catch (Throwable $e) {
+            return new PaymentSourceCharge(
+                source: 'wompi',
+                reference: $request->reference,
+                amountInCents: $request->amountInCents,
+                currency: $request->currency,
+                providerTransactionId: null,
+                providerStatus: null,
+                status: 'error',
+                requestUrl: $requestUrl,
+                requestPayload: $payload,
+                rawResponse: ['error' => $e->getMessage()],
+            );
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $headers
      */
@@ -142,6 +215,7 @@ class WompiPaymentClient implements PaymentClient
             status: self::normalizeProviderStatus($providerStatus),
             payload: $decodedPayload,
             transaction: $transaction,
+            paymentSourceProviderId: $this->paymentSourceIdFromPayload($decodedPayload, $transaction),
         );
     }
 
@@ -188,6 +262,11 @@ class WompiPaymentClient implements PaymentClient
         return $this->widgetUrl ?: 'https://checkout.wompi.co/widget.js';
     }
 
+    private function normalizedApiUrl(): string
+    {
+        return rtrim($this->apiUrl ?: 'https://sandbox.wompi.co/v1', '/');
+    }
+
     private function ensureCheckoutConfig(): void
     {
         if (! $this->publicKey || ! $this->integritySecret) {
@@ -195,9 +274,30 @@ class WompiPaymentClient implements PaymentClient
         }
     }
 
+    private function ensureChargeConfig(): void
+    {
+        if (! $this->privateKey || ! $this->integritySecret || ! $this->apiUrl) {
+            throw new InvalidArgumentException('Wompi private key, API URL and integrity secret are required.');
+        }
+    }
+
     private function formatExpirationTime(?DateTimeInterface $expirationTime): ?string
     {
         return $expirationTime?->format('Y-m-d\TH:i:s.v\Z');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function responseData(Response $response): array
+    {
+        $data = $response->json();
+
+        if (is_array($data)) {
+            return $data;
+        }
+
+        return ['raw' => $response->body()];
     }
 
     /**
@@ -283,6 +383,23 @@ class WompiPaymentClient implements PaymentClient
         return is_array($data['transaction'] ?? null) ? $data['transaction'] : [];
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $transaction
+     */
+    private function paymentSourceIdFromPayload(array $payload, array $transaction): ?string
+    {
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $paymentSource = is_array($data['payment_source'] ?? null) ? $data['payment_source'] : [];
+        $transactionPaymentSource = is_array($transaction['payment_source'] ?? null)
+            ? $transaction['payment_source']
+            : [];
+
+        return $this->stringOrNull($transaction['payment_source_id'] ?? null)
+            ?? $this->stringOrNull($transactionPaymentSource['id'] ?? null)
+            ?? $this->stringOrNull($paymentSource['id'] ?? null);
+    }
+
     private function stringOrNull(mixed $value): ?string
     {
         if ($value === null) {
@@ -297,5 +414,10 @@ class WompiPaymentClient implements PaymentClient
     private function intOrNull(mixed $value): ?int
     {
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function normalizedPaymentSourceId(string $paymentSourceProviderId): int|string
+    {
+        return ctype_digit($paymentSourceProviderId) ? (int) $paymentSourceProviderId : $paymentSourceProviderId;
     }
 }

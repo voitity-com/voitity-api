@@ -15,10 +15,13 @@ class PaymentOrder extends Model
     protected $fillable = [
         'user_id',
         'subscription_id',
+        'payment_source_id',
         'provider',
         'reference',
         'provider_transaction_id',
         'plan',
+        'recurring',
+        'billing_reason',
         'display_amount_usd',
         'display_currency',
         'exchange_rate',
@@ -36,6 +39,7 @@ class PaymentOrder extends Model
     protected $casts = [
         'provider' => PaymentProvider::class,
         'plan' => SubscriptionPlan::class,
+        'recurring' => 'boolean',
         'display_amount_usd' => 'float',
         'display_currency' => PaymentCurrency::class,
         'exchange_rate' => 'float',
@@ -56,6 +60,11 @@ class PaymentOrder extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function paymentSource(): BelongsTo
+    {
+        return $this->belongsTo(PaymentSource::class);
     }
 
     public function events(): HasMany

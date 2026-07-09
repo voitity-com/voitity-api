@@ -9,7 +9,11 @@ use App\Classes\VoiceService\VoiceClientAddedSample;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\Profile;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
@@ -137,6 +141,7 @@ class VoiceControllerTest extends TestAPI
         ]);
         $owner = User::factory()->create();
         $profile = $this->createProfileForUser($owner);
+        $this->createActiveSubscriptionFor($owner);
         $voice = Voice::factory()->create([
             'user_id' => $owner->id,
             'profile_id' => $profile->id,
@@ -253,6 +258,7 @@ class VoiceControllerTest extends TestAPI
         ]);
         $owner = User::factory()->create();
         $profile = $this->createProfileForUser($owner);
+        $this->createActiveSubscriptionFor($owner);
         $voice = Voice::factory()->create([
             'user_id' => $owner->id,
             'profile_id' => $profile->id,
@@ -380,6 +386,7 @@ class VoiceControllerTest extends TestAPI
         ]);
         $owner = User::factory()->create();
         $profile = $this->createProfileForUser($owner);
+        $this->createActiveSubscriptionFor($owner);
         $voice = Voice::factory()->create([
             'user_id' => $owner->id,
             'profile_id' => $profile->id,
@@ -446,6 +453,7 @@ class VoiceControllerTest extends TestAPI
         $apiUser = User::factory()->create(['role' => 'api']);
         $owner = User::factory()->create();
         $profile = $this->createProfileForUser($owner);
+        $this->createActiveSubscriptionFor($owner);
         $voice = Voice::factory()->create([
             'user_id' => $owner->id,
             'profile_id' => $profile->id,
@@ -534,6 +542,7 @@ class VoiceControllerTest extends TestAPI
             'password' => Hash::make('test123'),
         ]);
         $profile = $this->createProfileForUser($user);
+        $this->createActiveSubscriptionFor($user);
         $voice = Voice::factory()->create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -609,6 +618,7 @@ class VoiceControllerTest extends TestAPI
             'password' => Hash::make('test123'),
         ]);
         $profile = $this->createProfileForUser($user);
+        $this->createActiveSubscriptionFor($user);
         $voice = Voice::factory()->create([
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -674,5 +684,33 @@ class VoiceControllerTest extends TestAPI
             'personality' => $this->faker->text(100),
             'active' => true,
         ]);
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

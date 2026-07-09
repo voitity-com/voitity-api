@@ -2,7 +2,9 @@
 
 namespace App\Classes\Repositories;
 
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\SubscriptionUsageType;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
 use App\Models\AiImage;
@@ -20,6 +22,8 @@ use Throwable;
 class AvatarRepository
 {
     private ?VideoAIService $videoAIService = null;
+
+    public function __construct(private readonly ?SubscriptionUsageRecorder $usageRecorder = null) {}
 
     public function setVideoAIService(VideoAIService $videoAIService): self
     {
@@ -40,7 +44,7 @@ class AvatarRepository
             $disk = $this->profileArtifactDisk();
             $path = $sourceImage->store($this->sourceImageFolder(), $disk);
 
-            if (!is_string($path)) {
+            if (! is_string($path)) {
                 throw new RuntimeException('Avatar source image could not be stored.');
             }
 
@@ -64,10 +68,20 @@ class AvatarRepository
             ]);
 
             try {
+                $this->recordAvatarUsage($owner, $profile, $processingAvatar);
+            } catch (Throwable $e) {
+                $processingAvatar->status = ProfileAvatar::STATUS_FAILED;
+                $processingAvatar->save();
+
+                throw $e;
+            }
+
+            try {
                 $aiImage = $this->videoAIService()->generateImage($owner, $sourceImageUri, $profile);
             } catch (Throwable $e) {
                 $processingAvatar->status = ProfileAvatar::STATUS_FAILED;
                 $processingAvatar->save();
+                $this->releaseAvatarUsage($processingAvatar);
 
                 throw $e;
             }
@@ -124,12 +138,12 @@ class AvatarRepository
         return $profile->avatars()
             ->with(['aiImage', 'aiVideo'])
             ->orderByRaw(
-                "CASE status
+                'CASE status
                     WHEN ? THEN 0
                     WHEN ? THEN 1
                     WHEN ? THEN 2
                     ELSE 3
-                END",
+                END',
                 [
                     ProfileAvatar::STATUS_PROCESSING,
                     ProfileAvatar::STATUS_ACTIVE,
@@ -151,7 +165,7 @@ class AvatarRepository
             throw new AvatarGenerationInProgressException('Avatar generation is still processing for this profile.');
         }
 
-        if (!$avatar->isSelectable()) {
+        if (! $avatar->isSelectable()) {
             throw new RuntimeException('Avatar cannot be activated.');
         }
 
@@ -170,11 +184,73 @@ class AvatarRepository
 
     private function videoAIService(): VideoAIService
     {
-        if (!$this->videoAIService) {
+        if (! $this->videoAIService) {
             $this->videoAIService = app(VideoAIService::class);
         }
 
         return $this->videoAIService;
+    }
+
+    private function recordAvatarUsage(User $owner, Profile $profile, ProfileAvatar $avatar): void
+    {
+        DB::transaction(function () use ($avatar, $owner, $profile): void {
+            $this->usageRecorder()->record(
+                userId: $owner->id,
+                usageType: SubscriptionUsageType::AvatarImageCreated,
+                amounts: ['avatar_images' => 1],
+                idempotencyKey: $this->avatarImageUsageKey($avatar),
+                profileId: $profile->id,
+                sourceType: ProfileAvatar::class,
+                sourceId: (string) $avatar->id,
+                metadata: [
+                    'reservation' => 'avatar_generation',
+                ],
+            );
+
+            $videoSeconds = $this->avatarVideoSeconds();
+
+            $this->usageRecorder()->record(
+                userId: $owner->id,
+                usageType: SubscriptionUsageType::AvatarVideoCreated,
+                amounts: ['avatar_video_seconds' => $videoSeconds],
+                idempotencyKey: $this->avatarVideoUsageKey($avatar),
+                profileId: $profile->id,
+                sourceType: ProfileAvatar::class,
+                sourceId: (string) $avatar->id,
+                metadata: [
+                    'duration_seconds' => $videoSeconds,
+                    'reservation' => 'avatar_generation',
+                ],
+            );
+        });
+    }
+
+    private function releaseAvatarUsage(ProfileAvatar $avatar): void
+    {
+        $this->usageRecorder()->release($this->avatarImageUsageKey($avatar));
+        $this->usageRecorder()->release($this->avatarVideoUsageKey($avatar));
+    }
+
+    private function avatarImageUsageKey(ProfileAvatar $avatar): string
+    {
+        return "avatar-image:profile-avatar:{$avatar->id}";
+    }
+
+    private function avatarVideoUsageKey(ProfileAvatar $avatar): string
+    {
+        return "avatar-video:profile-avatar:{$avatar->id}";
+    }
+
+    private function usageRecorder(): SubscriptionUsageRecorder
+    {
+        return $this->usageRecorder ?? app(SubscriptionUsageRecorder::class);
+    }
+
+    private function avatarVideoSeconds(): int
+    {
+        $driver = config('videoai.default', 'runway');
+
+        return max(1, (int) config("videoai.drivers.{$driver}.default_duration", 5));
     }
 
     private function sourceImageToDataUri(string $path, UploadedFile $sourceImage, string $disk): string
@@ -182,7 +258,7 @@ class AvatarRepository
         $content = Storage::disk($disk)->get($path);
         $mimeType = $sourceImage->getMimeType() ?: 'image/png';
 
-        return "data:{$mimeType};base64," . base64_encode($content);
+        return "data:{$mimeType};base64,".base64_encode($content);
     }
 
     private function profileArtifactDisk(): string

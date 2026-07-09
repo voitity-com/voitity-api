@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Profile;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
@@ -45,8 +47,6 @@ class ProfileControllerTest extends TestAPI
 
     public function test_user_can_create_a_profile()
     {
-        Event::fake([SubscriptionUsageRequested::class]);
-
         $profile_data = [
             'name' => $this->faker->name,
             'alias' => 'Demo Alias',
@@ -55,7 +55,11 @@ class ProfileControllerTest extends TestAPI
             'personality' => $this->faker->text(100),
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+        $token = $this->getToken();
+        $user = User::where('email', 'voitity@gmail.com')->firstOrFail();
+        $this->createActiveSubscriptionFor($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson(self::ENDPOINT_PROFILE, $profile_data);
 
         $response->assertJsonPath('message', 'Profile created successfully.');
@@ -83,13 +87,27 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
         $response->assertJsonPath('data.voice', false);
         $response->assertJsonPath('data.voice_id', $baseVoice->id);
-        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($new_profile) {
-            return $event->usageType === SubscriptionUsageType::ProfileCreated
-                && $event->userId === $new_profile->user_id
-                && $event->profileId === $new_profile->id
-                && $event->amounts === ['profiles' => 1]
-                && $event->idempotencyKey === "profile-created:{$new_profile->id}";
-        });
+        $this->assertDatabaseHas('subscription_uses', [
+            'user_id' => $new_profile->user_id,
+            'profile_id' => $new_profile->id,
+            'usage_type' => SubscriptionUsageType::ProfileCreated->value,
+            'profiles_used' => 1,
+            'idempotency_key' => "profile-created:{$new_profile->id}",
+        ]);
+        $this->assertSame(0, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->profiles_remaining);
+
+        $secondResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE, array_merge($profile_data, [
+                'name' => $this->faker->name,
+                'alias' => 'Second Alias',
+            ]));
+
+        $secondResponse->assertStatus(402);
+        $secondResponse->assertJsonPath('message', 'Subscription limit exceeded.');
+        $this->assertDatabaseMissing('profiles', [
+            'user_id' => $user->id,
+            'alias' => 'Second Alias',
+        ]);
     }
 
     public function test_unauthorized_user_can_not_list_profiles()
@@ -288,6 +306,43 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.voice_language_code', 'en');
         $response->assertJsonPath('data.status', ProfileStatus::Published->value);
         $response->assertJsonPath('data.voice', true);
+    }
+
+    public function test_user_can_not_show_profile_by_alias_when_profile_is_not_public()
+    {
+        $owner = User::factory()->create(['role' => 'admin']);
+        $reader = User::factory()->create(['role' => 'api']);
+        $draftProfile = Profile::create([
+            'user_id' => $owner->id,
+            'alias' => 'draft-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Draft,
+            'active' => true,
+        ]);
+        $inactivePublishedProfile = Profile::create([
+            'user_id' => $owner->id,
+            'alias' => 'inactive-published-alias',
+            'name' => $this->faker->name,
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+            'status' => ProfileStatus::Published,
+            'active' => false,
+        ]);
+        $token = $reader->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$draftProfile->alias)
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Profile not found.');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('GET', self::ENDPOINT_PROFILE.'/alias/'.$inactivePublishedProfile->alias)
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Profile not found.');
     }
 
     public function test_user_without_profile_read_ability_can_not_show_profile_by_alias()
@@ -669,5 +724,33 @@ class ProfileControllerTest extends TestAPI
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

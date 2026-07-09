@@ -11,10 +11,18 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUse;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 
 class SubscriptionLimitsControllerTest extends TestAPI
 {
     private const ENDPOINT = '/api/subscription/limits';
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
 
     public function test_unauthenticated_user_can_not_read_subscription_limits(): void
     {
@@ -148,6 +156,119 @@ class SubscriptionLimitsControllerTest extends TestAPI
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Active subscription not found.');
+    }
+
+    public function test_admin_plan_limits_are_marked_as_unlimited(): void
+    {
+        $user = User::factory()->create();
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Admin,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+            'billing_mode' => 'admin_grant',
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 2147483647,
+            'avatar_images_remaining' => 2147483647,
+            'avatar_video_seconds_remaining' => 2147483647,
+            'voice_clones_remaining' => 2147483647,
+            'tts_characters_remaining' => 2147483647,
+            'chat_messages_remaining' => 2147483647,
+            'credits_remaining' => 99999999.99,
+        ]);
+
+        SubscriptionUse::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profile_id' => null,
+            'usage_type' => SubscriptionUsageType::ProfileCreated,
+            'idempotency_key' => 'admin-profile-created:1',
+            'profiles_used' => 1,
+            'credits_used' => 0,
+            'used_at' => now(),
+        ]);
+
+        $token = $user->createToken('test-token', ['subscription-limits:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.subscription.plan', 'admin');
+        $response->assertJsonPath('data.subscription.unlimited', true);
+        $response->assertJsonPath('data.limits.profiles.unlimited', true);
+        $response->assertJsonPath('data.limits.profiles.included', null);
+        $response->assertJsonPath('data.limits.profiles.remaining', null);
+        $response->assertJsonPath('data.limits.profiles.used', 1);
+        $response->assertJsonPath('data.limits.credits.unlimited', true);
+    }
+
+    public function test_annual_subscription_limits_are_reset_monthly_and_usage_is_period_scoped(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-16 10:00:00'));
+
+        $user = User::factory()->create();
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::StarterAnnual,
+            'started_at' => Carbon::parse('2026-01-15 10:00:00'),
+            'renews_at' => Carbon::parse('2027-01-15 10:00:00'),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+            'billing_mode' => 'recurring',
+            'next_billing_at' => Carbon::parse('2027-01-15 10:00:00'),
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => Carbon::parse('2026-01-15 10:00:00'),
+            'period_renews_at' => Carbon::parse('2026-02-15 10:00:00'),
+            'profiles_remaining' => 0,
+            'avatar_images_remaining' => 0,
+            'avatar_video_seconds_remaining' => 0,
+            'voice_clones_remaining' => 0,
+            'tts_characters_remaining' => 0,
+            'chat_messages_remaining' => 0,
+            'credits_remaining' => 0,
+        ]);
+
+        SubscriptionUse::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profile_id' => null,
+            'usage_type' => SubscriptionUsageType::ProfileCreated,
+            'idempotency_key' => 'annual-profile-created:previous-period',
+            'profiles_used' => 1,
+            'credits_used' => 0,
+            'used_at' => Carbon::parse('2026-01-20 10:00:00'),
+        ]);
+
+        $token = $user->createToken('test-token', ['subscription-limits:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.subscription.plan', 'starter_annual');
+        $response->assertJsonPath('data.limits.profiles.included', 1);
+        $response->assertJsonPath('data.limits.profiles.remaining', 1);
+        $response->assertJsonPath('data.limits.profiles.used', 0);
+        $response->assertJsonPath('data.usage.totals.profiles', 0);
+        $response->assertJsonCount(0, 'data.usage.by_type');
+
+        $limit = $subscription->limit()->firstOrFail();
+
+        $this->assertTrue($limit->period_started_at->isSameDay(Carbon::parse('2026-02-15')));
+        $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
     }
 
     private function createActiveStarterSubscriptionFor(User $user): Subscription

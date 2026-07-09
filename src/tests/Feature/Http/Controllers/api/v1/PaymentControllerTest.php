@@ -21,7 +21,7 @@ class PaymentControllerTest extends TestAPI
 
     private const WOMPI_EVENTS_ENDPOINT = '/api/payments/wompi/events';
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
 
@@ -60,9 +60,13 @@ class PaymentControllerTest extends TestAPI
         $plans = collect($response->json('data.plans'))->keyBy('id');
 
         $this->assertFalse($plans->has('admin'));
+        $this->assertFalse($plans->has('pro'));
+        $this->assertFalse($plans->has('business'));
         $this->assertTrue($plans->has('starter_annual'));
         $this->assertSame(80, $plans->get('starter_annual')['price_usd']);
         $this->assertSame('annual', $plans->get('starter_annual')['interval']);
+        $this->assertSame(1, $plans->get('starter_annual')['limits']['profiles']);
+        $this->assertSame(1000, $plans->get('starter_annual')['credits']['total']);
         $this->assertTrue($plans->get('starter_annual')['purchasable']);
     }
 
@@ -84,6 +88,8 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 3200000);
         $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
         $response->assertJsonPath('data.payment_order.status', 'pending');
+        $response->assertJsonPath('data.payment_order.recurring', true);
+        $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
         $response->assertJsonPath('data.checkout.public_key', 'pub_test_key');
         $response->assertJsonPath('data.checkout.widget_url', 'https://checkout.wompi.co/widget.js');
         $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
@@ -94,6 +100,8 @@ class PaymentControllerTest extends TestAPI
             'plan' => 'starter',
             'provider' => 'wompi',
             'status' => 'pending',
+            'recurring' => true,
+            'billing_reason' => 'subscription_initial',
             'amount_in_cents' => 3200000,
             'currency' => 'COP',
         ]);
@@ -117,6 +125,7 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 32000000);
         $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
         $response->assertJsonPath('data.payment_order.status', 'pending');
+        $response->assertJsonPath('data.payment_order.recurring', true);
         $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
 
         $this->assertDatabaseHas('payment_orders', [
@@ -124,6 +133,7 @@ class PaymentControllerTest extends TestAPI
             'plan' => 'starter_annual',
             'provider' => 'wompi',
             'status' => 'pending',
+            'recurring' => true,
             'amount_in_cents' => 32000000,
             'currency' => 'COP',
         ]);
@@ -147,6 +157,18 @@ class PaymentControllerTest extends TestAPI
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson(self::CHECKOUT_ENDPOINT, ['plan' => 'pro']);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Selected plan is not available for checkout.');
+    }
+
+    public function test_admin_plan_can_not_be_checked_out(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::CHECKOUT_ENDPOINT, ['plan' => 'admin']);
 
         $response->assertStatus(422);
         $response->assertJsonPath('message', 'Selected plan is not available for checkout.');
@@ -213,12 +235,23 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame('trx_'.$paymentOrder->reference, $paymentOrder->provider_transaction_id);
         $this->assertNotNull($paymentOrder->paid_at);
         $this->assertNotNull($paymentOrder->subscription_id);
+        $this->assertNotNull($paymentOrder->payment_source_id);
 
         $this->assertDatabaseHas('subscriptions', [
             'id' => $paymentOrder->subscription_id,
             'user_id' => $user->id,
             'plan' => 'starter',
             'active' => true,
+            'billing_mode' => 'recurring',
+            'source_payment_order_id' => $paymentOrder->id,
+        ]);
+
+        $this->assertDatabaseHas('payment_sources', [
+            'id' => $paymentOrder->payment_source_id,
+            'user_id' => $user->id,
+            'provider' => 'wompi',
+            'provider_source_id' => 'ps_'.$paymentOrder->reference,
+            'status' => 'active',
         ]);
 
         $this->assertDatabaseHas('subscription_limits', [
@@ -255,12 +288,17 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->status);
         $this->assertSame(SubscriptionPlan::StarterAnnual, $subscription->plan);
         $this->assertTrue($subscription->renews_at->isSameDay($subscription->started_at->copy()->addYear()));
+        $this->assertTrue($subscription->next_billing_at->isSameDay($subscription->started_at->copy()->addYear()));
+
+        $limit = $subscription->limit()->firstOrFail();
+
+        $this->assertTrue($limit->period_renews_at->isSameDay($subscription->started_at->copy()->addMonth()));
 
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
-            'credits_remaining' => 12000,
-            'profiles_remaining' => 12,
+            'credits_remaining' => 1000,
+            'profiles_remaining' => 1,
         ]);
     }
 
@@ -337,6 +375,8 @@ class PaymentControllerTest extends TestAPI
                     'reference' => $paymentOrder->reference,
                     'currency' => $paymentOrder->currency->value,
                     'status' => 'APPROVED',
+                    'payment_source_id' => 'ps_'.$paymentOrder->reference,
+                    'payment_method_type' => 'CARD',
                 ],
             ],
             'environment' => 'test',

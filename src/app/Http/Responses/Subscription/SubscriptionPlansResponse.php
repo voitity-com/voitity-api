@@ -16,7 +16,7 @@ class SubscriptionPlansResponse
     {
         return [
             'plans' => collect($this->plans)
-                ->filter(fn (array $plan): bool => ($plan['visible'] ?? true) !== false)
+                ->filter(fn (array $plan): bool => ($plan['active'] ?? false) === true && ($plan['visible'] ?? true) !== false)
                 ->map(fn (array $plan, string $id): array => [
                     'id' => $id,
                     'name' => $plan['name'] ?? null,
