@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionPlanAssigner;
+use App\Enums\SubscriptionPlan;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Admin\AdminUserListResponse;
 use App\Http\Responses\Admin\AdminUserResponse;
@@ -11,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class AdminUserController extends Controller
 {
@@ -41,6 +44,7 @@ class AdminUserController extends Controller
                         ->orWhereRaw('LOWER(last_name) LIKE ?', [$term]);
                 });
             })
+            ->with('activeSubscription')
             ->withCount($this->userCountRelations())
             ->orderByDesc('created_at')
             ->paginate($perPage);
@@ -62,6 +66,7 @@ class AdminUserController extends Controller
         $user
             ->loadCount($this->userCountRelations())
             ->load([
+                'activeSubscription',
                 'profiles' => fn ($query) => $query
                     ->withCount(['sources', 'avatars', 'voices', 'chats', 'aiImages', 'aiVideos'])
                     ->orderByDesc('created_at'),
@@ -70,6 +75,49 @@ class AdminUserController extends Controller
         return response()->json([
             'message' => 'User retrieved successfully.',
             'data' => (new AdminUserResponse($user, includeProfiles: true))->toArray(),
+        ], 200);
+    }
+
+    public function updateSubscription(
+        Request $request,
+        User $user,
+        SubscriptionPlanAssigner $subscriptionPlanAssigner
+    ): JsonResponse {
+        $admin = $request->user();
+
+        if (! $this->isAdmin($admin)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $validated = $request->validate([
+            'plan' => ['required', Rule::enum(SubscriptionPlan::class)],
+        ]);
+        $plan = SubscriptionPlan::from((string) $validated['plan']);
+        $planConfig = config("subscriptions.plans.{$plan->value}");
+
+        if (! is_array($planConfig) || ($planConfig['assignable'] ?? true) === false) {
+            return response()->json([
+                'message' => 'Selected plan can not be assigned.',
+                'errors' => ['plan' => ['Selected plan can not be assigned.']],
+            ], 422);
+        }
+
+        $subscription = $subscriptionPlanAssigner->assign($user, $plan);
+
+        Log::info('Admin user subscription updated.', [
+            'admin_user_id' => $admin->id,
+            'target_user_id' => $user->id,
+            'subscription_id' => $subscription->id,
+            'plan' => $plan->value,
+        ]);
+
+        $user
+            ->load('activeSubscription')
+            ->loadCount($this->userCountRelations());
+
+        return response()->json([
+            'message' => 'User subscription updated successfully.',
+            'data' => (new AdminUserResponse($user))->toArray(),
         ], 200);
     }
 

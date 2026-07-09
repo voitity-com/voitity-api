@@ -120,6 +120,28 @@ return [
             ],
             'estimated_total_cost_usd' => 39.96,
         ],
+        'admin' => [
+            'name' => 'Admin',
+            'price_usd' => null,
+            'currency' => 'USD',
+            'interval' => 'monthly',
+            'visible' => false,
+            'assignable' => true,
+            'purchasable' => false,
+            'unlimited' => true,
+            'limits' => [
+                'profiles' => 2147483647,
+                'avatar_images' => 2147483647,
+                'avatar_video_seconds' => 2147483647,
+                'voice_clones' => 2147483647,
+                'tts_characters' => 2147483647,
+                'chat_messages' => 2147483647,
+            ],
+            'credits' => [
+                'total' => 99999999.99,
+                'allocations' => [],
+            ],
+        ],
         'pro' => [
             'name' => 'Pro',
             'price_usd' => null,

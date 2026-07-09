@@ -33,6 +33,7 @@ return [
             'payments:read',
             'admin.users.view',
             'admin.users.impersonate',
+            'admin.users.subscriptions.manage',
         ],
     ],
     'user' => [

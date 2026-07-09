@@ -59,6 +59,7 @@ class PaymentControllerTest extends TestAPI
 
         $plans = collect($response->json('data.plans'))->keyBy('id');
 
+        $this->assertFalse($plans->has('admin'));
         $this->assertTrue($plans->has('starter_annual'));
         $this->assertSame(80, $plans->get('starter_annual')['price_usd']);
         $this->assertSame('annual', $plans->get('starter_annual')['interval']);

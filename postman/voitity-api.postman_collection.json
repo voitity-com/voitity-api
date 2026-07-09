@@ -405,6 +405,46 @@
           "response": []
         },
         {
+          "name": "Update Admin User Subscription",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"{{admin_subscription_plan}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{admin_user_id}}/subscription",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{admin_user_id}}",
+                "subscription"
+              ]
+            },
+            "description": "Assigns a subscription plan to admin_user_id, including the admin unlimited plan. Requires the authenticated user to have role admin."
+          },
+          "response": []
+        },
+        {
           "event": [
             {
               "listen": "test",

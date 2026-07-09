@@ -6,12 +6,16 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileSourceStatus;
 use App\Enums\ProfileSourceType;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Chat;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\ProfileSource;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -24,10 +28,12 @@ class AdminUserControllerTest extends TestAPI
     {
         $this->assertContains('admin.users.view', config('roles.admin.abilities'));
         $this->assertContains('admin.users.impersonate', config('roles.admin.abilities'));
+        $this->assertContains('admin.users.subscriptions.manage', config('roles.admin.abilities'));
 
         foreach (['user', 'profile', 'api'] as $role) {
             $this->assertNotContains('admin.users.view', config("roles.{$role}.abilities"));
             $this->assertNotContains('admin.users.impersonate', config("roles.{$role}.abilities"));
+            $this->assertNotContains('admin.users.subscriptions.manage', config("roles.{$role}.abilities"));
         }
     }
 
@@ -79,6 +85,7 @@ class AdminUserControllerTest extends TestAPI
         $response->assertJsonPath('data.users.0.counts.ai_images', 1);
         $response->assertJsonPath('data.users.0.counts.ai_videos', 1);
         $response->assertJsonPath('data.users.0.counts.chats', 1);
+        $this->assertContains('admin', collect($response->json('data.subscription_plans'))->pluck('id')->all());
         $response->assertJsonPath('data.pagination.total', 1);
 
         $this->assertSame($user->id, $profile->user_id);
@@ -103,6 +110,79 @@ class AdminUserControllerTest extends TestAPI
         $response->assertJsonPath('data.profiles.0.counts.chats', 1);
         $response->assertJsonPath('data.profiles.0.counts.ai_images', 1);
         $response->assertJsonPath('data.profiles.0.counts.ai_videos', 1);
+    }
+
+    public function test_admin_can_assign_admin_subscription_to_user(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'user']);
+        $previousSubscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+        SubscriptionLimit::create([
+            'subscription_id' => $previousSubscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $previousSubscription->started_at,
+            'period_renews_at' => $previousSubscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+        $token = $admin->createToken('test-token', ['user:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('PATCH', self::ENDPOINT_USERS.'/'.$user->id.'/subscription', [
+                'plan' => 'admin',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'User subscription updated successfully.');
+        $response->assertJsonPath('data.id', $user->id);
+        $response->assertJsonPath('data.subscription.plan', 'admin');
+        $response->assertJsonPath('data.subscription.plan_name', 'Admin');
+        $response->assertJsonPath('data.subscription.unlimited', true);
+
+        $previousSubscription->refresh();
+        $this->assertFalse($previousSubscription->active);
+        $this->assertSame(SubscriptionStatus::Expired, $previousSubscription->status);
+
+        $subscription = Subscription::where('user_id', $user->id)
+            ->where('active', true)
+            ->firstOrFail();
+        $this->assertSame(SubscriptionPlan::Admin, $subscription->plan);
+        $this->assertSame(SubscriptionStatus::Renewed, $subscription->status);
+
+        $this->assertDatabaseHas('subscription_limits', [
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profiles_remaining' => 2147483647,
+            'avatar_images_remaining' => 2147483647,
+            'credits_remaining' => 99999999.99,
+        ]);
+    }
+
+    public function test_non_admin_user_can_not_assign_user_subscription(): void
+    {
+        $actor = User::factory()->create(['role' => 'user']);
+        $target = User::factory()->create(['role' => 'user']);
+        $token = $actor->createToken('test-token', ['admin.users.subscriptions.manage'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->json('PATCH', self::ENDPOINT_USERS.'/'.$target->id.'/subscription', [
+                'plan' => 'admin',
+            ]);
+
+        $response->assertStatus(403);
+        $response->assertJsonPath('message', 'Forbidden.');
     }
 
     public function test_admin_can_impersonate_user_and_receive_user_token(): void

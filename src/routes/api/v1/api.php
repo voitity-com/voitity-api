@@ -28,6 +28,7 @@ Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum'
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
     Route::get('/users/{user}', [AdminUserController::class, 'show'])->middleware(['auth:sanctum']);
+    Route::patch('/users/{user}/subscription', [AdminUserController::class, 'updateSubscription'])->middleware(['auth:sanctum']);
     Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->middleware(['auth:sanctum']);
     Route::post('/impersonation/stop', [AdminUserController::class, 'stopImpersonation'])->middleware(['auth:sanctum']);
 });

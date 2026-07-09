@@ -119,6 +119,13 @@ class User extends Authenticatable
         return $this->hasMany(Subscription::class);
     }
 
+    public function activeSubscription()
+    {
+        return $this->hasOne(Subscription::class)
+            ->where('active', true)
+            ->latestOfMany('started_at');
+    }
+
     public function subscriptionLimits()
     {
         return $this->hasMany(SubscriptionLimit::class);

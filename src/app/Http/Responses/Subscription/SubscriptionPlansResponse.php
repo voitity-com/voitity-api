@@ -16,6 +16,7 @@ class SubscriptionPlansResponse
     {
         return [
             'plans' => collect($this->plans)
+                ->filter(fn (array $plan): bool => ($plan['visible'] ?? true) !== false)
                 ->map(fn (array $plan, string $id): array => [
                     'id' => $id,
                     'name' => $plan['name'] ?? null,
@@ -24,7 +25,8 @@ class SubscriptionPlansResponse
                     'interval' => $plan['interval'] ?? null,
                     'limits' => $plan['limits'] ?? [],
                     'credits' => $plan['credits'] ?? [],
-                    'purchasable' => is_numeric($plan['price_usd'] ?? null) && ((float) $plan['price_usd']) > 0,
+                    'purchasable' => (bool) ($plan['purchasable'] ?? (is_numeric($plan['price_usd'] ?? null) && ((float) $plan['price_usd']) > 0)),
+                    'unlimited' => (bool) ($plan['unlimited'] ?? false),
                 ])
                 ->values()
                 ->all(),
