@@ -304,6 +304,49 @@
           "response": []
         },
         {
+          "name": "Open Password Reset Redirect",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/reset?email={{password_reset_email}}&locale={{signup_locale}}&token={{password_reset_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "reset"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{password_reset_email}}"
+                },
+                {
+                  "key": "locale",
+                  "value": "{{signup_locale}}"
+                },
+                {
+                  "key": "token",
+                  "value": "{{password_reset_token}}"
+                }
+              ]
+            },
+            "description": "Redirect endpoint used by password reset emails. It forwards the reset query params to the configured admin reset-password page."
+          },
+          "response": []
+        },
+        {
           "name": "Change Password",
           "request": {
             "method": "POST",
@@ -1440,6 +1483,58 @@
               ]
             },
             "description": "Updates the profile identified by profile_id. Valid status values: draft, ready, published, hidden."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "activate"
+              ]
+            },
+            "description": "Activates and publishes a profile when publication requirements are met: required general fields, avatar, cloned voice, and at least one approved and synced source. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/deactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Deactivates and unpublishes a profile. Requires token ability: profile:write."
           },
           "response": []
         },
