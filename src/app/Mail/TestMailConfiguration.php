@@ -17,7 +17,7 @@ class TestMailConfiguration extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'bigmelo mail configuration test',
+            subject: 'Prueba local de correo bigmelo',
         );
     }
 
