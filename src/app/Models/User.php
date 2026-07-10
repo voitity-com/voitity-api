@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Config;
@@ -25,10 +26,15 @@ class User extends Authenticatable
         'first_name',
         'last_name',
         'email',
+        'locale',
+        'email_verified_at',
         'password',
         'google_id',
         'avatar',
         'provider',
+        'email_verification_token',
+        'email_verification_sent_at',
+        'email_verification_expires_at',
         'google_verified_at',
     ];
 
@@ -40,6 +46,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'email_verification_token',
     ];
 
     /**
@@ -51,6 +58,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'email_verification_sent_at' => 'datetime',
+            'email_verification_expires_at' => 'datetime',
             'google_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
@@ -144,5 +153,20 @@ class User extends Authenticatable
     public function paymentSources()
     {
         return $this->hasMany(PaymentSource::class);
+    }
+
+    public function loginEvents()
+    {
+        return $this->hasMany(AuthLoginEvent::class);
+    }
+
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(UserNotificationPreference::class);
+    }
+
+    public function appNotifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class);
     }
 }

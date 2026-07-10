@@ -127,6 +127,7 @@ return [
 
     'branding' => [
         'home_url' => env('MAIL_HOME_URL', env('APP_URL', 'http://localhost')),
+        'admin_url' => env('MAIL_ADMIN_URL', env('MAIL_HOME_URL', env('APP_URL', 'http://localhost'))),
         'logo_url' => env('MAIL_LOGO_URL'),
         'support_email' => env('MAIL_SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
         'support_url' => env('MAIL_SUPPORT_URL'),

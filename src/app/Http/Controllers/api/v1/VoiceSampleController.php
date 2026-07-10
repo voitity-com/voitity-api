@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
 use App\Models\VoiceSample;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -308,6 +309,8 @@ class VoiceSampleController extends Controller
             // Call to event or service to process the voice sample
             event(new \App\Events\Voices\VoiceSampleAdded($voice, $voiceSample));
 
+            $this->notifyVoiceOwner($voice, 'voice_cloning_started');
+
             return response()->json([
                 'message' => 'Voice sample is processing successfully.',
                 'data' => $voiceProviderRequest,
@@ -343,5 +346,26 @@ class VoiceSampleController extends Controller
         $driver = (string) config('voice.default', 'elevenlabs');
 
         return max(1, (int) config("voice.drivers.{$driver}.min_clone_sample_duration_seconds", 5));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function notifyVoiceOwner(Voice $voice, string $key, array $data = []): void
+    {
+        $voice->loadMissing('profile.user', 'user');
+        $owner = $voice->profile?->user ?: $voice->user;
+
+        if (! $owner instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($owner, $key, [
+            'profile' => $voice->profile?->name ?: ($voice->name ?: "Voice {$voice->id}"),
+            'profile_id' => $voice->profile_id,
+            'voice_id' => $voice->id,
+            'action_url' => $voice->profile_id ? "/dashboard/profiles/{$voice->profile_id}/voice" : '/dashboard/profiles',
+            ...$data,
+        ]);
     }
 }

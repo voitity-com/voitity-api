@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class SubscriptionEntitlementServiceTest extends TestCase
@@ -33,6 +34,8 @@ class SubscriptionEntitlementServiceTest extends TestCase
 
     public function test_it_rejects_usage_when_metric_limit_is_not_enough(): void
     {
+        Mail::fake();
+
         $user = User::factory()->create();
         $this->createActiveSubscriptionFor($user, profilesRemaining: 0);
 
@@ -43,6 +46,17 @@ class SubscriptionEntitlementServiceTest extends TestCase
             $this->assertSame('Subscription limit exceeded.', $exception->getMessage());
             $this->assertArrayHasKey('profiles', $exception->errors());
         }
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $user->id,
+            'notification_key' => 'critical_plan_limit_reached',
+            'category' => 'usage',
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $user->id,
+            'notification_key' => 'profile_limit_reached',
+            'category' => 'usage',
+        ]);
     }
 
     public function test_it_renews_expired_admin_plan_without_charge(): void

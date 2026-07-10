@@ -4,6 +4,9 @@ use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
+use App\Models\Subscription;
+use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Database\Seeders\LocalTestUserSeeder;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -76,6 +79,127 @@ Artisan::command('subscriptions:bill-recurring', function (): int {
     return Command::SUCCESS;
 })->purpose('Bill due paid recurring subscriptions through saved payment sources');
 
+Artisan::command('notifications:subscription-renewal-reminders {--days=7}', function (NotificationDispatcher $dispatcher): int {
+    $days = max(1, (int) $this->option('days'));
+    $target = now()->addDays($days);
+    $start = $target->copy()->startOfDay();
+    $end = $target->copy()->endOfDay();
+    $sent = 0;
+
+    Subscription::query()
+        ->with('user')
+        ->where('active', true)
+        ->where('billing_mode', 'recurring')
+        ->where('cancel_at_period_end', false)
+        ->where(function ($query) use ($end, $start): void {
+            $query
+                ->whereBetween('next_billing_at', [$start, $end])
+                ->orWhere(function ($query) use ($end, $start): void {
+                    $query
+                        ->whereNull('next_billing_at')
+                        ->whereBetween('renews_at', [$start, $end]);
+                });
+        })
+        ->orderBy('id')
+        ->chunkById(100, function ($subscriptions) use (&$sent, $dispatcher): void {
+            foreach ($subscriptions as $subscription) {
+                if (! $subscription instanceof Subscription || ! $subscription->user instanceof User) {
+                    continue;
+                }
+
+                $renewsAt = $subscription->next_billing_at ?? $subscription->renews_at;
+                $dispatcher->send($subscription->user, 'subscription_renewal_reminder', [
+                    'plan' => $subscription->plan->value,
+                    'subscription_id' => $subscription->id,
+                    'renews_at' => $renewsAt?->toFormattedDateString(),
+                ]);
+                $sent++;
+            }
+        });
+
+    $this->info("Subscription renewal reminders sent: {$sent}");
+
+    return Command::SUCCESS;
+})->purpose('Send subscription renewal reminders for subscriptions due soon');
+
+Artisan::command('notifications:monthly-usage-summary', function (NotificationDispatcher $dispatcher): int {
+    $sent = 0;
+    $period = now()->subMonthNoOverflow()->format('F Y');
+
+    Subscription::query()
+        ->with(['user', 'limit'])
+        ->where('active', true)
+        ->orderBy('id')
+        ->chunkById(100, function ($subscriptions) use (&$sent, $dispatcher, $period): void {
+            foreach ($subscriptions as $subscription) {
+                if (! $subscription instanceof Subscription || ! $subscription->user instanceof User) {
+                    continue;
+                }
+
+                $dispatcher->send($subscription->user, 'monthly_usage_summary', [
+                    'plan' => $subscription->plan->value,
+                    'subscription_id' => $subscription->id,
+                    'period' => $period,
+                ]);
+                $sent++;
+            }
+        });
+
+    $this->info("Monthly usage summaries sent: {$sent}");
+
+    return Command::SUCCESS;
+})->purpose('Send monthly usage summary notifications to active subscribers');
+
+Artisan::command('notifications:admin-alert {message}', function (string $message, NotificationDispatcher $dispatcher): int {
+    $dispatcher->sendToAdmins('critical_admin_alert', ['message' => $message]);
+    $this->info('Critical admin alert sent.');
+
+    return Command::SUCCESS;
+})->purpose('Send a critical notification to admin users');
+
+Artisan::command('notifications:integration-error {service} {message}', function (
+    string $service,
+    string $message,
+    NotificationDispatcher $dispatcher
+): int {
+    $dispatcher->sendToAdmins('external_integration_error', [
+        'service' => $service,
+        'message' => $message,
+    ]);
+    $this->info('External integration error notification sent to admins.');
+
+    return Command::SUCCESS;
+})->purpose('Send an external integration error notification to admin users');
+
+Artisan::command('notifications:service-notice {message}', function (
+    string $message,
+    NotificationDispatcher $dispatcher
+): int {
+    $sent = 0;
+
+    User::query()
+        ->whereNotNull('email')
+        ->orderBy('id')
+        ->chunkById(100, function ($users) use (&$sent, $dispatcher, $message): void {
+            foreach ($users as $user) {
+                if (! $user instanceof User) {
+                    continue;
+                }
+
+                $dispatcher->send($user, 'service_maintenance_or_degradation', [
+                    'message' => $message,
+                ]);
+                $sent++;
+            }
+        });
+
+    $this->info("Service notice sent: {$sent}");
+
+    return Command::SUCCESS;
+})->purpose('Send a service maintenance or degradation notice to users');
+
 Schedule::command('subscriptions:bill-recurring')->dailyAt('00:00');
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05');
 Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10');
+Schedule::command('notifications:subscription-renewal-reminders')->dailyAt('08:00');
+Schedule::command('notifications:monthly-usage-summary')->monthlyOn(1, '08:15');

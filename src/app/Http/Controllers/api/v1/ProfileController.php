@@ -15,7 +15,9 @@ use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
+use App\Models\User;
 use App\Models\Voice;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -181,6 +183,12 @@ class ProfileController extends Controller
 
                 return [$profile, $voice];
             });
+
+            app(NotificationDispatcher::class)->sendInApp(
+                $user,
+                'profile_created',
+                $this->profileNotificationData($profile)
+            );
 
             return response()->json([
                 'message' => 'Profile created successfully.',
@@ -489,6 +497,12 @@ class ProfileController extends Controller
             $profile->update($request->validated());
             $this->loadProfileResponseRelations($profile);
 
+            app(NotificationDispatcher::class)->sendInApp(
+                $user,
+                'profile_updated',
+                $this->profileNotificationData($profile)
+            );
+
             return response()->json([
                 'message' => 'Profile updated successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
@@ -519,6 +533,8 @@ class ProfileController extends Controller
             $publication = $readiness->evaluate($profile);
 
             if (! $publication['can_activate']) {
+                $this->notifyMissingPublicationRequirements($user, $profile, $publication['missing']);
+
                 return response()->json([
                     'message' => 'Profile cannot be activated because required information is missing.',
                     'data' => [
@@ -536,6 +552,12 @@ class ProfileController extends Controller
             ])->save();
 
             $this->loadProfileResponseRelations($profile);
+
+            app(NotificationDispatcher::class)->send(
+                $user,
+                'profile_activated_or_published',
+                $this->profileNotificationData($profile)
+            );
 
             return response()->json([
                 'message' => 'Profile activated successfully.',
@@ -571,6 +593,12 @@ class ProfileController extends Controller
             ])->save();
 
             $this->loadProfileResponseRelations($profile);
+
+            app(NotificationDispatcher::class)->send(
+                $user,
+                'profile_deactivated',
+                $this->profileNotificationData($profile)
+            );
 
             return response()->json([
                 'message' => 'Profile deactivated successfully.',
@@ -699,6 +727,12 @@ class ProfileController extends Controller
 
             $this->loadProfileResponseRelations($profile);
 
+            app(NotificationDispatcher::class)->sendInApp(
+                $user,
+                'profile_updated',
+                $this->profileNotificationData($profile)
+            );
+
             return response()->json([
                 'message' => 'Profile updated successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
@@ -712,5 +746,50 @@ class ProfileController extends Controller
     private function loadProfileResponseRelations(Profile $profile): void
     {
         $profile->loadMissing([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function profileNotificationData(Profile $profile): array
+    {
+        return [
+            'profile' => $profile->name ?: ($profile->alias ?: "Profile {$profile->id}"),
+            'profile_id' => $profile->id,
+            'action_url' => "/dashboard/profiles/{$profile->id}/profile",
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $missing
+     */
+    private function notifyMissingPublicationRequirements(User $user, Profile $profile, array $missing): void
+    {
+        $dispatcher = app(NotificationDispatcher::class);
+        $baseData = $this->profileNotificationData($profile);
+        $requirements = implode(', ', $missing);
+
+        $dispatcher->sendInApp($user, 'profile_activation_requirements_missing', [
+            ...$baseData,
+            'requirements' => $requirements,
+        ]);
+
+        if (in_array('avatar', $missing, true)) {
+            $dispatcher->sendInApp($user, 'missing_avatar_required_to_publish_profile', $baseData);
+        }
+
+        if (in_array('voice', $missing, true)) {
+            $dispatcher->sendInApp($user, 'missing_cloned_voice_required_to_publish_profile', $baseData);
+        }
+
+        if (in_array('source', $missing, true)) {
+            $dispatcher->sendInApp($user, 'missing_approved_synchronized_source_required_to_publish_profile', $baseData);
+        }
+
+        if (array_intersect(['alias', 'name', 'description'], $missing) !== []) {
+            $dispatcher->sendInApp($user, 'missing_profile_alias_name_or_description', $baseData);
+        }
+
+        $dispatcher->sendInApp($user, 'profile_quality_incomplete', $baseData);
     }
 }

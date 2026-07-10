@@ -17,6 +17,7 @@ use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileSource;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -116,11 +117,23 @@ class ProfileKnowledgeController extends Controller
                 metadata: $request->validated('metadata') ?? []
             );
 
+            $this->notifySourceImported($request->user(), $profile, $source);
+
             return response()->json([
                 'message' => 'CV source imported successfully.',
                 'data' => (new ProfileSourceResponse($source))->toArray(),
             ], 201);
         } catch (\Throwable $e) {
+            if ($request->user() instanceof User) {
+                app(NotificationDispatcher::class)->send($request->user(), 'source_rejected_or_failed', [
+                    'profile' => $profile->name ?: "Profile {$profile->id}",
+                    'profile_id' => $profile->id,
+                    'source' => (string) ($request->validated('name') ?: $request->file('file')?->getClientOriginalName() ?: 'Source'),
+                    'reason' => $e->getMessage(),
+                    'action_url' => "/dashboard/profiles/{$profile->id}/sources",
+                ]);
+            }
+
             Log::error('Error importing profile CV source.', [
                 'profile_id' => $profile->id,
                 'user_id' => $request->user()?->id,
@@ -168,6 +181,19 @@ class ProfileKnowledgeController extends Controller
 
             return $source->fresh(['items.facts']);
         });
+
+        if ($request->user() instanceof User) {
+            app(NotificationDispatcher::class)->sendInApp(
+                $request->user(),
+                'source_approved',
+                $this->sourceNotificationData($profile, $source)
+            );
+            app(NotificationDispatcher::class)->sendInApp(
+                $request->user(),
+                'source_synchronized',
+                $this->sourceNotificationData($profile, $source)
+            );
+        }
 
         return response()->json([
             'message' => 'Profile source approved successfully.',
@@ -281,5 +307,37 @@ class ProfileKnowledgeController extends Controller
         $fileName = trim((string) ($source->original_filename ?: $source->name));
 
         return $fileName !== '' ? $fileName : 'profile-source-'.$source->id;
+    }
+
+    private function notifySourceImported(?User $user, Profile $profile, ProfileSource $source): void
+    {
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $dispatcher = app(NotificationDispatcher::class);
+        $data = $this->sourceNotificationData($profile, $source);
+
+        $dispatcher->sendInApp($user, 'source_uploaded', $data);
+        $dispatcher->sendInApp($user, 'source_processing_started', $data);
+
+        if ($source->items()->exists()) {
+            $dispatcher->sendInApp($user, 'source_data_extracted_ready_to_review', $data);
+            $dispatcher->sendInApp($user, 'ai_suggested_profile_changes_ready_to_approve', $data);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sourceNotificationData(Profile $profile, ProfileSource $source): array
+    {
+        return [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'source' => $source->name ?: ($source->original_filename ?: "Source {$source->id}"),
+            'source_id' => $source->id,
+            'action_url' => "/dashboard/profiles/{$profile->id}/sources",
+        ];
     }
 }

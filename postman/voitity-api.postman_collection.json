@@ -177,7 +177,7 @@
           "response": []
         },
         {
-          "name": "Email Sign Up",
+          "name": "Forgot Password",
           "event": [
             {
               "listen": "test",
@@ -186,12 +186,8 @@
                 "exec": [
                   "let json = {};",
                   "try { json = pm.response.json(); } catch (e) {}",
-                  "if (json.access_token) {",
-                  "  pm.environment.set('access_token', json.access_token);",
-                  "}",
-                  "if (json.user && json.user.email) {",
-                  "  pm.environment.set('email', json.user.email);",
-                  "  pm.environment.set('password', pm.environment.get('signup_password'));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.environment.set('password_reset_email', pm.environment.get('email'));",
                   "}"
                 ]
               }
@@ -214,7 +210,251 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"locale\": \"{{signup_locale}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/forgot",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "forgot"
+              ]
+            },
+            "description": "Requests a password reset link for an email/password account. Google-authenticated accounts return 409 with provider=google. Copy the token from Mailtrap or local logs into password_reset_token before calling Reset Password."
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Password Reset Link",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{password_reset_email}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"token\": \"{{password_reset_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/reset/validate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "reset",
+                "validate"
+              ]
+            },
+            "description": "Validates whether a password reset token is still usable before showing the change-password form. Returns status=valid, invalid, or expired. A token becomes invalid after it is used once."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{password_reset_email}}\",\n  \"token\": \"{{password_reset_token}}\",\n  \"password\": \"{{new_password}}\",\n  \"password_confirmation\": \"{{new_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/reset",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "reset"
+              ]
+            },
+            "description": "Changes the password using the one-time token from the reset email. The token is consumed after a successful password change and cannot be reused."
+          },
+          "response": []
+        },
+        {
+          "name": "Open Password Reset Redirect",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/reset?email={{password_reset_email}}&locale={{signup_locale}}&token={{password_reset_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "reset"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{password_reset_email}}"
+                },
+                {
+                  "key": "locale",
+                  "value": "{{signup_locale}}"
+                },
+                {
+                  "key": "token",
+                  "value": "{{password_reset_token}}"
+                }
+              ]
+            },
+            "description": "Redirect endpoint used by password reset emails. It forwards the reset query params to the configured admin reset-password page."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"password\": \"{{new_password}}\",\n  \"password_confirmation\": \"{{new_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/password/change",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password",
+                "change"
+              ]
+            },
+            "description": "Changes the password for the authenticated email/password account and sends a confirmation email. Google-authenticated accounts return 409 with provider=google."
+          },
+          "response": []
+        },
+        {
+          "name": "Login History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login-history?page={{login_history_page}}&per_page={{login_history_per_page}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login-history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{login_history_page}}"
+                },
+                {
+                  "key": "per_page",
+                  "value": "{{login_history_per_page}}"
+                }
+              ]
+            },
+            "description": "Returns the authenticated user's login history from newest to oldest. Use per_page=10 for the admin security screen pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Email Sign Up",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.user && json.user.email) {",
+                  "  pm.environment.set('email', json.user.email);",
+                  "  pm.environment.set('password', pm.environment.get('signup_password'));",
+                  "  pm.environment.set('verification_user_id', json.user.id);",
+                  "}",
+                  "if (json.email_verification_required !== undefined) {",
+                  "  pm.environment.set('email_verification_required', String(json.email_verification_required));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/sign-up",
@@ -227,7 +467,42 @@
                 "sign-up"
               ]
             },
-            "description": "Creates an email/password user and stores access_token, email, and password in the active environment."
+            "description": "Creates an email/password user, sends a verification email, and stores email, password, and verification_user_id in the active environment. The user cannot sign in until the verification link is opened. Copy the token from the local logs or Mailtrap into verification_token to test Verify Email."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify-email/{{verification_user_id}}?token={{verification_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email",
+                "{{verification_user_id}}"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verification_token}}"
+                }
+              ]
+            },
+            "description": "Verifies an email signup account. Use the token from the verification email or local Laravel log. Add redirect=1 only when testing browser redirection to the admin sign-in screen."
           },
           "response": []
         },
@@ -265,7 +540,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
+              "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/google/sign-up",
@@ -386,6 +661,194 @@
               ]
             },
             "description": "Returns the authenticated user. Requires token ability: user:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notification-preferences"
+              ]
+            },
+            "description": "Returns configurable notification preferences for the authenticated user. Mandatory auth emails are not exposed as opt-out preferences. Requires token ability: user:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferences\": {\n    \"product_updates\": true,\n    \"security_updates\": false\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notification-preferences"
+              ]
+            },
+            "description": "Updates configurable notification preferences for the authenticated user. Only keys defined in config/notifications.php are accepted. Requires token ability: user:write."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?per_page=20&locale={{locale}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "20",
+                  "description": "Maximum 50."
+                },
+                {
+                  "key": "locale",
+                  "value": "{{locale}}",
+                  "description": "Optional locale used to format title/body."
+                }
+              ]
+            },
+            "description": "Lists authenticated user app notifications, excluding dismissed notifications. Requires token ability: user:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}/read?locale={{locale}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "locale",
+                  "value": "{{locale}}",
+                  "description": "Optional locale used to format the returned notification."
+                }
+              ]
+            },
+            "description": "Marks one owned notification as read and returns it localized. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read-all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Marks all owned, non-dismissed notifications as read. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Dismiss Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}"
+              ]
+            },
+            "description": "Dismisses one owned notification and removes it from the notification list. Requires token ability: user:write."
           },
           "response": []
         }
@@ -1208,6 +1671,58 @@
               ]
             },
             "description": "Updates the profile identified by profile_id. Valid status values: draft, ready, published, hidden."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "activate"
+              ]
+            },
+            "description": "Activates and publishes a profile when publication requirements are met: required general fields, avatar, cloned voice, and at least one approved and synced source. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/deactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Deactivates and unpublishes a profile. Requires token ability: profile:write."
           },
           "response": []
         },
@@ -2371,6 +2886,21 @@
     {
       "key": "profile_fact_id",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "new_password",
+      "value": "NewPass123!",
+      "type": "string"
+    },
+    {
+      "key": "login_history_page",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "login_history_per_page",
+      "value": "10",
       "type": "string"
     }
   ]

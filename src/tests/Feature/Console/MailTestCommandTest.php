@@ -36,7 +36,7 @@ class MailTestCommandTest extends TestCase
         $html = (new TestMailConfiguration('recipient@example.com'))->render();
 
         $this->assertStringContainsString('https://cdn.example.com/bigmelo-logo.png', $html);
-        $this->assertStringContainsString('Email configuration ready', $html);
+        $this->assertStringContainsString('Prueba local de correo', $html);
         $this->assertStringContainsString('bigmelo', $html);
     }
 }

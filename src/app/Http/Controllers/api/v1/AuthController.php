@@ -5,11 +5,30 @@ namespace App\Http\Controllers\api\v1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\EmailSignUpRequest;
 use App\Http\Requests\Auth\GoogleOAuthRequest;
+use App\Http\Requests\Auth\LoginHistoryRequest;
+use App\Http\Requests\Auth\PasswordChangeRequest;
+use App\Http\Requests\Auth\PasswordForgotRequest;
+use App\Http\Requests\Auth\PasswordResetRequest;
+use App\Http\Requests\Auth\PasswordResetValidateRequest;
+use App\Mail\Auth\PasswordChanged;
+use App\Mail\Auth\PasswordResetLink;
+use App\Mail\Auth\VerifyEmailAddress;
+use App\Mail\Auth\WelcomeEmail;
+use App\Models\AuthLoginEvent;
 use App\Models\User;
+use App\Services\EmailVerificationResult;
+use App\Services\EmailVerificationService;
 use App\Services\GoogleOAuthService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\PasswordResetResult;
+use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -61,14 +80,22 @@ class AuthController extends Controller
                 'password' => 'required|string',
             ]);
 
-            if (! Auth::attempt($login)) {
+            $guard = Auth::guard('web');
+
+            if (! $guard->attempt($login)) {
                 return response()->json(['message' => 'Your email or password are incorrect.'], 403);
             }
 
-            $user = Auth::user();
+            $user = $guard->user();
 
             if (! ($user instanceof User)) {
                 return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (! $user->email_verified_at) {
+                $guard->logout();
+
+                return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
             }
 
             if ($user->role === 'forgotten') {
@@ -77,6 +104,7 @@ class AuthController extends Controller
             }
 
             $token = $user->createToken('token-name', $user->getRoleAbilities());
+            $this->recordLoginEvent($request, $user, 'credential');
 
             return response()->json(
                 [
@@ -88,6 +116,11 @@ class AuthController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Your email or password are incorrect.'], 403);
         } catch (\Throwable $e) {
+            Log::error('Token authentication failed unexpectedly.', [
+                'email' => $request->input('email'),
+                'exception' => $e,
+            ]);
+
             return response()->json(['message' => 'An error occurred while processing your request.'], 500);
         }
     }
@@ -115,11 +148,12 @@ class AuthController extends Controller
      *
      *     @OA\Response(
      *         response=201,
-     *         description="Successful email sign up",
+     *         description="Successful email sign up. User must verify email before signing in.",
      *
      *         @OA\JsonContent(
      *
-     *             @OA\Property(property="access_token", type="string"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="email_verification_required", type="boolean"),
      *             @OA\Property(property="user", type="object",
      *                 @OA\Property(property="id", type="integer"),
      *                 @OA\Property(property="name", type="string"),
@@ -138,7 +172,7 @@ class AuthController extends Controller
      *     )
      * )
      */
-    public function signUp(EmailSignUpRequest $request): JsonResponse
+    public function signUp(EmailSignUpRequest $request, EmailVerificationService $emailVerificationService): JsonResponse
     {
         $validated = $request->validated();
         [$firstName, $lastName] = $this->nameParts(
@@ -153,16 +187,258 @@ class AuthController extends Controller
             'first_name' => $firstName,
             'last_name' => $lastName,
             'email' => $validated['email'],
+            'locale' => $validated['locale'],
             'password' => $validated['password'],
             'provider' => 'email',
         ]);
 
-        $token = $user->createToken('email-sign-up-token', $user->getRoleAbilities());
+        $verificationUrl = $emailVerificationService->createVerificationUrl($user);
+
+        Log::info(
+            'Email verification link generated.',
+            [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'verification_url' => app()->environment(['local', 'testing']) ? $verificationUrl : null,
+            ]
+        );
+
+        Mail::to($user->email)->send(new VerifyEmailAddress($user, $verificationUrl));
+        app(NotificationDispatcher::class)->sendInApp($user, 'account_email_confirmation', [
+            'email' => $user->email,
+        ]);
 
         return response()->json([
-            'access_token' => $token->plainTextToken,
+            'message' => 'We sent a verification link to your email address.',
+            'email_verification_required' => true,
             'user' => $this->authUserPayload($user),
         ], 201);
+    }
+
+    public function forgotPassword(
+        PasswordForgotRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => $this->passwordResetRequestedMessage($validated['locale']),
+            ]);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            app(NotificationDispatcher::class)->sendInApp($user, 'password_recovery_requested_for_google_account');
+
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $resetUrl = $passwordResetService->createResetUrl($user);
+
+        Log::info(
+            'Password reset link generated.',
+            [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'reset_url' => app()->environment(['local', 'testing']) ? $resetUrl : null,
+            ]
+        );
+
+        Mail::to($user->email)->send(new PasswordResetLink($user, $resetUrl));
+
+        return response()->json([
+            'message' => $this->passwordResetRequestedMessage($user->locale ?: $validated['locale']),
+        ]);
+    }
+
+    public function resetPassword(
+        PasswordResetRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'This password reset link is invalid.',
+                'status' => PasswordResetResult::Invalid->value,
+            ], 422);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $result = $passwordResetService->verify($user, $validated['token']);
+
+        if ($result !== PasswordResetResult::Valid) {
+            return response()->json([
+                'message' => $this->passwordResetResultMessage($result, $user->locale ?: 'en'),
+                'status' => $result->value,
+            ], $this->passwordResetStatusCode($result));
+        }
+
+        $user->forceFill([
+            'password' => $validated['password'],
+            'email_verified_at' => $user->email_verified_at ?: now(),
+        ])->save();
+        $user->refresh();
+
+        $passwordResetService->consume($user);
+        $user->tokens()->delete();
+
+        Mail::to($user->email)->send(new PasswordChanged($user));
+        app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_confirmation');
+
+        Log::info('Password reset completed.', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => $this->passwordChangedMessage($user->locale ?: 'en'),
+            'status' => 'changed',
+        ]);
+    }
+
+    public function changePassword(PasswordChangeRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! ($user instanceof User)) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $validated = $request->validated();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => $this->currentPasswordIncorrectMessage($user->locale ?: 'en'),
+            ], 422);
+        }
+
+        $user->forceFill(['password' => $validated['password']])->save();
+        $user->refresh();
+        $this->revokeOtherTokens($user);
+
+        Mail::to($user->email)->send(new PasswordChanged($user));
+        app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_from_active_session');
+
+        Log::info('Password changed from active session.', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => $this->passwordChangedMessage($user->locale ?: 'en'),
+            'status' => 'changed',
+        ]);
+    }
+
+    public function loginHistory(LoginHistoryRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! ($user instanceof User)) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        $perPage = (int) $request->validated('per_page', 10);
+        $events = $user->loginEvents()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json([
+            'message' => 'Login history retrieved successfully.',
+            'data' => [
+                'events' => collect($events->items())->map(fn (AuthLoginEvent $event): array => [
+                    'id' => $event->id,
+                    'type' => $event->type,
+                    'ip_address' => $event->ip_address,
+                    'user_agent' => $event->user_agent,
+                    'created_at' => $event->created_at?->toJSON(),
+                ])->values()->all(),
+                'pagination' => [
+                    'current_page' => $events->currentPage(),
+                    'last_page' => $events->lastPage(),
+                    'per_page' => $events->perPage(),
+                    'total' => $events->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function validatePasswordResetLink(
+        PasswordResetValidateRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => $this->passwordResetResultMessage(PasswordResetResult::Invalid, $validated['locale']),
+                'status' => PasswordResetResult::Invalid->value,
+            ], 422);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $result = $passwordResetService->verify($user, $validated['token']);
+
+        return response()->json([
+            'message' => $this->passwordResetResultMessage($result, $user->locale ?: $validated['locale']),
+            'status' => $result->value,
+        ], $this->passwordResetStatusCode($result));
+    }
+
+    public function verifyEmail(
+        Request $request,
+        User $user,
+        EmailVerificationService $emailVerificationService
+    ): JsonResponse|RedirectResponse {
+        $result = $emailVerificationService->verify($user, $request->query('token'));
+
+        if ($result === EmailVerificationResult::Verified) {
+            $user->refresh();
+
+            Mail::to($user->email)->send(new WelcomeEmail($user));
+            app(NotificationDispatcher::class)->sendInApp($user, 'welcome_after_email_verification');
+
+            Log::info('Email verified successfully.', [
+                'email' => $user->email,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        if (! $request->boolean('redirect') && $request->wantsJson()) {
+            return response()->json([
+                'message' => $this->verificationMessage($result),
+                'status' => $result->value,
+            ], $this->verificationStatusCode($result));
+        }
+
+        return $this->verificationRedirect($result, $user);
     }
 
     /**
@@ -324,8 +600,13 @@ class AuthController extends Controller
                 return response()->json(['message' => $missingUserMessage], 404);
             }
 
+            if (! $user->email_verified_at) {
+                return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
+            }
+
             // Generate access token
             $accessToken = $googleService->generateAccessToken($user);
+            $this->recordLoginEvent($request, $user, 'google');
 
             return response()->json([
                 'access_token' => $accessToken,
@@ -356,7 +637,128 @@ class AuthController extends Controller
             'avatar' => $user->avatar,
             'provider' => $user->provider,
             'role' => $user->role,
+            'locale' => $user->locale,
+            'email_verified_at' => $user->email_verified_at?->toJSON(),
         ];
+    }
+
+    private function verificationRedirect(EmailVerificationResult $result, User $user): RedirectResponse
+    {
+        $redirectUrl = (string) config('email-verification.redirect_url');
+        $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+
+        return redirect()->away($redirectUrl.$separator.http_build_query([
+            'verification' => $result->value,
+            'locale' => $user->locale ?: 'en',
+        ]));
+    }
+
+    private function verificationMessage(EmailVerificationResult $result): string
+    {
+        return match ($result) {
+            EmailVerificationResult::Verified => 'Your email address has been verified.',
+            EmailVerificationResult::AlreadyVerified => 'Your email address is already verified.',
+            EmailVerificationResult::Expired => 'This verification link has expired.',
+            EmailVerificationResult::Invalid => 'This verification link is invalid.',
+        };
+    }
+
+    private function verificationStatusCode(EmailVerificationResult $result): int
+    {
+        return match ($result) {
+            EmailVerificationResult::Verified, EmailVerificationResult::AlreadyVerified => 200,
+            EmailVerificationResult::Expired => 410,
+            EmailVerificationResult::Invalid => 422,
+        };
+    }
+
+    private function usesGoogleAuthentication(User $user): bool
+    {
+        return $user->provider === 'google' || filled($user->google_id);
+    }
+
+    private function passwordResetRequestedMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'Si el correo pertenece a una cuenta con contraseña, enviamos un enlace para cambiarla.';
+        }
+
+        return 'If the email belongs to a password account, we sent a link to change it.';
+    }
+
+    private function googlePasswordResetMessage(User $user): string
+    {
+        if ($user->locale === 'es') {
+            return 'Esta cuenta usa inicio de sesión con Google. Ingresa con el botón de Google.';
+        }
+
+        return 'This account uses Google sign-in. Use the Google button to continue.';
+    }
+
+    private function passwordResetResultMessage(PasswordResetResult $result, string $locale): string
+    {
+        if ($locale === 'es') {
+            return match ($result) {
+                PasswordResetResult::Expired => 'Este enlace para cambiar contraseña expiró.',
+                PasswordResetResult::Invalid => 'Este enlace para cambiar contraseña no es válido.',
+                PasswordResetResult::Valid => 'El enlace es válido.',
+            };
+        }
+
+        return match ($result) {
+            PasswordResetResult::Expired => 'This password reset link has expired.',
+            PasswordResetResult::Invalid => 'This password reset link is invalid.',
+            PasswordResetResult::Valid => 'This password reset link is valid.',
+        };
+    }
+
+    private function passwordResetStatusCode(PasswordResetResult $result): int
+    {
+        return match ($result) {
+            PasswordResetResult::Valid => 200,
+            PasswordResetResult::Expired => 410,
+            PasswordResetResult::Invalid => 422,
+        };
+    }
+
+    private function passwordChangedMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'Tu contraseña fue actualizada correctamente.';
+        }
+
+        return 'Your password was updated successfully.';
+    }
+
+    private function currentPasswordIncorrectMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'La contraseña actual es incorrecta.';
+        }
+
+        return 'Current password is incorrect.';
+    }
+
+    private function recordLoginEvent(Request $request, User $user, string $type): void
+    {
+        AuthLoginEvent::create([
+            'user_id' => $user->id,
+            'type' => $type,
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 1000),
+        ]);
+    }
+
+    private function revokeOtherTokens(User $user): void
+    {
+        $currentToken = $user->currentAccessToken();
+        $currentTokenId = is_object($currentToken) && method_exists($currentToken, 'getKey')
+            ? $currentToken->getKey()
+            : null;
+
+        $user->tokens()
+            ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
+            ->delete();
     }
 
     /**

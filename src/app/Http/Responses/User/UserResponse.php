@@ -6,9 +6,7 @@ use App\Models\User;
 
 class UserResponse
 {
-    public function __construct(private readonly User $user)
-    {
-    }
+    public function __construct(private readonly User $user) {}
 
     public function toArray(): array
     {
@@ -18,6 +16,7 @@ class UserResponse
             'first_name' => $this->user->first_name,
             'last_name' => $this->user->last_name,
             'email' => $this->user->email,
+            'locale' => $this->user->locale,
             'role' => $this->user->role,
             'avatar' => $this->user->avatar,
             'provider' => $this->user->provider,

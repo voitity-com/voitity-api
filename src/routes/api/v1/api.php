@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\api\v1\AdminUserController;
+use App\Http\Controllers\api\v1\AppNotificationController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\MessageController;
+use App\Http\Controllers\api\v1\NotificationPreferenceController;
 use App\Http\Controllers\api\v1\PaymentController;
 use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
@@ -24,6 +26,12 @@ Route::get('health', function () {
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::get('/notifications', [AppNotificationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::delete('/notifications/{notification}', [AppNotificationController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:user:write']);
 
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
@@ -36,6 +44,13 @@ Route::prefix('/admin')->group(function () {
 Route::prefix('/auth')->group(function () {
     Route::post('/get-token', [AuthController::class, 'getToken']);
     Route::post('/sign-up', [AuthController::class, 'signUp']);
+    Route::get('/password/reset', fn () => redirect()->away(config('password-reset.redirect_url').'?'.http_build_query(request()->query())))->name('auth.password.reset.form');
+    Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+    Route::post('/password/reset/validate', [AuthController::class, 'validatePasswordResetLink']);
+    Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+    Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware(['auth:sanctum']);
+    Route::get('/login-history', [AuthController::class, 'loginHistory'])->middleware(['auth:sanctum']);
+    Route::get('/verify-email/{user}', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
     Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
     Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);

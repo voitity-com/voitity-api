@@ -13,6 +13,8 @@ use App\Http\Requests\Voice\UpdateVoiceRequest;
 use App\Http\Responses\Voice\VoiceTestResponse;
 use App\Models\Profile;
 use App\Models\Voice;
+use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -214,6 +216,9 @@ class VoiceController extends Controller
         VoiceManager $voiceManager,
         SubscriptionEntitlementService $entitlements
     ): JsonResponse {
+        $profile = null;
+        $voice = null;
+
         try {
             $user = $request->user();
 
@@ -265,6 +270,8 @@ class VoiceController extends Controller
             $generatedAudio = $voiceService->generateAudio($payload['text']);
 
             if ($generatedAudio->isFailed()) {
+                $this->notifyAudioGenerationFailed($profile, $generatedAudio->status);
+
                 Log::warning('Voice test audio generation failed.', [
                     'user_id' => $user->id,
                     'profile_id' => $profile->id,
@@ -297,6 +304,10 @@ class VoiceController extends Controller
                 'errors' => $e->errors(),
             ], $e->statusCode());
         } catch (\Throwable $e) {
+            if ($profile instanceof Profile) {
+                $this->notifyAudioGenerationFailed($profile, $e->getMessage());
+            }
+
             Log::error('Error generating voice test audio.', [
                 'user_id' => $request->user()?->id,
                 'profile_id' => $request->input('profile_id'),
@@ -334,5 +345,25 @@ class VoiceController extends Controller
         $voice->loadMissing('profile:id,user_id');
 
         return $voice->profile !== null && (int) $voice->profile->user_id === (int) $user->id;
+    }
+
+    private function notifyAudioGenerationFailed(Profile $profile, string $reason): void
+    {
+        $profile->loadMissing('user');
+
+        if (! $profile->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($profile->user, 'audio_response_generation_failed', [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'reason' => $reason,
+            'action_url' => "/dashboard/profiles/{$profile->id}/voice",
+        ]);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Voice audio provider',
+            'message' => $reason,
+        ]);
     }
 }

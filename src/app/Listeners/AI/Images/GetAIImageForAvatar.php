@@ -7,6 +7,8 @@ use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Models\ProfileAvatar;
+use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -75,6 +77,7 @@ class GetAIImageForAvatar implements ShouldQueue
                 $aiImage->status = 'failed';
                 $aiImage->save();
                 $this->markAvatarFailed($aiImage->id);
+                $this->notifyAvatarFailure($aiImage->id, 'The image provider returned a failed status.');
 
                 Log::error('AI image generation failed at provider', [
                     'aiimage_id' => $aiImage->id,
@@ -106,6 +109,7 @@ class GetAIImageForAvatar implements ShouldQueue
             $aiImage->status = 'failed';
             $aiImage->save();
             $this->markAvatarFailed($aiImage->id);
+            $this->notifyAvatarFailure($aiImage->id, $exception->getMessage());
         }
 
         Log::error('GetAIImageForAvatar listener failed', [
@@ -123,6 +127,7 @@ class GetAIImageForAvatar implements ShouldQueue
             $aiImage->status = 'failed';
             $aiImage->save();
             $this->markAvatarFailed($aiImage->id);
+            $this->notifyAvatarFailure($aiImage->id, 'Image generation timed out.');
 
             Log::error('AI image generation exceeded max attempts', [
                 'aiimage_id' => $aiImage->id,
@@ -154,5 +159,32 @@ class GetAIImageForAvatar implements ShouldQueue
         ProfileAvatar::where('aiimage_id', $aiImageId)
             ->where('status', ProfileAvatar::STATUS_PROCESSING)
             ->update(['status' => ProfileAvatar::STATUS_FAILED]);
+    }
+
+    private function notifyAvatarFailure(int|string $aiImageId, string $reason): void
+    {
+        $avatar = ProfileAvatar::query()
+            ->with('profile.user')
+            ->where('aiimage_id', $aiImageId)
+            ->latest('id')
+            ->first();
+
+        if (! $avatar || ! $avatar->profile || ! $avatar->profile->user instanceof User) {
+            return;
+        }
+
+        $profile = $avatar->profile;
+        $data = [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'reason' => $reason,
+            'action_url' => "/dashboard/profiles/{$profile->id}/avatar",
+        ];
+
+        app(NotificationDispatcher::class)->send($profile->user, 'avatar_generation_failed', $data);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Video AI image provider',
+            'message' => $reason,
+        ]);
     }
 }

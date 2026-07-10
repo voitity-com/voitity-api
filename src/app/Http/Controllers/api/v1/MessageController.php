@@ -14,6 +14,7 @@ use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -264,6 +265,7 @@ class MessageController extends Controller
             $entitlements->assertCanUse($profile->user_id, ['chat_messages' => 1]);
         }
 
+        $isNewChat = $chatId === null;
         $chat = $chatId
             ? $profile->chats()->find($chatId)
             : $profile->chats()->create();
@@ -289,6 +291,8 @@ class MessageController extends Controller
         if (! $message instanceof Message) {
             throw new RuntimeException('Unable to store message.');
         }
+
+        $this->notifyMessageReceived($profile, $user, $chat->id, $isNewChat);
 
         $event = new MessageStored($message);
         event($event);
@@ -447,5 +451,30 @@ class MessageController extends Controller
     private function audioMessageVisibility(): string
     {
         return (string) config('chatai.audio_messages.visibility', 'public');
+    }
+
+    private function notifyMessageReceived(Profile $profile, User $actor, int $chatId, bool $isNewChat): void
+    {
+        $profile->loadMissing('user');
+
+        if (! $profile->user instanceof User) {
+            return;
+        }
+
+        $data = [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'chat_id' => $chatId,
+            'action_url' => "/dashboard/profiles/{$profile->id}/chats/{$chatId}",
+        ];
+        $dispatcher = app(NotificationDispatcher::class);
+
+        if ($isNewChat) {
+            $dispatcher->sendInApp($profile->user, 'new_chat_received', $data);
+        }
+
+        if ((int) $actor->id !== (int) $profile->user_id || $actor->role === 'api') {
+            $dispatcher->sendInApp($profile->user, 'new_visitor_message_received', $data);
+        }
     }
 }

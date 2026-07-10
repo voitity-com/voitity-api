@@ -10,6 +10,8 @@ use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
+use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -104,6 +106,14 @@ class CloneVoice implements ShouldQueue
                         'voice_sample_id' => $voiceSample->id,
                     ]
                 ));
+
+                $this->notifyVoiceOwner($voice, 'voice_cloned_successfully', [
+                    'provider' => $clonedVoice->source,
+                ]);
+            } else {
+                $this->notifyVoiceOwner($voice, 'voice_cloning_failed', [
+                    'reason' => $clonedVoice->status,
+                ]);
             }
 
         } catch (\Exception $e) {
@@ -141,6 +151,13 @@ class CloneVoice implements ShouldQueue
         ]);
 
         app(SubscriptionUsageRecorder::class)->release("voice-clone:{$voice->id}");
+        $this->notifyVoiceOwner($voice, 'voice_cloning_failed', [
+            'reason' => $exception->getMessage(),
+        ]);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Voice provider',
+            'message' => $exception->getMessage(),
+        ]);
 
         $providerRequest = VoiceProviderRequest::query()
             ->where('voice_id', $voice->id)
@@ -159,5 +176,26 @@ class CloneVoice implements ShouldQueue
             ])
                 ->save();
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function notifyVoiceOwner(Voice $voice, string $key, array $data = []): void
+    {
+        $voice->loadMissing('profile.user', 'user');
+        $owner = $voice->profile?->user ?: $voice->user;
+
+        if (! $owner instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($owner, $key, [
+            'profile' => $voice->profile?->name ?: ($voice->name ?: "Voice {$voice->id}"),
+            'profile_id' => $voice->profile_id,
+            'voice_id' => $voice->id,
+            'action_url' => $voice->profile_id ? "/dashboard/profiles/{$voice->profile_id}/voice" : '/dashboard/profiles',
+            ...$data,
+        ]);
     }
 }

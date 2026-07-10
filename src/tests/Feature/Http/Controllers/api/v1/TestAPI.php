@@ -36,6 +36,7 @@ class TestAPI extends TestCase
             'name' => 'Test Admin User',
             'password' => bcrypt($password),
             'role' => 'admin',
+            'email_verified_at' => now(),
         ]);
 
         $response = $this->json('post', '/api/auth/get-token', [
