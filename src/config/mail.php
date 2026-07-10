@@ -115,4 +115,39 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mail Branding
+    |--------------------------------------------------------------------------
+    |
+    | These values are used by the shared mail header and footer templates.
+    | Keep image URLs public because email clients cannot load private assets.
+    |
+    */
+
+    'branding' => [
+        'home_url' => env('MAIL_HOME_URL', env('APP_URL', 'http://localhost')),
+        'logo_url' => env('MAIL_LOGO_URL'),
+        'support_email' => env('MAIL_SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+        'support_url' => env('MAIL_SUPPORT_URL'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown Mail Settings
+    |--------------------------------------------------------------------------
+    |
+    | Markdown mailables render responsive HTML and text versions. Custom
+    | components can be placed in resources/views/vendor/mail.
+    |
+    */
+
+    'markdown' => [
+        'theme' => env('MAIL_MARKDOWN_THEME', 'default'),
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
 ];
