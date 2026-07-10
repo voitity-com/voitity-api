@@ -5,6 +5,8 @@ namespace App\Http\Controllers\api\v1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\EmailSignUpRequest;
 use App\Http\Requests\Auth\GoogleOAuthRequest;
+use App\Http\Requests\Auth\LoginHistoryRequest;
+use App\Http\Requests\Auth\PasswordChangeRequest;
 use App\Http\Requests\Auth\PasswordForgotRequest;
 use App\Http\Requests\Auth\PasswordResetRequest;
 use App\Http\Requests\Auth\PasswordResetValidateRequest;
@@ -12,6 +14,7 @@ use App\Mail\Auth\PasswordChanged;
 use App\Mail\Auth\PasswordResetLink;
 use App\Mail\Auth\VerifyEmailAddress;
 use App\Mail\Auth\WelcomeEmail;
+use App\Models\AuthLoginEvent;
 use App\Models\User;
 use App\Services\EmailVerificationResult;
 use App\Services\EmailVerificationService;
@@ -22,6 +25,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -75,18 +79,20 @@ class AuthController extends Controller
                 'password' => 'required|string',
             ]);
 
-            if (! Auth::attempt($login)) {
+            $guard = Auth::guard('web');
+
+            if (! $guard->attempt($login)) {
                 return response()->json(['message' => 'Your email or password are incorrect.'], 403);
             }
 
-            $user = Auth::user();
+            $user = $guard->user();
 
             if (! ($user instanceof User)) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
             if (! $user->email_verified_at) {
-                Auth::logout();
+                $guard->logout();
 
                 return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
             }
@@ -97,6 +103,7 @@ class AuthController extends Controller
             }
 
             $token = $user->createToken('token-name', $user->getRoleAbilities());
+            $this->recordLoginEvent($request, $user, 'credential');
 
             return response()->json(
                 [
@@ -108,6 +115,11 @@ class AuthController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Your email or password are incorrect.'], 403);
         } catch (\Throwable $e) {
+            Log::error('Token authentication failed unexpectedly.', [
+                'email' => $request->input('email'),
+                'exception' => $e,
+            ]);
+
             return response()->json(['message' => 'An error occurred while processing your request.'], 500);
         }
     }
@@ -286,6 +298,80 @@ class AuthController extends Controller
         return response()->json([
             'message' => $this->passwordChangedMessage($user->locale ?: 'en'),
             'status' => 'changed',
+        ]);
+    }
+
+    public function changePassword(PasswordChangeRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! ($user instanceof User)) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $validated = $request->validated();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => $this->currentPasswordIncorrectMessage($user->locale ?: 'en'),
+            ], 422);
+        }
+
+        $user->forceFill(['password' => $validated['password']])->save();
+        $user->refresh();
+        $this->revokeOtherTokens($user);
+
+        Mail::to($user->email)->send(new PasswordChanged($user));
+
+        Log::info('Password changed from active session.', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => $this->passwordChangedMessage($user->locale ?: 'en'),
+            'status' => 'changed',
+        ]);
+    }
+
+    public function loginHistory(LoginHistoryRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! ($user instanceof User)) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        $perPage = (int) $request->validated('per_page', 10);
+        $events = $user->loginEvents()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json([
+            'message' => 'Login history retrieved successfully.',
+            'data' => [
+                'events' => collect($events->items())->map(fn (AuthLoginEvent $event): array => [
+                    'id' => $event->id,
+                    'type' => $event->type,
+                    'ip_address' => $event->ip_address,
+                    'user_agent' => $event->user_agent,
+                    'created_at' => $event->created_at?->toJSON(),
+                ])->values()->all(),
+                'pagination' => [
+                    'current_page' => $events->currentPage(),
+                    'last_page' => $events->lastPage(),
+                    'per_page' => $events->perPage(),
+                    'total' => $events->total(),
+                ],
+            ],
         ]);
     }
 
@@ -511,6 +597,7 @@ class AuthController extends Controller
 
             // Generate access token
             $accessToken = $googleService->generateAccessToken($user);
+            $this->recordLoginEvent($request, $user, 'google');
 
             return response()->json([
                 'access_token' => $accessToken,
@@ -632,6 +719,37 @@ class AuthController extends Controller
         }
 
         return 'Your password was updated successfully.';
+    }
+
+    private function currentPasswordIncorrectMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'La contraseña actual es incorrecta.';
+        }
+
+        return 'Current password is incorrect.';
+    }
+
+    private function recordLoginEvent(Request $request, User $user, string $type): void
+    {
+        AuthLoginEvent::create([
+            'user_id' => $user->id,
+            'type' => $type,
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 1000),
+        ]);
+    }
+
+    private function revokeOtherTokens(User $user): void
+    {
+        $currentToken = $user->currentAccessToken();
+        $currentTokenId = is_object($currentToken) && method_exists($currentToken, 'getKey')
+            ? $currentToken->getKey()
+            : null;
+
+        $user->tokens()
+            ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
+            ->delete();
     }
 
     /**

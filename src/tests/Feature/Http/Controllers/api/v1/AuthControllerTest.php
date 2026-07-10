@@ -6,6 +6,7 @@ use App\Mail\Auth\PasswordChanged;
 use App\Mail\Auth\PasswordResetLink;
 use App\Mail\Auth\VerifyEmailAddress;
 use App\Mail\Auth\WelcomeEmail;
+use App\Models\AuthLoginEvent;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -38,6 +39,10 @@ class AuthControllerTest extends TestAPI
 
         $response->assertStatus(200);
         $response->assertJsonStructure(['access_token']);
+        $this->assertDatabaseHas('auth_login_events', [
+            'user_id' => User::where('email', 'voitity@gmail.com')->value('id'),
+            'type' => 'credential',
+        ]);
     }
 
     #[Test]
@@ -307,6 +312,147 @@ class AuthControllerTest extends TestAPI
             'email' => $user->email,
             'password' => 'NewPass123!',
         ])->assertStatus(200)->assertJsonStructure(['access_token']);
+    }
+
+    #[Test]
+    public function active_session_password_change_updates_password_revokes_other_tokens_and_sends_email(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create([
+            'email' => 'active.change@example.com',
+            'locale' => 'es',
+            'password' => 'OldPass123!',
+            'provider' => 'email',
+        ]);
+        $currentToken = $user->createToken('current-token');
+        $otherToken = $user->createToken('other-token');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$currentToken->plainTextToken)
+            ->postJson(self::ENDPOINT_AUTH.'/password/change', [
+                'current_password' => 'OldPass123!',
+                'password' => 'NewPass123!',
+                'password_confirmation' => 'NewPass123!',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('status', 'changed');
+        $response->assertJsonPath('message', 'Tu contraseña fue actualizada correctamente.');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('NewPass123!', $user->password));
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $currentToken->accessToken->id]);
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $otherToken->accessToken->id]);
+
+        Mail::assertSent(
+            PasswordChanged::class,
+            fn (PasswordChanged $mail): bool => $mail->hasTo('active.change@example.com')
+                && str_contains($mail->render(), 'Contraseña actualizada')
+        );
+
+        $this->flushHeaders();
+
+        $this->postJson(self::ENDPOINT_AUTH.'/get-token', [
+            'email' => $user->email,
+            'password' => 'OldPass123!',
+        ])->assertStatus(403);
+
+        $this->postJson(self::ENDPOINT_AUTH.'/get-token', [
+            'email' => $user->email,
+            'password' => 'NewPass123!',
+        ])->assertStatus(200)->assertJsonStructure(['access_token']);
+    }
+
+    #[Test]
+    public function active_session_password_change_rejects_wrong_current_password(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create([
+            'email' => 'wrong-current@example.com',
+            'locale' => 'en',
+            'password' => 'OldPass123!',
+            'provider' => 'email',
+        ]);
+        $token = $user->createToken('current-token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_AUTH.'/password/change', [
+                'current_password' => 'WrongPass123!',
+                'password' => 'NewPass123!',
+                'password_confirmation' => 'NewPass123!',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Current password is incorrect.');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('OldPass123!', $user->password));
+        Mail::assertNotSent(PasswordChanged::class);
+    }
+
+    #[Test]
+    public function active_session_password_change_rejects_google_accounts(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create([
+            'email' => 'google.change@example.com',
+            'google_id' => 'google-change-123',
+            'locale' => 'en',
+            'provider' => 'google',
+        ]);
+        $token = $user->createToken('current-token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_AUTH.'/password/change', [
+                'current_password' => 'password',
+                'password' => 'NewPass123!',
+                'password_confirmation' => 'NewPass123!',
+            ]);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('provider', 'google');
+        $response->assertJsonPath('message', 'This account uses Google sign-in. Use the Google button to continue.');
+        Mail::assertNotSent(PasswordChanged::class);
+    }
+
+    #[Test]
+    public function login_history_returns_latest_events_first_with_ten_item_pagination(): void
+    {
+        $user = User::factory()->create(['email' => 'history@example.com']);
+        $token = $user->createToken('current-token')->plainTextToken;
+
+        foreach (range(1, 12) as $index) {
+            AuthLoginEvent::create([
+                'user_id' => $user->id,
+                'type' => 'credential',
+                'ip_address' => '10.0.0.'.$index,
+                'user_agent' => 'Browser '.$index,
+                'created_at' => now()->subMinutes(12 - $index),
+                'updated_at' => now()->subMinutes(12 - $index),
+            ]);
+        }
+
+        $firstPage = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT_AUTH.'/login-history?per_page=10&page=1');
+
+        $firstPage->assertStatus(200);
+        $firstPage->assertJsonPath('data.pagination.current_page', 1);
+        $firstPage->assertJsonPath('data.pagination.per_page', 10);
+        $firstPage->assertJsonPath('data.pagination.total', 12);
+        $this->assertCount(10, $firstPage->json('data.events'));
+        $firstPage->assertJsonPath('data.events.0.user_agent', 'Browser 12');
+        $firstPage->assertJsonPath('data.events.9.user_agent', 'Browser 3');
+
+        $secondPage = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT_AUTH.'/login-history?per_page=10&page=2');
+
+        $secondPage->assertStatus(200);
+        $secondPage->assertJsonPath('data.pagination.current_page', 2);
+        $this->assertCount(2, $secondPage->json('data.events'));
+        $secondPage->assertJsonPath('data.events.0.user_agent', 'Browser 2');
+        $secondPage->assertJsonPath('data.events.1.user_agent', 'Browser 1');
     }
 
     #[Test]

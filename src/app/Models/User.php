@@ -153,4 +153,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(PaymentSource::class);
     }
+
+    public function loginEvents()
+    {
+        return $this->hasMany(AuthLoginEvent::class);
+    }
 }

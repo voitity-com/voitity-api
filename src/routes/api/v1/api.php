@@ -40,6 +40,8 @@ Route::prefix('/auth')->group(function () {
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
     Route::post('/password/reset/validate', [AuthController::class, 'validatePasswordResetLink']);
     Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+    Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware(['auth:sanctum']);
+    Route::get('/login-history', [AuthController::class, 'loginHistory'])->middleware(['auth:sanctum']);
     Route::get('/verify-email/{user}', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
     Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
     Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
