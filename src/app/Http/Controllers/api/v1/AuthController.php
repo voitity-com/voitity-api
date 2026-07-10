@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\EmailVerificationResult;
 use App\Services\EmailVerificationService;
 use App\Services\GoogleOAuthService;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\PasswordResetResult;
 use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
@@ -203,6 +204,9 @@ class AuthController extends Controller
         );
 
         Mail::to($user->email)->send(new VerifyEmailAddress($user, $verificationUrl));
+        app(NotificationDispatcher::class)->sendInApp($user, 'account_email_confirmation', [
+            'email' => $user->email,
+        ]);
 
         return response()->json([
             'message' => 'We sent a verification link to your email address.',
@@ -225,6 +229,8 @@ class AuthController extends Controller
         }
 
         if ($this->usesGoogleAuthentication($user)) {
+            app(NotificationDispatcher::class)->sendInApp($user, 'password_recovery_requested_for_google_account');
+
             return response()->json([
                 'message' => $this->googlePasswordResetMessage($user),
                 'provider' => 'google',
@@ -289,6 +295,7 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         Mail::to($user->email)->send(new PasswordChanged($user));
+        app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_confirmation');
 
         Log::info('Password reset completed.', [
             'email' => $user->email,
@@ -329,6 +336,7 @@ class AuthController extends Controller
         $this->revokeOtherTokens($user);
 
         Mail::to($user->email)->send(new PasswordChanged($user));
+        app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_from_active_session');
 
         Log::info('Password changed from active session.', [
             'email' => $user->email,
@@ -415,6 +423,7 @@ class AuthController extends Controller
             $user->refresh();
 
             Mail::to($user->email)->send(new WelcomeEmail($user));
+            app(NotificationDispatcher::class)->sendInApp($user, 'welcome_after_email_verification');
 
             Log::info('Email verified successfully.', [
                 'email' => $user->email,

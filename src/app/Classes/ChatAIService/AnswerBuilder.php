@@ -10,7 +10,9 @@ use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\User;
 use App\Models\Voice;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
@@ -92,6 +94,8 @@ class AnswerBuilder
             $driverName = $voice->source ?: null;
             $voiceClient = $this->voiceManager->driver($driverName);
         } catch (\Throwable $e) {
+            $this->notifyAudioGenerationFailed($profile, $e->getMessage());
+
             Log::warning('Unable to resolve voice driver for profile.', [
                 'profile_id' => $profile->id,
                 'voice_id' => $voice->id,
@@ -104,8 +108,16 @@ class AnswerBuilder
         try {
             $voiceService = new VoiceService($voice, $voiceClient);
 
-            return $voiceService->generateAudio($text);
+            $audio = $voiceService->generateAudio($text);
+
+            if ($audio->isFailed()) {
+                $this->notifyAudioGenerationFailed($profile, $audio->status);
+            }
+
+            return $audio;
         } catch (\Throwable $e) {
+            $this->notifyAudioGenerationFailed($profile, $e->getMessage());
+
             Log::warning('Audio generation failed.', [
                 'profile_id' => $profile->id,
                 'voice_id' => $voice->id,
@@ -114,5 +126,25 @@ class AnswerBuilder
 
             return null;
         }
+    }
+
+    private function notifyAudioGenerationFailed(Profile $profile, string $reason): void
+    {
+        $profile->loadMissing('user');
+
+        if (! $profile->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($profile->user, 'audio_response_generation_failed', [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'reason' => $reason,
+            'action_url' => "/dashboard/profiles/{$profile->id}/voice",
+        ]);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Voice audio provider',
+            'message' => $reason,
+        ]);
     }
 }

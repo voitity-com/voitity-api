@@ -26,7 +26,7 @@ class TestMailConfiguration extends Mailable
         return new Content(
             markdown: 'emails.system.test-mail',
             with: [
-                'homeUrl' => config('mail.branding.home_url') ?: config('app.url'),
+                'homeUrl' => config('mail.branding.admin_url') ?: config('mail.branding.home_url') ?: config('app.url'),
                 'mailer' => config('mail.default'),
                 'recipientEmail' => $this->recipientEmail,
             ],

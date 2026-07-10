@@ -26,7 +26,7 @@ class PasswordChanged extends Mailable
             markdown: 'emails.auth.password-changed',
             with: [
                 'copy' => $this->copy(),
-                'homeUrl' => config('mail.branding.home_url') ?: config('app.url'),
+                'homeUrl' => config('mail.branding.admin_url') ?: config('mail.branding.home_url') ?: config('app.url'),
                 'user' => $this->user,
             ],
         );

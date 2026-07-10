@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUse;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -68,7 +69,7 @@ class SubscriptionUsageRecorder
         }
 
         try {
-            return DB::transaction(function () use (
+            $use = DB::transaction(function () use (
                 $userId,
                 $usageType,
                 $amounts,
@@ -122,6 +123,10 @@ class SubscriptionUsageRecorder
 
                 return $use;
             });
+
+            $this->notifyUsageUpdated($use);
+
+            return $use;
         } catch (SubscriptionEntitlementException $exception) {
             if ($exception->getMessage() === 'Active subscription has expired.') {
                 $this->expireDueSubscriptionsFor((int) $userId);
@@ -199,6 +204,7 @@ class SubscriptionUsageRecorder
             $subscription->status = SubscriptionStatus::Expired;
             $subscription->active = false;
             $subscription->save();
+            $this->notifySubscriptionDeactivated($subscription);
 
             throw new SubscriptionEntitlementException(
                 'Active subscription has expired.',
@@ -254,6 +260,8 @@ class SubscriptionUsageRecorder
         }
 
         if ($errors !== []) {
+            $this->notifyLimitReached($limit, $errors);
+
             throw new SubscriptionEntitlementException('Subscription limit exceeded.', $errors);
         }
     }
@@ -340,5 +348,75 @@ class SubscriptionUsageRecorder
     private function limitPeriods(): SubscriptionLimitPeriodService
     {
         return $this->limitPeriods ?? app(SubscriptionLimitPeriodService::class);
+    }
+
+    private function notifyUsageUpdated(SubscriptionUse $use): void
+    {
+        $use->loadMissing('user');
+
+        if (! $use->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->sendInApp($use->user, 'plan_usage_updated', [
+            'usage_type' => $use->usage_type->value,
+            'subscription_id' => $use->subscription_id,
+            'profile_id' => $use->profile_id,
+        ]);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $errors
+     */
+    private function notifyLimitReached(SubscriptionLimit $limit, array $errors): void
+    {
+        $limit->loadMissing('subscription.user');
+        $subscription = $limit->subscription;
+
+        if (! $subscription instanceof Subscription || ! $subscription->user instanceof User) {
+            return;
+        }
+
+        $metric = (string) array_key_first($errors);
+        $dispatcher = app(NotificationDispatcher::class);
+
+        $dispatcher->send($subscription->user, 'critical_plan_limit_reached', [
+            'metric' => $metric,
+            'plan' => $subscription->plan->value,
+        ]);
+
+        $specificKey = $this->limitNotificationKey($metric);
+
+        if ($specificKey) {
+            $dispatcher->sendInApp($subscription->user, $specificKey, [
+                'metric' => $metric,
+                'plan' => $subscription->plan->value,
+            ]);
+        }
+    }
+
+    private function limitNotificationKey(string $metric): ?string
+    {
+        return match ($metric) {
+            'profiles' => 'profile_limit_reached',
+            'avatar_images', 'avatar_video_seconds' => 'avatar_limit_reached',
+            'voice_clones', 'tts_characters' => 'voice_limit_reached',
+            'chat_messages' => 'message_or_chat_limit_reached',
+            default => null,
+        };
+    }
+
+    private function notifySubscriptionDeactivated(Subscription $subscription): void
+    {
+        $subscription->loadMissing('user');
+
+        if (! $subscription->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($subscription->user, 'subscription_cancelled_or_deactivated', [
+            'plan' => $subscription->plan->value,
+            'subscription_id' => $subscription->id,
+        ]);
     }
 }

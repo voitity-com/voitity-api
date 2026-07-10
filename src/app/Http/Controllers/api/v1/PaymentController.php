@@ -15,6 +15,7 @@ use App\Http\Responses\Payments\PaymentCheckoutResponse;
 use App\Http\Responses\Payments\PaymentOrderResponse;
 use App\Models\PaymentOrder;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 
@@ -93,6 +94,8 @@ class PaymentController extends Controller
         $paymentOrder->raw_provider_payload = $intent->toArray();
         $paymentOrder->save();
 
+        app(NotificationDispatcher::class)->sendInApp($user, 'payment_pending', $this->notificationDataForOrder($paymentOrder));
+
         return response()->json([
             'message' => 'Wompi checkout created successfully.',
             'data' => (new PaymentCheckoutResponse($paymentOrder, $intent))->toArray(),
@@ -132,6 +135,19 @@ class PaymentController extends Controller
         } while (PaymentOrder::where('reference', $reference)->exists());
 
         return $reference;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function notificationDataForOrder(PaymentOrder $paymentOrder): array
+    {
+        return [
+            'plan' => $paymentOrder->plan->value,
+            'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
+            'payment_order_id' => $paymentOrder->id,
+            'reference' => $paymentOrder->reference,
+        ];
     }
 
     /**

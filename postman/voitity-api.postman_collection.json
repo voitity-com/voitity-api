@@ -723,6 +723,138 @@
       ]
     },
     {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?per_page=20&locale={{locale}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "20",
+                  "description": "Maximum 50."
+                },
+                {
+                  "key": "locale",
+                  "value": "{{locale}}",
+                  "description": "Optional locale used to format title/body."
+                }
+              ]
+            },
+            "description": "Lists authenticated user app notifications, excluding dismissed notifications. Requires token ability: user:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}/read?locale={{locale}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "locale",
+                  "value": "{{locale}}",
+                  "description": "Optional locale used to format the returned notification."
+                }
+              ]
+            },
+            "description": "Marks one owned notification as read and returns it localized. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read-all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Marks all owned, non-dismissed notifications as read. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Dismiss Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}"
+              ]
+            },
+            "description": "Dismisses one owned notification and removes it from the notification list. Requires token ability: user:write."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Admin Users",
       "item": [
         {

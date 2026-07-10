@@ -650,7 +650,11 @@ class AuthControllerTest extends TestAPI
     #[Test]
     public function localized_auth_emails_render_in_english_and_spanish(): void
     {
-        config(['mail.branding.logo_url' => 'https://cdn.example.com/bigmelo-logo.png']);
+        config([
+            'mail.branding.admin_url' => 'https://admin.example.com',
+            'mail.branding.home_url' => 'https://web.example.com',
+            'mail.branding.logo_url' => 'https://cdn.example.com/bigmelo-logo.png',
+        ]);
 
         $englishUser = User::factory()->make(['locale' => 'en', 'name' => 'English User']);
         $spanishUser = User::factory()->make(['locale' => 'es', 'name' => 'Usuario Espanol']);
@@ -673,6 +677,10 @@ class AuthControllerTest extends TestAPI
         $this->assertStringContainsString('Password updated', $englishPasswordChanged);
         $this->assertStringContainsString('Contraseña actualizada', $spanishPasswordChanged);
         $this->assertStringContainsString('https://cdn.example.com/bigmelo-logo.png', $englishVerification);
+        $this->assertStringContainsString('https://admin.example.com', $englishWelcome);
+        $this->assertStringContainsString('https://admin.example.com', $spanishPasswordChanged);
+        $this->assertStringNotContainsString('https://web.example.com', $englishWelcome);
+        $this->assertStringNotContainsString('https://web.example.com', $spanishPasswordChanged);
     }
 
     #[Test]

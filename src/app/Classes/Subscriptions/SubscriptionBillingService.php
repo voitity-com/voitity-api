@@ -10,6 +10,7 @@ use App\Enums\PaymentProvider;
 use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
 use App\Models\Subscription;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -128,13 +129,18 @@ class SubscriptionBillingService
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
             $this->subscriptionPlanActivator->activateForPaymentOrder($paymentOrder);
+            $this->dispatchRenewalNotifications($paymentOrder);
 
             return 'approved';
         }
 
         if ($paymentOrder->status === PaymentOrderStatus::Pending) {
+            $this->dispatchRenewalNotifications($paymentOrder);
+
             return 'pending';
         }
+
+        $this->dispatchRenewalNotifications($paymentOrder);
 
         return 'failed';
     }
@@ -218,5 +224,49 @@ class SubscriptionBillingService
         } while (PaymentOrder::where('reference', $reference)->exists());
 
         return $reference;
+    }
+
+    private function dispatchRenewalNotifications(PaymentOrder $paymentOrder): void
+    {
+        $paymentOrder->loadMissing('user');
+        $user = $paymentOrder->user;
+
+        if (! $user) {
+            return;
+        }
+
+        $dispatcher = app(NotificationDispatcher::class);
+        $data = $this->notificationDataForOrder($paymentOrder);
+
+        if ($paymentOrder->status === PaymentOrderStatus::Approved) {
+            $dispatcher->send($user, 'payment_approved', $data);
+            $dispatcher->send($user, 'successful_subscription_renewal', $data);
+            $dispatcher->send($user, 'plan_activated_or_changed', $data);
+
+            return;
+        }
+
+        if ($paymentOrder->status === PaymentOrderStatus::Pending) {
+            $dispatcher->sendInApp($user, 'payment_pending', $data);
+
+            return;
+        }
+
+        $dispatcher->send($user, 'payment_rejected', $data);
+        $dispatcher->send($user, 'failed_payment', $data);
+        $dispatcher->send($user, 'failed_subscription_renewal', $data);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function notificationDataForOrder(PaymentOrder $paymentOrder): array
+    {
+        return [
+            'plan' => $paymentOrder->plan->value,
+            'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
+            'payment_order_id' => $paymentOrder->id,
+            'reference' => $paymentOrder->reference,
+        ];
     }
 }

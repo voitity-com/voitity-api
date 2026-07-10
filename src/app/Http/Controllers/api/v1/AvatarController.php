@@ -12,6 +12,7 @@ use App\Models\AiImage;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -56,6 +57,8 @@ class AvatarController extends Controller
         AvatarRepository $avatarRepository,
         SubscriptionEntitlementService $entitlements
     ): JsonResponse {
+        $profile = null;
+
         try {
             $user = $request->user();
 
@@ -79,6 +82,8 @@ class AvatarController extends Controller
                 ->where('aiimage_id', $aiImage->id)
                 ->first();
 
+            $this->notifyProfileOwner($profile, 'avatar_generation_started');
+
             return response()->json([
                 'message' => 'Avatar generation started successfully.',
                 'data' => $this->aiImageToArray($aiImage, $avatar),
@@ -91,6 +96,12 @@ class AvatarController extends Controller
                 'errors' => $e->errors(),
             ], $e->statusCode());
         } catch (\Throwable $e) {
+            if ($profile instanceof Profile) {
+                $this->notifyProfileOwner($profile, 'avatar_generation_failed', [
+                    'reason' => $e->getMessage(),
+                ]);
+            }
+
             Log::error('Error generating avatar.', [
                 'user_id' => $request->user()?->id,
                 'profile_id' => $request->input('profile_id'),
@@ -225,6 +236,8 @@ class AvatarController extends Controller
 
             $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar);
 
+            $this->notifyProfileOwner($profile, 'avatar_activated');
+
             return response()->json([
                 'message' => 'Avatar activated successfully.',
                 'data' => $this->profileAvatarToArray($activeAvatar),
@@ -303,5 +316,24 @@ class AvatarController extends Controller
             'created_at' => $avatar->created_at,
             'updated_at' => $avatar->updated_at,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function notifyProfileOwner(Profile $profile, string $key, array $data = []): void
+    {
+        $profile->loadMissing('user');
+
+        if (! $profile->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($profile->user, $key, [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'action_url' => "/dashboard/profiles/{$profile->id}/avatar",
+            ...$data,
+        ]);
     }
 }

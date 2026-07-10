@@ -10,6 +10,7 @@ use App\Http\Responses\Admin\AdminUserListResponse;
 use App\Http\Responses\Admin\AdminUserResponse;
 use App\Http\Responses\User\UserResponse;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -115,6 +116,13 @@ class AdminUserController extends Controller
             'plan' => $plan->value,
         ]);
 
+        $notificationData = [
+            'plan' => $plan->value,
+            'subscription_id' => $subscription->id,
+        ];
+        app(NotificationDispatcher::class)->send($user, 'admin_changed_user_plan', $notificationData);
+        app(NotificationDispatcher::class)->send($user, 'plan_activated_or_changed', $notificationData);
+
         $user
             ->load('activeSubscription')
             ->loadCount($this->userCountRelations());
@@ -146,6 +154,10 @@ class AdminUserController extends Controller
             'admin_user_id' => $admin->id,
             'impersonated_user_id' => $user->id,
             'token_id' => $token->accessToken->id,
+        ]);
+
+        app(NotificationDispatcher::class)->sendInApp($admin, 'admin_impersonation_started', [
+            'user' => $user->email ?: $user->name,
         ]);
 
         return response()->json([

@@ -7,6 +7,7 @@ use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 
 class SubscriptionEntitlementService
 {
@@ -40,6 +41,7 @@ class SubscriptionEntitlementService
         if ($subscription->renews_at->isPast()) {
             $subscription->active = false;
             $subscription->save();
+            $this->notifySubscriptionDeactivated($subscription);
 
             throw new SubscriptionEntitlementException(
                 'Active subscription has expired.',
@@ -64,6 +66,8 @@ class SubscriptionEntitlementService
         $errors = $this->capacityErrors($subscription->plan, $limit, $normalizedAmounts);
 
         if ($errors !== []) {
+            $this->notifyLimitReached($subscription, $errors);
+
             throw new SubscriptionEntitlementException('Subscription limit exceeded.', $errors);
         }
 
@@ -158,5 +162,59 @@ class SubscriptionEntitlementService
         }
 
         return round($creditsUsed, 2);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $errors
+     */
+    private function notifyLimitReached(Subscription $subscription, array $errors): void
+    {
+        $subscription->loadMissing('user');
+
+        if (! $subscription->user instanceof User) {
+            return;
+        }
+
+        $metric = (string) array_key_first($errors);
+        $dispatcher = app(NotificationDispatcher::class);
+
+        $dispatcher->send($subscription->user, 'critical_plan_limit_reached', [
+            'metric' => $metric,
+            'plan' => $subscription->plan->value,
+        ]);
+
+        $specificKey = $this->limitNotificationKey($metric);
+
+        if ($specificKey) {
+            $dispatcher->sendInApp($subscription->user, $specificKey, [
+                'metric' => $metric,
+                'plan' => $subscription->plan->value,
+            ]);
+        }
+    }
+
+    private function limitNotificationKey(string $metric): ?string
+    {
+        return match ($metric) {
+            'profiles' => 'profile_limit_reached',
+            'avatar_images', 'avatar_video_seconds' => 'avatar_limit_reached',
+            'voice_clones', 'tts_characters' => 'voice_limit_reached',
+            'chat_messages' => 'message_or_chat_limit_reached',
+            default => null,
+        };
+    }
+
+    private function notifySubscriptionDeactivated(Subscription $subscription): void
+    {
+        $subscription->loadMissing('user');
+
+        if (! $subscription->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($subscription->user, 'subscription_cancelled_or_deactivated', [
+            'plan' => $subscription->plan->value,
+            'subscription_id' => $subscription->id,
+        ]);
     }
 }

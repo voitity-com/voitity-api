@@ -2,7 +2,7 @@
 
 @php
     $brandName = config('mail.from.name') ?: config('app.name');
-    $homeUrl = config('mail.branding.home_url') ?: $url;
+    $homeUrl = config('mail.branding.admin_url') ?: config('mail.branding.home_url') ?: $url;
     $logoUrl = config('mail.branding.logo_url');
 @endphp
 

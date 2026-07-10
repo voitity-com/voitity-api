@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\api\v1\AdminUserController;
+use App\Http\Controllers\api\v1\AppNotificationController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\MessageController;
@@ -27,6 +28,10 @@ Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
 Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
 Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::get('/notifications', [AppNotificationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::delete('/notifications/{notification}', [AppNotificationController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:user:write']);
 
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);

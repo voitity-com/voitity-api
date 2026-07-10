@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,14 +70,26 @@ class WompiWebhookController extends Controller
             return response()->json(['message' => 'Wompi event ignored.']);
         }
 
-        DB::transaction(function () use ($paymentOrder, $paymentEvent, $webhook, $subscriptionPlanActivator): void {
+        $notificationOrder = null;
+        $statusChanged = false;
+
+        DB::transaction(function () use (
+            $paymentOrder,
+            $paymentEvent,
+            $webhook,
+            $subscriptionPlanActivator,
+            &$notificationOrder,
+            &$statusChanged
+        ): void {
             /** @var PaymentOrder $order */
             $order = PaymentOrder::whereKey($paymentOrder->id)->lockForUpdate()->firstOrFail();
+            $previousStatus = $order->status;
 
             $order->provider_transaction_id = $webhook->providerTransactionId;
             $order->wompi_status = $webhook->providerStatus;
             $order->raw_provider_payload = $webhook->payload;
             $order->status = PaymentOrderStatus::from($webhook->status);
+            $statusChanged = $previousStatus !== $order->status;
 
             if ($webhook->paymentSourceProviderId) {
                 $paymentSource = PaymentSource::updateOrCreate([
@@ -110,7 +123,13 @@ class WompiWebhookController extends Controller
             $paymentEvent->payment_order_id = $order->id;
             $paymentEvent->processed_at = now();
             $paymentEvent->save();
+
+            $notificationOrder = $order->fresh(['user']);
         });
+
+        if ($statusChanged && $notificationOrder instanceof PaymentOrder) {
+            $this->dispatchPaymentNotifications($notificationOrder);
+        }
 
         return response()->json(['message' => 'Wompi event processed successfully.']);
     }
@@ -119,5 +138,58 @@ class WompiWebhookController extends Controller
     {
         return $amountInCents === $paymentOrder->amount_in_cents
             && $currency === $paymentOrder->currency->value;
+    }
+
+    private function dispatchPaymentNotifications(PaymentOrder $paymentOrder): void
+    {
+        $paymentOrder->loadMissing('user');
+        $user = $paymentOrder->user;
+
+        if (! $user) {
+            return;
+        }
+
+        $dispatcher = app(NotificationDispatcher::class);
+        $data = $this->notificationDataForOrder($paymentOrder);
+
+        if ($paymentOrder->status === PaymentOrderStatus::Approved) {
+            $dispatcher->send($user, 'payment_approved', $data);
+
+            if ($paymentOrder->billing_reason === 'subscription_renewal') {
+                $dispatcher->send($user, 'successful_subscription_renewal', $data);
+            } else {
+                $dispatcher->send($user, 'successful_plan_purchase', $data);
+            }
+
+            $dispatcher->send($user, 'plan_activated_or_changed', $data);
+
+            return;
+        }
+
+        if ($paymentOrder->status === PaymentOrderStatus::Pending) {
+            $dispatcher->sendInApp($user, 'payment_pending', $data);
+
+            return;
+        }
+
+        $dispatcher->send($user, 'payment_rejected', $data);
+        $dispatcher->send($user, 'failed_payment', $data);
+
+        if ($paymentOrder->billing_reason === 'subscription_renewal') {
+            $dispatcher->send($user, 'failed_subscription_renewal', $data);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function notificationDataForOrder(PaymentOrder $paymentOrder): array
+    {
+        return [
+            'plan' => $paymentOrder->plan->value,
+            'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
+            'payment_order_id' => $paymentOrder->id,
+            'reference' => $paymentOrder->reference,
+        ];
     }
 }

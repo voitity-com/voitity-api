@@ -5,6 +5,9 @@ namespace App\Listeners;
 use App\Classes\ChatAIService\AnswerBuilder;
 use App\Events\MessageStored;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
+use App\Models\Message;
+use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\Log;
 
 class ProcessStoredMessage
@@ -58,6 +61,8 @@ class ProcessStoredMessage
             $message->data = $data;
             $message->save();
 
+            $this->notifyAiResponseFailed($message, $e->getMessage());
+
             Log::warning('Failed to build message answer from chat AI provider.', [
                 'message_id' => $message->id,
                 'source' => $chatAIError['source'] ?? null,
@@ -72,10 +77,35 @@ class ProcessStoredMessage
             $message->data = $data;
             $message->save();
 
+            $this->notifyAiResponseFailed($message, $e->getMessage());
+
             Log::error('Failed to build message answer.', [
                 'message_id' => $message->id,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function notifyAiResponseFailed(Message $message, string $reason): void
+    {
+        $message->loadMissing('profile.user');
+        $profile = $message->profile;
+
+        if (! $profile || ! $profile->user instanceof User) {
+            return;
+        }
+
+        app(NotificationDispatcher::class)->send($profile->user, 'ai_response_failed', [
+            'profile' => $profile->name ?: "Profile {$profile->id}",
+            'profile_id' => $profile->id,
+            'chat_id' => $message->chat_id,
+            'message_id' => $message->id,
+            'reason' => $reason,
+            'action_url' => "/dashboard/profiles/{$profile->id}/chats/{$message->chat_id}",
+        ]);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Chat AI provider',
+            'message' => $reason,
+        ]);
     }
 }
