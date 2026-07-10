@@ -28,6 +28,7 @@ class GoogleOAuthRequest extends FormRequest
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'avatar' => 'nullable|url',
+            'locale' => 'nullable|string|in:en,es',
             'access_token' => 'required|string', // Token de Google para verificar
         ];
     }

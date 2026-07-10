@@ -11,13 +11,14 @@ class UserResponseTest extends TestCase
 {
     public function test_to_array_returns_safe_user_payload(): void
     {
-        $user = new User();
+        $user = new User;
         $user->setRawAttributes([
             'id' => 10,
             'name' => 'Abel Moreno',
             'first_name' => 'Abel',
             'last_name' => 'Moreno',
             'email' => 'moreno.abel@gmail.com',
+            'locale' => 'es',
             'role' => 'admin',
             'avatar' => 'https://example.com/avatar.jpg',
             'provider' => 'email',
@@ -38,6 +39,7 @@ class UserResponseTest extends TestCase
         $this->assertSame('Abel', $payload['first_name']);
         $this->assertSame('Moreno', $payload['last_name']);
         $this->assertSame('moreno.abel@gmail.com', $payload['email']);
+        $this->assertSame('es', $payload['locale']);
         $this->assertSame('admin', $payload['role']);
         $this->assertSame('https://example.com/avatar.jpg', $payload['avatar']);
         $this->assertSame('email', $payload['provider']);

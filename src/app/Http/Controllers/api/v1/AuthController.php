@@ -5,11 +5,18 @@ namespace App\Http\Controllers\api\v1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\EmailSignUpRequest;
 use App\Http\Requests\Auth\GoogleOAuthRequest;
+use App\Mail\Auth\VerifyEmailAddress;
+use App\Mail\Auth\WelcomeEmail;
 use App\Models\User;
+use App\Services\EmailVerificationResult;
+use App\Services\EmailVerificationService;
 use App\Services\GoogleOAuthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -71,6 +78,12 @@ class AuthController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
+            if (! $user->email_verified_at) {
+                Auth::logout();
+
+                return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
+            }
+
             if ($user->role === 'forgotten') {
                 $user->role = $user->active ? 'user' : 'inactive';
                 $user->save();
@@ -115,11 +128,12 @@ class AuthController extends Controller
      *
      *     @OA\Response(
      *         response=201,
-     *         description="Successful email sign up",
+     *         description="Successful email sign up. User must verify email before signing in.",
      *
      *         @OA\JsonContent(
      *
-     *             @OA\Property(property="access_token", type="string"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="email_verification_required", type="boolean"),
      *             @OA\Property(property="user", type="object",
      *                 @OA\Property(property="id", type="integer"),
      *                 @OA\Property(property="name", type="string"),
@@ -138,7 +152,7 @@ class AuthController extends Controller
      *     )
      * )
      */
-    public function signUp(EmailSignUpRequest $request): JsonResponse
+    public function signUp(EmailSignUpRequest $request, EmailVerificationService $emailVerificationService): JsonResponse
     {
         $validated = $request->validated();
         [$firstName, $lastName] = $this->nameParts(
@@ -153,16 +167,57 @@ class AuthController extends Controller
             'first_name' => $firstName,
             'last_name' => $lastName,
             'email' => $validated['email'],
+            'locale' => $validated['locale'],
             'password' => $validated['password'],
             'provider' => 'email',
         ]);
 
-        $token = $user->createToken('email-sign-up-token', $user->getRoleAbilities());
+        $verificationUrl = $emailVerificationService->createVerificationUrl($user);
+
+        Log::info(
+            'Email verification link generated.',
+            [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'verification_url' => app()->environment(['local', 'testing']) ? $verificationUrl : null,
+            ]
+        );
+
+        Mail::to($user->email)->send(new VerifyEmailAddress($user, $verificationUrl));
 
         return response()->json([
-            'access_token' => $token->plainTextToken,
+            'message' => 'We sent a verification link to your email address.',
+            'email_verification_required' => true,
             'user' => $this->authUserPayload($user),
         ], 201);
+    }
+
+    public function verifyEmail(
+        Request $request,
+        User $user,
+        EmailVerificationService $emailVerificationService
+    ): JsonResponse|RedirectResponse {
+        $result = $emailVerificationService->verify($user, $request->query('token'));
+
+        if ($result === EmailVerificationResult::Verified) {
+            $user->refresh();
+
+            Mail::to($user->email)->send(new WelcomeEmail($user));
+
+            Log::info('Email verified successfully.', [
+                'email' => $user->email,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        if (! $request->boolean('redirect') && $request->wantsJson()) {
+            return response()->json([
+                'message' => $this->verificationMessage($result),
+                'status' => $result->value,
+            ], $this->verificationStatusCode($result));
+        }
+
+        return $this->verificationRedirect($result, $user);
     }
 
     /**
@@ -324,6 +379,10 @@ class AuthController extends Controller
                 return response()->json(['message' => $missingUserMessage], 404);
             }
 
+            if (! $user->email_verified_at) {
+                return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
+            }
+
             // Generate access token
             $accessToken = $googleService->generateAccessToken($user);
 
@@ -356,7 +415,39 @@ class AuthController extends Controller
             'avatar' => $user->avatar,
             'provider' => $user->provider,
             'role' => $user->role,
+            'locale' => $user->locale,
+            'email_verified_at' => $user->email_verified_at?->toJSON(),
         ];
+    }
+
+    private function verificationRedirect(EmailVerificationResult $result, User $user): RedirectResponse
+    {
+        $redirectUrl = (string) config('email-verification.redirect_url');
+        $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+
+        return redirect()->away($redirectUrl.$separator.http_build_query([
+            'verification' => $result->value,
+            'locale' => $user->locale ?: 'en',
+        ]));
+    }
+
+    private function verificationMessage(EmailVerificationResult $result): string
+    {
+        return match ($result) {
+            EmailVerificationResult::Verified => 'Your email address has been verified.',
+            EmailVerificationResult::AlreadyVerified => 'Your email address is already verified.',
+            EmailVerificationResult::Expired => 'This verification link has expired.',
+            EmailVerificationResult::Invalid => 'This verification link is invalid.',
+        };
+    }
+
+    private function verificationStatusCode(EmailVerificationResult $result): int
+    {
+        return match ($result) {
+            EmailVerificationResult::Verified, EmailVerificationResult::AlreadyVerified => 200,
+            EmailVerificationResult::Expired => 410,
+            EmailVerificationResult::Invalid => 422,
+        };
     }
 
     /**

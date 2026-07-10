@@ -184,15 +184,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "let json = {};",
-                  "try { json = pm.response.json(); } catch (e) {}",
-                  "if (json.access_token) {",
-                  "  pm.environment.set('access_token', json.access_token);",
-                  "}",
-                  "if (json.user && json.user.email) {",
-                  "  pm.environment.set('email', json.user.email);",
-                  "  pm.environment.set('password', pm.environment.get('signup_password'));",
-                  "}"
+          "let json = {};",
+          "try { json = pm.response.json(); } catch (e) {}",
+          "if (json.user && json.user.email) {",
+          "  pm.environment.set('email', json.user.email);",
+          "  pm.environment.set('password', pm.environment.get('signup_password'));",
+          "  pm.environment.set('verification_user_id', json.user.id);",
+          "}",
+          "if (json.email_verification_required !== undefined) {",
+          "  pm.environment.set('email_verification_required', String(json.email_verification_required));",
+          "}"
                 ]
               }
             }
@@ -214,7 +215,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
+      "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/sign-up",
@@ -227,12 +228,47 @@
                 "sign-up"
               ]
             },
-            "description": "Creates an email/password user and stores access_token, email, and password in the active environment."
-          },
-          "response": []
-        },
+    "description": "Creates an email/password user, sends a verification email, and stores email, password, and verification_user_id in the active environment. The user cannot sign in until the verification link is opened. Copy the token from the local logs or Mailtrap into verification_token to test Verify Email."
+  },
+  "response": []
+},
+{
+  "name": "Verify Email",
+  "request": {
+    "auth": {
+      "type": "noauth"
+    },
+    "method": "GET",
+    "header": [
+      {
+        "key": "Accept",
+        "value": "application/json"
+      }
+    ],
+    "url": {
+      "raw": "{{base_url}}/api/auth/verify-email/{{verification_user_id}}?token={{verification_token}}",
+      "host": [
+        "{{base_url}}"
+      ],
+      "path": [
+        "api",
+        "auth",
+        "verify-email",
+        "{{verification_user_id}}"
+      ],
+      "query": [
         {
-          "name": "Google Sign Up",
+          "key": "token",
+          "value": "{{verification_token}}"
+        }
+      ]
+    },
+    "description": "Verifies an email signup account. Use the token from the verification email or local Laravel log. Add redirect=1 only when testing browser redirection to the admin sign-in screen."
+  },
+  "response": []
+},
+{
+  "name": "Google Sign Up",
           "event": [
             {
               "listen": "test",
@@ -265,7 +301,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
+      "raw": "{\n  \"google_id\": \"{{google_id}}\",\n  \"email\": \"{{google_email}}\",\n  \"name\": \"{{google_name}}\",\n  \"first_name\": \"{{google_first_name}}\",\n  \"last_name\": \"{{google_last_name}}\",\n  \"avatar\": \"{{google_avatar}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"access_token\": \"{{google_access_token}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/google/sign-up",

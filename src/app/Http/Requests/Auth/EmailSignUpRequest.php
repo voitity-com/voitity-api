@@ -22,6 +22,7 @@ class EmailSignUpRequest extends FormRequest
             'first_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'locale' => ['nullable', 'string', 'in:en,es'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ];
     }
@@ -36,6 +37,7 @@ class EmailSignUpRequest extends FormRequest
             'email.required' => 'Email is required.',
             'email.email' => 'Email must be a valid email address.',
             'email.unique' => 'A user with this email already exists.',
+            'locale.in' => 'Locale must be English or Spanish.',
             'password.required' => 'Password is required.',
             'password.min' => 'Password must be at least 8 characters.',
             'password.confirmed' => 'Password confirmation does not match.',
@@ -44,11 +46,16 @@ class EmailSignUpRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $locale = $this->trimString($this->input('locale') ?? $this->input('language'));
+        $locale = Str::lower($locale ?? '');
+        $locale = in_array($locale, ['en', 'es'], true) ? $locale : 'en';
+
         $this->merge([
             'name' => $this->trimString($this->input('name')),
             'first_name' => $this->trimString($this->input('first_name')),
             'last_name' => $this->trimString($this->input('last_name')),
             'email' => Str::lower($this->trimString($this->input('email')) ?? ''),
+            'locale' => $locale,
         ]);
     }
 
