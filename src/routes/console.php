@@ -3,9 +3,11 @@
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
+use App\Mail\TestMailConfiguration;
 use Database\Seeders\LocalTestUserSeeder;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schedule;
 use Symfony\Component\Console\Command\Command;
 
@@ -26,6 +28,22 @@ Artisan::command('dev:create-test-user {email} {password}', function (string $em
 
     return Command::SUCCESS;
 })->purpose('Create or update a local test user with the user role');
+
+Artisan::command('mail:test {email} {--queue}', function (string $email): int {
+    $mailable = new TestMailConfiguration($email);
+
+    if ($this->option('queue')) {
+        Mail::to($email)->queue($mailable);
+        $this->info("Test email queued to {$email} using ".config('mail.default').' mailer.');
+
+        return Command::SUCCESS;
+    }
+
+    Mail::to($email)->send($mailable);
+    $this->info("Test email sent to {$email} using ".config('mail.default').' mailer.');
+
+    return Command::SUCCESS;
+})->purpose('Send a branded test email through the configured mailer');
 
 Artisan::command('subscriptions:renew-free', function (SubscriptionRenewalService $renewalService): int {
     $renewed = $renewalService->renewDueFreeSubscriptions();
