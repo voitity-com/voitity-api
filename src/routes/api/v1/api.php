@@ -4,6 +4,7 @@ use App\Http\Controllers\api\v1\AdminUserController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
 use App\Http\Controllers\api\v1\MessageController;
+use App\Http\Controllers\api\v1\NotificationPreferenceController;
 use App\Http\Controllers\api\v1\PaymentController;
 use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
@@ -24,6 +25,8 @@ Route::get('health', function () {
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:user:write']);
 
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
