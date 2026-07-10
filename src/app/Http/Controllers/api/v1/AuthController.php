@@ -5,12 +5,19 @@ namespace App\Http\Controllers\api\v1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\EmailSignUpRequest;
 use App\Http\Requests\Auth\GoogleOAuthRequest;
+use App\Http\Requests\Auth\PasswordForgotRequest;
+use App\Http\Requests\Auth\PasswordResetRequest;
+use App\Http\Requests\Auth\PasswordResetValidateRequest;
+use App\Mail\Auth\PasswordChanged;
+use App\Mail\Auth\PasswordResetLink;
 use App\Mail\Auth\VerifyEmailAddress;
 use App\Mail\Auth\WelcomeEmail;
 use App\Models\User;
 use App\Services\EmailVerificationResult;
 use App\Services\EmailVerificationService;
 use App\Services\GoogleOAuthService;
+use App\Services\PasswordResetResult;
+use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -190,6 +197,125 @@ class AuthController extends Controller
             'email_verification_required' => true,
             'user' => $this->authUserPayload($user),
         ], 201);
+    }
+
+    public function forgotPassword(
+        PasswordForgotRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => $this->passwordResetRequestedMessage($validated['locale']),
+            ]);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $resetUrl = $passwordResetService->createResetUrl($user);
+
+        Log::info(
+            'Password reset link generated.',
+            [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'reset_url' => app()->environment(['local', 'testing']) ? $resetUrl : null,
+            ]
+        );
+
+        Mail::to($user->email)->send(new PasswordResetLink($user, $resetUrl));
+
+        return response()->json([
+            'message' => $this->passwordResetRequestedMessage($user->locale ?: $validated['locale']),
+        ]);
+    }
+
+    public function resetPassword(
+        PasswordResetRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'This password reset link is invalid.',
+                'status' => PasswordResetResult::Invalid->value,
+            ], 422);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $result = $passwordResetService->verify($user, $validated['token']);
+
+        if ($result !== PasswordResetResult::Valid) {
+            return response()->json([
+                'message' => $this->passwordResetResultMessage($result, $user->locale ?: 'en'),
+                'status' => $result->value,
+            ], $this->passwordResetStatusCode($result));
+        }
+
+        $user->forceFill([
+            'password' => $validated['password'],
+            'email_verified_at' => $user->email_verified_at ?: now(),
+        ])->save();
+        $user->refresh();
+
+        $passwordResetService->consume($user);
+        $user->tokens()->delete();
+
+        Mail::to($user->email)->send(new PasswordChanged($user));
+
+        Log::info('Password reset completed.', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => $this->passwordChangedMessage($user->locale ?: 'en'),
+            'status' => 'changed',
+        ]);
+    }
+
+    public function validatePasswordResetLink(
+        PasswordResetValidateRequest $request,
+        PasswordResetService $passwordResetService
+    ): JsonResponse {
+        $validated = $request->validated();
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'message' => $this->passwordResetResultMessage(PasswordResetResult::Invalid, $validated['locale']),
+                'status' => PasswordResetResult::Invalid->value,
+            ], 422);
+        }
+
+        if ($this->usesGoogleAuthentication($user)) {
+            return response()->json([
+                'message' => $this->googlePasswordResetMessage($user),
+                'provider' => 'google',
+            ], 409);
+        }
+
+        $result = $passwordResetService->verify($user, $validated['token']);
+
+        return response()->json([
+            'message' => $this->passwordResetResultMessage($result, $user->locale ?: $validated['locale']),
+            'status' => $result->value,
+        ], $this->passwordResetStatusCode($result));
     }
 
     public function verifyEmail(
@@ -448,6 +574,64 @@ class AuthController extends Controller
             EmailVerificationResult::Expired => 410,
             EmailVerificationResult::Invalid => 422,
         };
+    }
+
+    private function usesGoogleAuthentication(User $user): bool
+    {
+        return $user->provider === 'google' || filled($user->google_id);
+    }
+
+    private function passwordResetRequestedMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'Si el correo pertenece a una cuenta con contraseña, enviamos un enlace para cambiarla.';
+        }
+
+        return 'If the email belongs to a password account, we sent a link to change it.';
+    }
+
+    private function googlePasswordResetMessage(User $user): string
+    {
+        if ($user->locale === 'es') {
+            return 'Esta cuenta usa inicio de sesión con Google. Ingresa con el botón de Google.';
+        }
+
+        return 'This account uses Google sign-in. Use the Google button to continue.';
+    }
+
+    private function passwordResetResultMessage(PasswordResetResult $result, string $locale): string
+    {
+        if ($locale === 'es') {
+            return match ($result) {
+                PasswordResetResult::Expired => 'Este enlace para cambiar contraseña expiró.',
+                PasswordResetResult::Invalid => 'Este enlace para cambiar contraseña no es válido.',
+                PasswordResetResult::Valid => 'El enlace es válido.',
+            };
+        }
+
+        return match ($result) {
+            PasswordResetResult::Expired => 'This password reset link has expired.',
+            PasswordResetResult::Invalid => 'This password reset link is invalid.',
+            PasswordResetResult::Valid => 'This password reset link is valid.',
+        };
+    }
+
+    private function passwordResetStatusCode(PasswordResetResult $result): int
+    {
+        return match ($result) {
+            PasswordResetResult::Valid => 200,
+            PasswordResetResult::Expired => 410,
+            PasswordResetResult::Invalid => 422,
+        };
+    }
+
+    private function passwordChangedMessage(string $locale): string
+    {
+        if ($locale === 'es') {
+            return 'Tu contraseña fue actualizada correctamente.';
+        }
+
+        return 'Your password was updated successfully.';
     }
 
     /**

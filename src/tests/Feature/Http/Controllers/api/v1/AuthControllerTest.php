@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Mail\Auth\PasswordChanged;
+use App\Mail\Auth\PasswordResetLink;
 use App\Mail\Auth\VerifyEmailAddress;
 use App\Mail\Auth\WelcomeEmail;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
@@ -47,6 +50,263 @@ class AuthControllerTest extends TestAPI
 
         $response->assertStatus(403);
         $response->assertJsonPath('message', 'Your email or password are incorrect.');
+    }
+
+    #[Test]
+    public function forgot_password_sends_reset_email_for_email_user(): void
+    {
+        Mail::fake();
+        config(['password-reset.redirect_url' => 'http://localhost:3000/auth/custom/reset-password']);
+
+        $user = User::factory()->create([
+            'email' => 'reset.user@example.com',
+            'locale' => 'es',
+            'provider' => 'email',
+        ]);
+
+        $response = $this->postJson(self::ENDPOINT_AUTH.'/password/forgot', [
+            'email' => 'RESET.USER@example.com',
+            'locale' => 'en',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath(
+            'message',
+            'Si el correo pertenece a una cuenta con contraseña, enviamos un enlace para cambiarla.'
+        );
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'reset.user@example.com']);
+
+        Mail::assertSent(
+            PasswordResetLink::class,
+            fn (PasswordResetLink $mail): bool => $mail->hasTo('reset.user@example.com')
+                && str_contains($mail->resetUrl, '/api/auth/password/reset')
+                && str_contains($mail->resetUrl, 'email=reset.user%40example.com')
+                && str_contains($mail->resetUrl, 'locale=es')
+                && str_contains($mail->render(), 'Restablece tu contraseña')
+        );
+    }
+
+    #[Test]
+    public function forgot_password_preserves_english_account_locale_even_from_spanish_page(): void
+    {
+        Mail::fake();
+        config(['password-reset.redirect_url' => 'http://localhost:3000/auth/custom/reset-password']);
+
+        User::factory()->create([
+            'email' => 'english.reset@example.com',
+            'locale' => 'en',
+            'provider' => 'email',
+        ]);
+
+        $response = $this->postJson(self::ENDPOINT_AUTH.'/password/forgot', [
+            'email' => 'english.reset@example.com',
+            'locale' => 'es',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath(
+            'message',
+            'If the email belongs to a password account, we sent a link to change it.'
+        );
+
+        Mail::assertSent(
+            PasswordResetLink::class,
+            fn (PasswordResetLink $mail): bool => $mail->hasTo('english.reset@example.com')
+                && str_contains($mail->resetUrl, 'locale=en')
+                && str_contains($mail->render(), 'Reset your password')
+        );
+    }
+
+    #[Test]
+    public function forgot_password_informs_google_users_to_use_google_sign_in(): void
+    {
+        Mail::fake();
+
+        User::factory()->create([
+            'email' => 'google.reset@example.com',
+            'google_id' => 'google-reset-123',
+            'locale' => 'en',
+            'provider' => 'google',
+        ]);
+
+        $response = $this->postJson(self::ENDPOINT_AUTH.'/password/forgot', [
+            'email' => 'google.reset@example.com',
+            'locale' => 'en',
+        ]);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('provider', 'google');
+        $response->assertJsonPath('message', 'This account uses Google sign-in. Use the Google button to continue.');
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'google.reset@example.com']);
+        Mail::assertNotSent(PasswordResetLink::class);
+    }
+
+    #[Test]
+    public function password_reset_token_changes_password_once_and_sends_confirmation(): void
+    {
+        Mail::fake();
+        config(['password-reset.redirect_url' => 'http://localhost:3000/auth/custom/reset-password']);
+
+        $user = User::factory()->create([
+            'email' => 'change.password@example.com',
+            'locale' => 'en',
+            'password' => 'OldPass123!',
+            'provider' => 'email',
+        ]);
+        $token = null;
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/forgot', [
+            'email' => $user->email,
+            'locale' => 'en',
+        ])->assertStatus(200);
+
+        Mail::assertSent(PasswordResetLink::class, function (PasswordResetLink $mail) use (&$token): bool {
+            parse_str((string) parse_url($mail->resetUrl, PHP_URL_QUERY), $query);
+            $token = $query['token'] ?? null;
+
+            return $mail->hasTo('change.password@example.com');
+        });
+
+        $this->assertIsString($token);
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/reset/validate', [
+            'email' => $user->email,
+            'locale' => 'en',
+            'token' => $token,
+        ])->assertStatus(200)->assertJsonPath('status', 'valid');
+
+        $resetResponse = $this->postJson(self::ENDPOINT_AUTH.'/password/reset', [
+            'email' => $user->email,
+            'token' => $token,
+            'password' => 'NewPass123!',
+            'password_confirmation' => 'NewPass123!',
+        ]);
+
+        $resetResponse->assertStatus(200);
+        $resetResponse->assertJsonPath('status', 'changed');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('NewPass123!', $user->password));
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+
+        Mail::assertSent(
+            PasswordChanged::class,
+            fn (PasswordChanged $mail): bool => $mail->hasTo('change.password@example.com')
+        );
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/reset/validate', [
+            'email' => $user->email,
+            'locale' => 'en',
+            'token' => $token,
+        ])->assertStatus(422)->assertJsonPath('status', 'invalid');
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/reset', [
+            'email' => $user->email,
+            'token' => $token,
+            'password' => 'AnotherPass123!',
+            'password_confirmation' => 'AnotherPass123!',
+        ])->assertStatus(422)->assertJsonPath('status', 'invalid');
+
+        $this->postJson(self::ENDPOINT_AUTH.'/get-token', [
+            'email' => $user->email,
+            'password' => 'OldPass123!',
+        ])->assertStatus(403);
+
+        $this->postJson(self::ENDPOINT_AUTH.'/get-token', [
+            'email' => $user->email,
+            'password' => 'NewPass123!',
+        ])->assertStatus(200)->assertJsonStructure(['access_token']);
+    }
+
+    #[Test]
+    public function password_reset_rejects_expired_token(): void
+    {
+        Mail::fake();
+        config(['password-reset.expires_in_minutes' => 60]);
+
+        $user = User::factory()->create([
+            'email' => 'expired.reset@example.com',
+            'locale' => 'en',
+            'provider' => 'email',
+        ]);
+
+        DB::table('password_reset_tokens')->insert([
+            'created_at' => now()->subMinutes(61),
+            'email' => $user->email,
+            'token' => hash('sha256', 'expired-token'),
+        ]);
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/reset/validate', [
+            'email' => $user->email,
+            'locale' => 'en',
+            'token' => 'expired-token',
+        ])->assertStatus(410)->assertJsonPath('status', 'expired');
+
+        $response = $this->postJson(self::ENDPOINT_AUTH.'/password/reset', [
+            'email' => $user->email,
+            'token' => 'expired-token',
+            'password' => 'NewPass123!',
+            'password_confirmation' => 'NewPass123!',
+        ]);
+
+        $response->assertStatus(410);
+        $response->assertJsonPath('status', 'expired');
+        Mail::assertNotSent(PasswordChanged::class);
+    }
+
+    #[Test]
+    public function password_reset_verifies_unverified_email_user_after_successful_reset(): void
+    {
+        Mail::fake();
+        config(['password-reset.redirect_url' => 'http://localhost:3000/auth/custom/reset-password']);
+
+        $user = User::factory()->unverified()->create([
+            'email' => 'pending.reset@example.com',
+            'locale' => 'es',
+            'password' => 'OldPass123!',
+            'provider' => 'email',
+        ]);
+        $token = null;
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/forgot', [
+            'email' => $user->email,
+            'locale' => 'en',
+        ])->assertStatus(200);
+
+        Mail::assertSent(PasswordResetLink::class, function (PasswordResetLink $mail) use (&$token): bool {
+            parse_str((string) parse_url($mail->resetUrl, PHP_URL_QUERY), $query);
+            $token = $query['token'] ?? null;
+
+            return $mail->hasTo('pending.reset@example.com')
+                && str_contains($mail->resetUrl, 'locale=es');
+        });
+
+        $this->assertIsString($token);
+        $this->assertNull($user->email_verified_at);
+
+        $this->postJson(self::ENDPOINT_AUTH.'/password/reset', [
+            'email' => $user->email,
+            'token' => $token,
+            'password' => 'NewPass123!',
+            'password_confirmation' => 'NewPass123!',
+        ])->assertStatus(200)->assertJsonPath('status', 'changed');
+
+        $user->refresh();
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertTrue(Hash::check('NewPass123!', $user->password));
+
+        Mail::assertSent(
+            PasswordChanged::class,
+            fn (PasswordChanged $mail): bool => $mail->hasTo('pending.reset@example.com')
+                && str_contains($mail->render(), 'Contraseña actualizada')
+        );
+
+        $this->postJson(self::ENDPOINT_AUTH.'/get-token', [
+            'email' => $user->email,
+            'password' => 'NewPass123!',
+        ])->assertStatus(200)->assertJsonStructure(['access_token']);
     }
 
     #[Test]
@@ -253,11 +513,19 @@ class AuthControllerTest extends TestAPI
         $spanishVerification = (new VerifyEmailAddress($spanishUser, 'https://example.com/verificar'))->render();
         $englishWelcome = (new WelcomeEmail($englishUser))->render();
         $spanishWelcome = (new WelcomeEmail($spanishUser))->render();
+        $englishPasswordReset = (new PasswordResetLink($englishUser, 'https://example.com/reset'))->render();
+        $spanishPasswordReset = (new PasswordResetLink($spanishUser, 'https://example.com/restablecer'))->render();
+        $englishPasswordChanged = (new PasswordChanged($englishUser))->render();
+        $spanishPasswordChanged = (new PasswordChanged($spanishUser))->render();
 
         $this->assertStringContainsString('Confirm your email', $englishVerification);
         $this->assertStringContainsString('Confirma tu correo', $spanishVerification);
         $this->assertStringContainsString('Your account is confirmed', $englishWelcome);
         $this->assertStringContainsString('Tu cuenta ya está confirmada', $spanishWelcome);
+        $this->assertStringContainsString('Reset your password', $englishPasswordReset);
+        $this->assertStringContainsString('Restablece tu contraseña', $spanishPasswordReset);
+        $this->assertStringContainsString('Password updated', $englishPasswordChanged);
+        $this->assertStringContainsString('Contraseña actualizada', $spanishPasswordChanged);
         $this->assertStringContainsString('https://cdn.example.com/bigmelo-logo.png', $englishVerification);
     }
 

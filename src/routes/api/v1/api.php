@@ -36,6 +36,10 @@ Route::prefix('/admin')->group(function () {
 Route::prefix('/auth')->group(function () {
     Route::post('/get-token', [AuthController::class, 'getToken']);
     Route::post('/sign-up', [AuthController::class, 'signUp']);
+    Route::get('/password/reset', fn () => redirect()->away(config('password-reset.redirect_url').'?'.http_build_query(request()->query())))->name('auth.password.reset.form');
+    Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+    Route::post('/password/reset/validate', [AuthController::class, 'validatePasswordResetLink']);
+    Route::post('/password/reset', [AuthController::class, 'resetPassword']);
     Route::get('/verify-email/{user}', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
     Route::post('/google/sign-in', [AuthController::class, 'googleSignIn']);
     Route::post('/google/sign-up', [AuthController::class, 'googleSignUp']);
