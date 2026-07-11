@@ -20,6 +20,14 @@ class UserControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Unauthenticated.');
     }
 
+    public function test_api_request_without_json_accept_returns_json_unauthenticated_response(): void
+    {
+        $response = $this->get(self::ENDPOINT_USER);
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('message', 'Unauthenticated.');
+    }
+
     public function test_user_without_user_read_ability_can_not_show_logged_user(): void
     {
         $user = User::factory()->create([

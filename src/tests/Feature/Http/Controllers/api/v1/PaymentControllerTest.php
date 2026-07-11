@@ -29,7 +29,7 @@ class PaymentControllerTest extends TestAPI
         Config::set('payment.display_currency', 'USD');
         Config::set('payment.processing_currency', 'COP');
         Config::set('payment.usd_cop_rate', 4000);
-        Config::set('payment.redirect_url', 'http://localhost:5173/dashboard/settings/billing/payment-result');
+        Config::set('payment.redirect_url', 'http://localhost:3000/dashboard/settings/billing/payment-result');
         Config::set('payment.drivers.wompi.environment', 'sandbox');
         Config::set('payment.drivers.wompi.public_key', 'pub_test_key');
         Config::set('payment.drivers.wompi.private_key', 'prv_test_key');
@@ -94,6 +94,15 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.checkout.widget_url', 'https://checkout.wompi.co/widget.js');
         $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
         $this->assertSame($response->json('data.payment_order.reference'), $response->json('data.checkout.reference'));
+        $this->assertIsString($response->json('data.checkout.redirect_url'));
+        $this->assertStringStartsWith(
+            'http://localhost:3000/dashboard/settings/billing/payment-result?',
+            $response->json('data.checkout.redirect_url')
+        );
+        $this->assertStringContainsString(
+            'payment_order_id='.$response->json('data.payment_order.id'),
+            $response->json('data.checkout.redirect_url')
+        );
 
         $this->assertDatabaseHas('payment_orders', [
             'user_id' => $user->id,
