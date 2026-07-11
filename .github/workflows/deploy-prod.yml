@@ -67,7 +67,7 @@ jobs:
               "/usr/local/bin/docker-compose pull",
               "/usr/local/bin/docker-compose run --rm api php artisan optimize:clear",
               "/usr/local/bin/docker-compose run --rm api php artisan migrate --force",
-              "/usr/local/bin/docker-compose up -d --remove-orphans",
+              "/usr/local/bin/docker-compose up -d --force-recreate --remove-orphans",
               "/usr/local/bin/docker-compose exec -T api php artisan queue:restart || /usr/local/bin/docker-compose run --rm api php artisan queue:restart",
               "docker image prune -f"
             ]' \
