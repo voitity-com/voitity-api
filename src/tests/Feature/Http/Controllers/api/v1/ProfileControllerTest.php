@@ -116,6 +116,37 @@ class ProfileControllerTest extends TestAPI
         ]);
     }
 
+    public function test_user_can_not_create_profile_without_alias(): void
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->postJson(self::ENDPOINT_PROFILE, [
+                'name' => $this->faker->name,
+                'description' => $this->faker->text(200),
+                'genre' => 'male',
+                'personality' => $this->faker->text(100),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alias']);
+    }
+
+    public function test_user_can_not_create_profile_with_existing_alias(): void
+    {
+        Profile::factory()->create(['alias' => 'existing-alias']);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->postJson(self::ENDPOINT_PROFILE, [
+                'name' => $this->faker->name,
+                'alias' => 'existing-alias',
+                'description' => $this->faker->text(200),
+                'genre' => 'male',
+                'personality' => $this->faker->text(100),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alias']);
+    }
+
     public function test_unauthorized_user_can_not_list_profiles()
     {
         $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
@@ -472,6 +503,75 @@ class ProfileControllerTest extends TestAPI
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $response->assertJsonPath('data.alias', $new_data['alias']);
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
+    }
+
+    public function test_user_can_update_profile_keeping_same_alias()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'alias' => 'same-alias',
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
+                'alias' => 'same-alias',
+                'name' => 'Updated name',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.alias', 'same-alias');
+        $this->assertSame('same-alias', $profile->fresh()->alias);
+    }
+
+    public function test_user_can_not_update_profile_with_existing_alias()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'alias' => 'current-alias',
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+        Profile::factory()->create(['alias' => 'taken-alias']);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
+                'alias' => 'taken-alias',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alias']);
+        $this->assertSame('current-alias', $profile->fresh()->alias);
+    }
+
+    public function test_user_can_not_update_profile_with_empty_description()
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'alias' => 'description-required-profile',
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
+                'alias' => 'description-required-profile',
+                'description' => '   ',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['description']);
+        $this->assertNotSame('', $profile->fresh()->description);
     }
 
     public function test_user_can_not_update_profile_with_invalid_status()

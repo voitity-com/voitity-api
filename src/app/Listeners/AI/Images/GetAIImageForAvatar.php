@@ -2,6 +2,7 @@
 
 namespace App\Listeners\AI\Images;
 
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
@@ -19,21 +20,23 @@ class GetAIImageForAvatar implements ShouldQueue
     use InteractsWithQueue;
 
     public int $tries = 5;
+
     public int $backoff = 30;
+
     public int $timeout = 120;
 
     public function __construct(
         private readonly VideoAIService $videoAIService,
         private readonly VideoAIArtifactStorage $artifactStorage
-    ) {
-    }
+    ) {}
 
     public function handle(AiImageForAvatarCreated $event): void
     {
         $aiImage = $event->aiImage->fresh();
 
-        if (!$aiImage) {
+        if (! $aiImage) {
             Log::warning('GetAIImageForAvatar skipped because AiImage no longer exists.');
+
             return;
         }
 
@@ -43,6 +46,7 @@ class GetAIImageForAvatar implements ShouldQueue
                 'source_id' => $aiImage->source_id,
                 'file' => $aiImage->file,
             ]);
+
             return;
         }
 
@@ -62,6 +66,8 @@ class GetAIImageForAvatar implements ShouldQueue
 
                 $aiImage->status = 'succeeded';
                 $aiImage->file = $file;
+                $aiImage->failure_code = null;
+                $aiImage->failure_reason = null;
                 $aiImage->save();
 
                 Log::info('AI image generated and stored', [
@@ -70,20 +76,32 @@ class GetAIImageForAvatar implements ShouldQueue
                 ]);
 
                 event(new AiImageForAvatarGenerated($aiImage->fresh(), $image->getOutputUrl()));
+
                 return;
             }
 
             if ($image->isFailed()) {
+                $response = $image->getResponse();
+                $failureReason = $this->failureReasonFromResponse(
+                    $response,
+                    'The image provider returned a failed status.'
+                );
+                $failureCode = $this->failureCodeFromResponse($response);
+
                 $aiImage->status = 'failed';
+                $aiImage->failure_code = $failureCode;
+                $aiImage->failure_reason = $failureReason;
                 $aiImage->save();
-                $this->markAvatarFailed($aiImage->id);
-                $this->notifyAvatarFailure($aiImage->id, 'The image provider returned a failed status.');
+                $avatar = $this->markAvatarFailed($aiImage->id, $failureReason, $failureCode);
+                $this->releaseAvatarUsage($avatar);
+                $this->notifyAvatarFailure($aiImage->id, $failureReason);
 
                 Log::error('AI image generation failed at provider', [
                     'aiimage_id' => $aiImage->id,
                     'source_id' => $aiImage->source_id,
-                    'response' => $image->getResponse(),
+                    'response' => $response,
                 ]);
+
                 return;
             }
 
@@ -106,10 +124,13 @@ class GetAIImageForAvatar implements ShouldQueue
         $aiImage = $event->aiImage->fresh();
 
         if ($aiImage) {
+            $failureReason = $exception->getMessage();
             $aiImage->status = 'failed';
+            $aiImage->failure_reason = $failureReason;
             $aiImage->save();
-            $this->markAvatarFailed($aiImage->id);
-            $this->notifyAvatarFailure($aiImage->id, $exception->getMessage());
+            $avatar = $this->markAvatarFailed($aiImage->id, $failureReason);
+            $this->releaseAvatarUsage($avatar);
+            $this->notifyAvatarFailure($aiImage->id, $failureReason);
         }
 
         Log::error('GetAIImageForAvatar listener failed', [
@@ -124,16 +145,20 @@ class GetAIImageForAvatar implements ShouldQueue
     private function releaseOrMarkFailed($aiImage): void
     {
         if ($this->attempts() >= $this->tries) {
+            $failureReason = 'Image generation timed out.';
             $aiImage->status = 'failed';
+            $aiImage->failure_reason = $failureReason;
             $aiImage->save();
-            $this->markAvatarFailed($aiImage->id);
-            $this->notifyAvatarFailure($aiImage->id, 'Image generation timed out.');
+            $avatar = $this->markAvatarFailed($aiImage->id, $failureReason);
+            $this->releaseAvatarUsage($avatar);
+            $this->notifyAvatarFailure($aiImage->id, $failureReason);
 
             Log::error('AI image generation exceeded max attempts', [
                 'aiimage_id' => $aiImage->id,
                 'source_id' => $aiImage->source_id,
                 'attempts' => $this->attempts(),
             ]);
+
             return;
         }
 
@@ -154,11 +179,23 @@ class GetAIImageForAvatar implements ShouldQueue
         return strtolower($status);
     }
 
-    private function markAvatarFailed(int|string $aiImageId): void
+    private function markAvatarFailed(int|string $aiImageId, string $reason, ?string $code = null): ?ProfileAvatar
     {
-        ProfileAvatar::where('aiimage_id', $aiImageId)
+        $avatar = ProfileAvatar::where('aiimage_id', $aiImageId)
             ->where('status', ProfileAvatar::STATUS_PROCESSING)
-            ->update(['status' => ProfileAvatar::STATUS_FAILED]);
+            ->latest('id')
+            ->first();
+
+        if (! $avatar) {
+            return null;
+        }
+
+        $avatar->status = ProfileAvatar::STATUS_FAILED;
+        $avatar->failure_code = $code;
+        $avatar->failure_reason = $reason;
+        $avatar->save();
+
+        return $avatar->fresh(['profile.user']);
     }
 
     private function notifyAvatarFailure(int|string $aiImageId, string $reason): void
@@ -186,5 +223,56 @@ class GetAIImageForAvatar implements ShouldQueue
             'service' => 'Video AI image provider',
             'message' => $reason,
         ]);
+    }
+
+    private function releaseAvatarUsage(?ProfileAvatar $avatar): void
+    {
+        if (! $avatar) {
+            return;
+        }
+
+        $recorder = app(SubscriptionUsageRecorder::class);
+        $recorder->release("avatar-image:profile-avatar:{$avatar->id}");
+        $recorder->release("avatar-video:profile-avatar:{$avatar->id}");
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function failureReasonFromResponse(array $response, string $fallback): string
+    {
+        foreach (['failure', 'error', 'message', 'detail'] as $key) {
+            $value = $response[$key] ?? null;
+
+            if (is_scalar($value) && (string) $value !== '') {
+                return (string) $value;
+            }
+
+            if (is_array($value)) {
+                $encoded = json_encode($value);
+
+                if (is_string($encoded) && $encoded !== '') {
+                    return $encoded;
+                }
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function failureCodeFromResponse(array $response): ?string
+    {
+        foreach (['failureCode', 'failure_code', 'errorCode', 'error_code', 'code'] as $key) {
+            $value = $response[$key] ?? null;
+
+            if (is_scalar($value) && (string) $value !== '') {
+                return substr((string) $value, 0, 100);
+            }
+        }
+
+        return null;
     }
 }

@@ -18,6 +18,8 @@ class ProfileAvatarFactory extends Factory
             'ai_video_id' => null,
             'file' => null,
             'status' => 'active',
+            'failure_code' => null,
+            'failure_reason' => null,
         ];
     }
 }

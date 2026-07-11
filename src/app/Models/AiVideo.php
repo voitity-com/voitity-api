@@ -20,6 +20,8 @@ class AiVideo extends Model
         'source',
         'status',
         'file',
+        'failure_code',
+        'failure_reason',
     ];
 
     public function user()
