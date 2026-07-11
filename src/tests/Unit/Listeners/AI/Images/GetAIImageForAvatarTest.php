@@ -5,14 +5,23 @@ namespace Tests\Unit\Listeners\AI\Images;
 use App\Classes\VideoAIService\AiImage as AiImageResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
+use App\Enums\SubscriptionUsageType;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Listeners\AI\Images\GetAIImageForAvatar;
 use App\Models\AiImage;
+use App\Models\AppNotification;
 use App\Models\Profile;
+use App\Models\ProfileAvatar;
+use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use PHPUnit\Framework\Attributes\Test;
@@ -48,7 +57,7 @@ class GetAIImageForAvatarTest extends TestCase
                 output: ['https://example.com/generated-image.png']
             ));
 
-        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage());
+        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage);
         $listener->handle(new AiImageForAvatarCreated($aiImage));
 
         $aiImage->refresh();
@@ -76,10 +85,96 @@ class GetAIImageForAvatarTest extends TestCase
         $service = Mockery::mock(VideoAIService::class);
         $service->shouldNotReceive('getImage');
 
-        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage());
+        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage);
         $listener->handle(new AiImageForAvatarCreated($aiImage));
 
         Event::assertNotDispatched(AiImageForAvatarGenerated::class);
+    }
+
+    #[Test]
+    public function it_marks_avatar_failed_persists_provider_failure_releases_usage_and_notifies_user(): void
+    {
+        Mail::fake();
+
+        $aiImage = $this->aiImage();
+        $profile = $aiImage->profile()->firstOrFail();
+        $user = $aiImage->user()->firstOrFail();
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
+        SubscriptionUse::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'usage_type' => SubscriptionUsageType::AvatarImageCreated,
+            'source_type' => ProfileAvatar::class,
+            'source_id' => (string) $avatar->id,
+            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+            'avatar_images_used' => 1,
+            'metadata' => ['reservation' => 'avatar_generation'],
+            'used_at' => now(),
+        ]);
+        SubscriptionUse::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'usage_type' => SubscriptionUsageType::AvatarVideoCreated,
+            'source_type' => ProfileAvatar::class,
+            'source_id' => (string) $avatar->id,
+            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'avatar_video_seconds_used' => 5,
+            'metadata' => ['reservation' => 'avatar_generation'],
+            'used_at' => now(),
+        ]);
+
+        $service = Mockery::mock(VideoAIService::class);
+        $service->shouldReceive('getImage')
+            ->once()
+            ->with('image-source-id')
+            ->andReturn(new AiImageResult(
+                id: 'image-source-id',
+                status: 'FAILED',
+                response: [
+                    'failure' => 'Image did not pass public figure content moderation.',
+                    'failureCode' => 'SAFETY.OUTPUT.IMAGE',
+                ]
+            ));
+
+        $listener = new GetAIImageForAvatar($service, new VideoAIArtifactStorage);
+        $listener->handle(new AiImageForAvatarCreated($aiImage));
+
+        $aiImage->refresh();
+        $avatar->refresh();
+        $limit = $subscription->limit()->firstOrFail();
+
+        $this->assertSame('failed', $aiImage->status);
+        $this->assertSame('SAFETY.OUTPUT.IMAGE', $aiImage->failure_code);
+        $this->assertSame('Image did not pass public figure content moderation.', $aiImage->failure_reason);
+        $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
+        $this->assertSame('SAFETY.OUTPUT.IMAGE', $avatar->failure_code);
+        $this->assertSame('Image did not pass public figure content moderation.', $avatar->failure_reason);
+        $this->assertSame(1, (int) $limit->avatar_images_remaining);
+        $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+        ]);
+        $this->assertDatabaseMissing('subscription_uses', [
+            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $user->id,
+            'notification_key' => 'avatar_generation_failed',
+            'category' => 'avatar',
+            'action_url' => "/dashboard/profiles/{$profile->id}/avatar",
+        ]);
+        $notification = AppNotification::where('user_id', $user->id)
+            ->where('notification_key', 'avatar_generation_failed')
+            ->firstOrFail();
+        $this->assertSame('Image did not pass public figure content moderation.', $notification->data['reason']);
     }
 
     private function aiImage(array $overrides = []): AiImage
@@ -102,5 +197,33 @@ class GetAIImageForAvatarTest extends TestCase
             'status' => 'pending',
             'file' => null,
         ], $overrides));
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 0,
+            'avatar_video_seconds_remaining' => 0,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 10000,
+            'chat_messages_remaining' => 1000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }

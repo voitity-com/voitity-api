@@ -7,6 +7,21 @@ use Illuminate\Validation\Rule;
 
 class UpdateProfileRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('description')) {
+            $this->merge([
+                'description' => trim((string) $this->input('description')),
+            ]);
+        }
+
+        if ($this->has('alias')) {
+            $this->merge([
+                'alias' => trim((string) $this->input('alias')),
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -14,10 +29,19 @@ class UpdateProfileRequest extends FormRequest
 
     public function rules(): array
     {
+        $profile = $this->route('profile');
+        $profileId = is_object($profile) && method_exists($profile, 'getKey') ? $profile->getKey() : $profile;
+
         return [
             'name' => 'sometimes|string|max:100',
-            'alias' => 'sometimes|nullable|string|max:100',
-            'description' => 'sometimes|string|max:500',
+            'alias' => [
+                'required_with:name,description,genre,personality,profession_key,profession_template_version',
+                'filled',
+                'string',
+                'max:100',
+                Rule::unique('profiles', 'alias')->ignore($profileId)->whereNull('deleted_at'),
+            ],
+            'description' => 'sometimes|required|string|max:500',
             'genre' => 'sometimes|string|max:10',
             'personality' => 'sometimes|string|max:200',
             'active' => ['prohibited'],

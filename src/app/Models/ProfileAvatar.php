@@ -11,8 +11,11 @@ class ProfileAvatar extends Model
     use HasFactory, SoftDeletes;
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_INACTIVE = 'inactive';
+
     public const STATUS_PROCESSING = 'processing';
 
     protected $fillable = [
@@ -22,6 +25,8 @@ class ProfileAvatar extends Model
         'ai_video_id',
         'file',
         'status',
+        'failure_code',
+        'failure_reason',
     ];
 
     public function user()

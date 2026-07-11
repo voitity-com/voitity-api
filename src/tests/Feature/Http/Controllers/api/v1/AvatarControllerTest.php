@@ -215,6 +215,44 @@ class AvatarControllerTest extends TestAPI
         $response->assertJsonPath('data.avatars.2.id', $inactive->id);
     }
 
+    public function test_avatar_history_includes_failure_details(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:read'])->plainTextToken;
+        $aiImage = AiImage::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source_id' => 'failed-image-source-id',
+            'source' => 'runway',
+            'status' => 'failed',
+            'file' => null,
+            'failure_code' => 'SAFETY.OUTPUT.IMAGE',
+            'failure_reason' => 'Image did not pass public figure content moderation.',
+        ]);
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'file' => null,
+            'status' => ProfileAvatar::STATUS_FAILED,
+            'failure_code' => 'SAFETY.OUTPUT.IMAGE',
+            'failure_reason' => 'Image did not pass public figure content moderation.',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->get("/api/avatar/{$profile->id}/history");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.avatars.0.id', $avatar->id);
+        $response->assertJsonPath('data.avatars.0.status', ProfileAvatar::STATUS_FAILED);
+        $response->assertJsonPath('data.avatars.0.failure_code', 'SAFETY.OUTPUT.IMAGE');
+        $response->assertJsonPath('data.avatars.0.failure_reason', 'Image did not pass public figure content moderation.');
+        $response->assertJsonPath('data.avatars.0.ai_image.failure_code', 'SAFETY.OUTPUT.IMAGE');
+        $response->assertJsonPath('data.avatars.0.ai_image.failure_reason', 'Image did not pass public figure content moderation.');
+    }
+
     public function test_user_can_not_list_avatar_history_for_other_profile(): void
     {
         $user = User::factory()->create();

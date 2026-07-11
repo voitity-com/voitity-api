@@ -17,7 +17,9 @@ class AiVideoFactory extends Factory
             'source_id' => $this->faker->uuid(),
             'source' => 'runway',
             'status' => 'pending',
-            'file' => 'videos/' . $this->faker->uuid() . '.mp4',
+            'file' => 'videos/'.$this->faker->uuid().'.mp4',
+            'failure_code' => null,
+            'failure_reason' => null,
         ];
     }
 }

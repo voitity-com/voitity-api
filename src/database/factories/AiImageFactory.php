@@ -17,7 +17,9 @@ class AiImageFactory extends Factory
             'source_id' => $this->faker->uuid(),
             'source' => 'runway',
             'status' => 'pending',
-            'file' => 'images/' . $this->faker->uuid() . '.png',
+            'file' => 'images/'.$this->faker->uuid().'.png',
+            'failure_code' => null,
+            'failure_reason' => null,
         ];
     }
 }

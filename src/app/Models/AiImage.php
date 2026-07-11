@@ -19,6 +19,8 @@ class AiImage extends Model
         'source',
         'status',
         'file',
+        'failure_code',
+        'failure_reason',
     ];
 
     public function user()
