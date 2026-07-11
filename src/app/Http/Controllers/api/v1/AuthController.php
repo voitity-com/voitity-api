@@ -25,11 +25,13 @@ use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
@@ -203,7 +205,16 @@ class AuthController extends Controller
             ]
         );
 
-        Mail::to($user->email)->send(new VerifyEmailAddress($user, $verificationUrl));
+        if (! $this->sendAuthMail($user, new VerifyEmailAddress($user, $verificationUrl), 'email_verification')) {
+            $user->delete();
+
+            return response()->json([
+                'message' => $this->authMailDeliveryFailedMessage($validated['locale'], 'verification'),
+                'email_delivery_failed' => true,
+                'email_verification_required' => true,
+            ], 503);
+        }
+
         app(NotificationDispatcher::class)->sendInApp($user, 'account_email_confirmation', [
             'email' => $user->email,
         ]);
@@ -248,7 +259,14 @@ class AuthController extends Controller
             ]
         );
 
-        Mail::to($user->email)->send(new PasswordResetLink($user, $resetUrl));
+        if (! $this->sendAuthMail($user, new PasswordResetLink($user, $resetUrl), 'password_reset')) {
+            $passwordResetService->consume($user);
+
+            return response()->json([
+                'message' => $this->authMailDeliveryFailedMessage($user->locale ?: $validated['locale'], 'password_reset'),
+                'email_delivery_failed' => true,
+            ], 503);
+        }
 
         return response()->json([
             'message' => $this->passwordResetRequestedMessage($user->locale ?: $validated['locale']),
@@ -294,7 +312,7 @@ class AuthController extends Controller
         $passwordResetService->consume($user);
         $user->tokens()->delete();
 
-        Mail::to($user->email)->send(new PasswordChanged($user));
+        $this->sendAuthMail($user, new PasswordChanged($user), 'password_changed');
         app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_confirmation');
 
         Log::info('Password reset completed.', [
@@ -335,7 +353,7 @@ class AuthController extends Controller
         $user->refresh();
         $this->revokeOtherTokens($user);
 
-        Mail::to($user->email)->send(new PasswordChanged($user));
+        $this->sendAuthMail($user, new PasswordChanged($user), 'password_changed');
         app(NotificationDispatcher::class)->sendInApp($user, 'password_changed_from_active_session');
 
         Log::info('Password changed from active session.', [
@@ -422,7 +440,7 @@ class AuthController extends Controller
         if ($result === EmailVerificationResult::Verified) {
             $user->refresh();
 
-            Mail::to($user->email)->send(new WelcomeEmail($user));
+            $this->sendAuthMail($user, new WelcomeEmail($user), 'welcome');
             app(NotificationDispatcher::class)->sendInApp($user, 'welcome_after_email_verification');
 
             Log::info('Email verified successfully.', [
@@ -737,6 +755,39 @@ class AuthController extends Controller
         }
 
         return 'Current password is incorrect.';
+    }
+
+    private function authMailDeliveryFailedMessage(string $locale, string $purpose): string
+    {
+        if ($locale === 'es') {
+            return match ($purpose) {
+                'password_reset' => 'No pudimos enviar el correo para cambiar tu contraseña. Intenta de nuevo más tarde.',
+                default => 'No pudimos enviar el correo de verificación. Intenta de nuevo más tarde.',
+            };
+        }
+
+        return match ($purpose) {
+            'password_reset' => 'We could not send the password reset email. Please try again later.',
+            default => 'We could not send the verification email. Please try again later.',
+        };
+    }
+
+    private function sendAuthMail(User $user, Mailable $mailable, string $type): bool
+    {
+        try {
+            Mail::to($user->email)->send($mailable);
+
+            return true;
+        } catch (TransportExceptionInterface $exception) {
+            Log::error('Auth email delivery failed.', [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'type' => $type,
+                'exception' => $exception,
+            ]);
+
+            return false;
+        }
     }
 
     private function recordLoginEvent(Request $request, User $user, string $type): void
