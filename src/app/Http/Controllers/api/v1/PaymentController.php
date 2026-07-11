@@ -85,7 +85,7 @@ class PaymentController extends Controller
             reference: $paymentOrder->reference,
             amountInCents: $paymentOrder->amount_in_cents,
             currency: $paymentOrder->currency->value,
-            redirectUrl: config('payment.redirect_url'),
+            redirectUrl: $this->redirectUrlFor($paymentOrder),
             expirationTime: $expiresAt,
             customerData: $this->customerDataFor($user),
         ));
@@ -135,6 +135,22 @@ class PaymentController extends Controller
         } while (PaymentOrder::where('reference', $reference)->exists());
 
         return $reference;
+    }
+
+    private function redirectUrlFor(PaymentOrder $paymentOrder): ?string
+    {
+        $redirectUrl = config('payment.redirect_url');
+
+        if (! is_string($redirectUrl) || trim($redirectUrl) === '') {
+            return null;
+        }
+
+        $redirectUrl = trim($redirectUrl);
+        $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+
+        return $redirectUrl.$separator.http_build_query([
+            'payment_order_id' => $paymentOrder->id,
+        ]);
     }
 
     /**

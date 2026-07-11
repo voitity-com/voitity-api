@@ -1,13 +1,12 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
-    ->withExceptions(function (Exceptions $exceptions): void {
-        //
-    })
     ->withEvents(discover: false)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -24,7 +23,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
         ]);
         $middleware->appendToGroup('api', 'force.json');
+        $middleware->redirectGuestsTo(fn (Request $request): ?string => $request->is('api/*') ? null : '/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            return null;
+        });
     })->create();
