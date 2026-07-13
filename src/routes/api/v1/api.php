@@ -11,6 +11,7 @@ use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
+use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
 use App\Http\Controllers\api\v1\TestController;
@@ -101,6 +102,10 @@ Route::prefix('/avatar')->group(function () {
 Route::prefix('/subscription')->group(function () {
     Route::get('/plans', [SubscriptionPlansController::class, 'index'])->middleware(['auth:sanctum', 'abilities:subscription-plans:read']);
     Route::get('/limits', [SubscriptionLimitsController::class, 'show'])->middleware(['auth:sanctum', 'abilities:subscription-limits:read']);
+    Route::post('/trial', [SubscriptionActionsController::class, 'startTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::post('/trial/cancel', [SubscriptionActionsController::class, 'cancelTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::post('/renewal/cancel', [SubscriptionActionsController::class, 'cancelRenewal'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::post('/renewal/reactivate', [SubscriptionActionsController::class, 'reactivateRenewal'])->middleware(['auth:sanctum', 'abilities:payments:create']);
 });
 
 Route::prefix('/payments')->group(function () {

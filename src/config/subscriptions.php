@@ -3,6 +3,13 @@
 return [
     'default_plan' => env('SUBSCRIPTION_DEFAULT_PLAN', 'starter'),
 
+    'trial' => [
+        'enabled' => env('SUBSCRIPTION_FREE_TRIAL_ENABLED', true),
+        'days' => (int) env('SUBSCRIPTION_FREE_TRIAL_DAYS', 7),
+        'setup_amount_usd' => (float) env('SUBSCRIPTION_TRIAL_SETUP_AMOUNT_USD', 0),
+        'requires_payment_source' => env('SUBSCRIPTION_FREE_TRIAL_REQUIRES_PAYMENT_SOURCE', true),
+    ],
+
     'plans' => [
         'starter' => [
             'name' => 'Starter',

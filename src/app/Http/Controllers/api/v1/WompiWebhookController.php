@@ -4,12 +4,15 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\Subscriptions\SubscriptionPlanActivator;
+use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
+use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
+use App\Models\Subscription;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,7 +32,8 @@ class WompiWebhookController extends Controller
     public function handle(
         Request $request,
         PaymentService $paymentService,
-        SubscriptionPlanActivator $subscriptionPlanActivator
+        SubscriptionPlanActivator $subscriptionPlanActivator,
+        SubscriptionTrialService $trialService,
     ): JsonResponse {
         $webhook = $paymentService->parseWebhook(
             ['x-event-checksum' => $request->header('X-Event-Checksum')],
@@ -78,6 +82,7 @@ class WompiWebhookController extends Controller
             $paymentEvent,
             $webhook,
             $subscriptionPlanActivator,
+            $trialService,
             &$notificationOrder,
             &$statusChanged
         ): void {
@@ -110,14 +115,32 @@ class WompiWebhookController extends Controller
                 $order->payment_source_id = $paymentSource->id;
             }
 
+            if (
+                $order->status === PaymentOrderStatus::Approved
+                && $order->billing_reason === 'trial_setup'
+                && ! $this->trialHasRequiredPaymentSource($order)
+            ) {
+                $order->status = PaymentOrderStatus::Error;
+                $order->raw_provider_payload = array_merge($webhook->payload, [
+                    'local_error' => 'trial_payment_source_required',
+                ]);
+            }
+
             if ($order->status === PaymentOrderStatus::Approved && ! $order->paid_at) {
                 $order->paid_at = now();
             }
 
             $order->save();
 
-            if ($order->status === PaymentOrderStatus::Approved) {
+            if ($order->status === PaymentOrderStatus::Approved && $order->billing_reason === 'trial_setup') {
+                $trialService->activateTrialFromPaymentOrder($order);
+            } elseif ($order->status === PaymentOrderStatus::Approved) {
                 $subscriptionPlanActivator->activateForPaymentOrder($order);
+            } elseif (
+                $order->billing_reason === 'trial_conversion'
+                && ! in_array($order->status, [PaymentOrderStatus::Pending, PaymentOrderStatus::Approved], true)
+            ) {
+                $this->markTrialConversionFailed($order);
             }
 
             $paymentEvent->payment_order_id = $order->id;
@@ -140,6 +163,15 @@ class WompiWebhookController extends Controller
             && $currency === $paymentOrder->currency->value;
     }
 
+    private function trialHasRequiredPaymentSource(PaymentOrder $paymentOrder): bool
+    {
+        if (! (bool) config('subscriptions.trial.requires_payment_source', true)) {
+            return true;
+        }
+
+        return $paymentOrder->payment_source_id !== null;
+    }
+
     private function dispatchPaymentNotifications(PaymentOrder $paymentOrder): void
     {
         $paymentOrder->loadMissing('user');
@@ -153,17 +185,24 @@ class WompiWebhookController extends Controller
         $data = $this->notificationDataForOrder($paymentOrder);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
-            if ($paymentOrder->billing_reason === 'subscription_renewal') {
-                $dispatcher->send($user, 'successful_subscription_renewal', $data);
-            } else {
-                $dispatcher->send($user, 'successful_plan_purchase', $data);
-            }
+            match ($paymentOrder->billing_reason) {
+                'trial_setup' => $dispatcher->send($user, 'trial_started', $data),
+                'trial_conversion' => $dispatcher->send($user, 'trial_converted_to_paid', $data),
+                'subscription_renewal' => $dispatcher->send($user, 'successful_subscription_renewal', $data),
+                default => $dispatcher->send($user, 'successful_plan_purchase', $data),
+            };
 
             return;
         }
 
         if ($paymentOrder->status === PaymentOrderStatus::Pending) {
             $dispatcher->sendInApp($user, 'payment_pending', $data);
+
+            return;
+        }
+
+        if (in_array($paymentOrder->billing_reason, ['trial_setup', 'trial_conversion'], true)) {
+            $dispatcher->send($user, 'trial_payment_failed', $data);
 
             return;
         }
@@ -175,6 +214,26 @@ class WompiWebhookController extends Controller
         }
 
         $dispatcher->send($user, 'failed_payment', $data);
+    }
+
+    private function markTrialConversionFailed(PaymentOrder $paymentOrder): void
+    {
+        /** @var Subscription|null $subscription */
+        $subscription = Subscription::query()
+            ->where('user_id', $paymentOrder->user_id)
+            ->where('active', true)
+            ->where('status', SubscriptionStatus::Trialing->value)
+            ->lockForUpdate()
+            ->latest('started_at')
+            ->first();
+
+        if (! $subscription instanceof Subscription) {
+            return;
+        }
+
+        $subscription->active = false;
+        $subscription->status = SubscriptionStatus::PastDue;
+        $subscription->save();
     }
 
     /**

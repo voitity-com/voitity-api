@@ -6,6 +6,7 @@ use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
+use App\Mail\PlatformNotificationMail;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
@@ -49,14 +50,13 @@ class SubscriptionEntitlementServiceTest extends TestCase
 
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $user->id,
-            'notification_key' => 'critical_plan_limit_reached',
-            'category' => 'usage',
-        ]);
-        $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $user->id,
             'notification_key' => 'profile_limit_reached',
             'category' => 'usage',
         ]);
+        Mail::assertSent(PlatformNotificationMail::class, function (PlatformNotificationMail $mail) use ($user): bool {
+            return $mail->hasTo($user->email)
+                && $mail->message->subject === 'A Bigmelo plan limit was reached';
+        });
     }
 
     public function test_it_renews_expired_admin_plan_without_charge(): void

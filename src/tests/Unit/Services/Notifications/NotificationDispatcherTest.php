@@ -6,7 +6,9 @@ use App\Mail\PlatformNotificationMail;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationMessageFormatter;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 class NotificationDispatcherTest extends TestCase
@@ -51,6 +53,29 @@ class NotificationDispatcherTest extends TestCase
             'category' => 'profile',
         ]);
         Mail::assertNothingSent();
+    }
+
+    public function test_email_failure_does_not_block_in_app_notification(): void
+    {
+        $user = User::factory()->create(['locale' => 'en']);
+        Log::spy();
+        Mail::shouldReceive('to')
+            ->once()
+            ->with($user->email)
+            ->andThrow(new RuntimeException('SMTP rate limited'));
+
+        $notification = app(NotificationDispatcher::class)->send($user, 'payment_approved', [
+            'plan' => 'starter',
+            'amount' => 'USD 9.00',
+        ]);
+
+        $this->assertNotNull($notification);
+        $this->assertDatabaseHas('app_notifications', [
+            'id' => $notification->id,
+            'user_id' => $user->id,
+            'notification_key' => 'payment_approved',
+        ]);
+        Log::shouldHaveReceived('warning')->once();
     }
 
     public function test_notification_action_urls_point_to_admin_url(): void

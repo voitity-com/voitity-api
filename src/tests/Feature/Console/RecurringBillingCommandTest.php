@@ -127,6 +127,84 @@ class RecurringBillingCommandTest extends TestCase
         $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
         $this->assertSame(1, $limit->profiles_remaining);
     }
+
+    #[Test]
+    public function it_converts_due_trial_to_paid_subscription_and_resets_usage_limits(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-13 00:00:00'));
+        config(['payment.usd_cop_rate' => 4000]);
+
+        $paymentClient = new ConsoleRecurringPaymentClient('APPROVED');
+        $this->app->instance(PaymentClient::class, $paymentClient);
+
+        $user = User::factory()->create(['email' => 'trial-conversion@example.com']);
+        $paymentSource = PaymentSource::query()->create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => '3891',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+            'verified_at' => now(),
+        ]);
+        $trial = Subscription::query()->create([
+            'user_id' => $user->id,
+            'payment_source_id' => $paymentSource->id,
+            'plan' => SubscriptionPlan::Starter,
+            'billing_mode' => 'recurring',
+            'started_at' => now()->subDays(7),
+            'trial_started_at' => now()->subDays(7),
+            'trial_ends_at' => now()->subMinute(),
+            'renews_at' => now()->subMinute(),
+            'status' => SubscriptionStatus::Trialing,
+            'active' => true,
+            'cancel_at_period_end' => false,
+            'next_billing_at' => now()->subMinute(),
+        ]);
+
+        SubscriptionLimit::query()->create([
+            'subscription_id' => $trial->id,
+            'user_id' => $user->id,
+            'period_started_at' => $trial->started_at,
+            'period_renews_at' => $trial->renews_at,
+            'profiles_remaining' => 0,
+            'avatar_images_remaining' => 0,
+            'avatar_video_seconds_remaining' => 0,
+            'voice_clones_remaining' => 0,
+            'tts_characters_remaining' => 0,
+            'chat_messages_remaining' => 0,
+            'credits_remaining' => 0,
+        ]);
+
+        $this->artisan('subscriptions:bill-recurring')
+            ->expectsOutput('Recurring billing processed: 1. Approved: 1. Pending: 0. Failed: 0. Skipped: 0.')
+            ->assertSuccessful();
+
+        $this->assertCount(1, $paymentClient->charges);
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'payment_source_id' => $paymentSource->id,
+            'plan' => 'starter',
+            'recurring' => true,
+            'billing_reason' => 'trial_conversion',
+            'status' => PaymentOrderStatus::Approved->value,
+        ]);
+
+        $paymentOrder = PaymentOrder::query()->where('billing_reason', 'trial_conversion')->firstOrFail();
+        $trial->refresh();
+        $activeSubscription = Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('active', true)
+            ->firstOrFail();
+        $activeLimit = $activeSubscription->limit()->firstOrFail();
+
+        $this->assertFalse($trial->active);
+        $this->assertSame(SubscriptionStatus::Expired, $trial->status);
+        $this->assertNotNull($trial->trial_converted_at);
+        $this->assertSame($paymentOrder->id, $activeSubscription->source_payment_order_id);
+        $this->assertSame(1000.0, (float) $activeLimit->credits_remaining);
+        $this->assertSame(1, $activeLimit->profiles_remaining);
+    }
 }
 
 class ConsoleRecurringPaymentClient implements PaymentClient

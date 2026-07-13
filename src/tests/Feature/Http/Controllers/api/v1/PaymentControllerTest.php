@@ -7,6 +7,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
 use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
 use App\Models\Subscription;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Config;
 class PaymentControllerTest extends TestAPI
 {
     private const CHECKOUT_ENDPOINT = '/api/payments/wompi/checkout';
+
+    private const TRIAL_ENDPOINT = '/api/subscription/trial';
 
     private const PLANS_ENDPOINT = '/api/subscription/plans';
 
@@ -37,6 +40,10 @@ class PaymentControllerTest extends TestAPI
         Config::set('payment.drivers.wompi.events_secret', 'test_events_key');
         Config::set('payment.drivers.wompi.checkout_url', 'https://checkout.wompi.co/p/');
         Config::set('payment.drivers.wompi.widget_url', 'https://checkout.wompi.co/widget.js');
+        Config::set('subscriptions.trial.enabled', true);
+        Config::set('subscriptions.trial.days', 7);
+        Config::set('subscriptions.trial.setup_amount_usd', 0);
+        Config::set('subscriptions.trial.requires_payment_source', true);
 
         app(\App\Classes\PaymentService\PaymentManager::class)->forgetDrivers();
     }
@@ -54,6 +61,9 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.display_currency', 'USD');
         $response->assertJsonPath('data.processing_currency', 'COP');
         $response->assertJsonPath('data.exchange_rate', 4000);
+        $response->assertJsonPath('data.trial.enabled', true);
+        $response->assertJsonPath('data.trial.available', true);
+        $response->assertJsonPath('data.trial.days', 7);
         $response->assertJsonPath('data.plans.0.id', 'starter');
         $response->assertJsonPath('data.plans.0.purchasable', true);
 
@@ -68,6 +78,61 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame(1, $plans->get('starter_annual')['limits']['profiles']);
         $this->assertSame(1000, $plans->get('starter_annual')['credits']['total']);
         $this->assertTrue($plans->get('starter_annual')['purchasable']);
+    }
+
+    public function test_user_can_create_trial_checkout_for_starter_plan(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::TRIAL_ENDPOINT, ['plan' => 'starter']);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('message', 'Subscription trial checkout created successfully.');
+        $response->assertJsonPath('data.payment_order.user_id', $user->id);
+        $response->assertJsonPath('data.payment_order.plan', 'starter');
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 0);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 0);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 0);
+        $response->assertJsonPath('data.payment_order.status', 'pending');
+        $response->assertJsonPath('data.payment_order.recurring', true);
+        $response->assertJsonPath('data.payment_order.billing_reason', 'trial_setup');
+        $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
+
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'plan' => 'starter',
+            'provider' => 'wompi',
+            'status' => 'pending',
+            'recurring' => true,
+            'billing_reason' => 'trial_setup',
+            'amount_in_cents' => 0,
+            'currency' => 'COP',
+        ]);
+    }
+
+    public function test_user_with_existing_subscription_can_not_create_trial_checkout(): void
+    {
+        $user = User::factory()->create();
+        Subscription::query()->create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'billing_mode' => 'recurring',
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+            'cancel_at_period_end' => false,
+            'next_billing_at' => now()->addMonth(),
+        ]);
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::TRIAL_ENDPOINT, ['plan' => 'starter']);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Free trial is only available before the first subscription.');
     }
 
     public function test_user_can_create_wompi_checkout_for_starter_plan(): void
@@ -311,6 +376,62 @@ class PaymentControllerTest extends TestAPI
         ]);
     }
 
+    public function test_valid_wompi_approved_event_starts_trial_subscription(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingPaymentOrder($user, SubscriptionPlan::Starter, 0, 'trial_setup');
+        $payload = $this->wompiPayload($paymentOrder);
+
+        $response = $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $payload, [
+            'X-Event-Checksum' => $this->eventChecksum($payload),
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Wompi event processed successfully.');
+
+        $paymentOrder->refresh();
+        $subscription = $paymentOrder->subscription()->firstOrFail();
+        $user->refresh();
+
+        $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->status);
+        $this->assertSame(SubscriptionStatus::Trialing, $subscription->status);
+        $this->assertTrue($subscription->active);
+        $this->assertSame('recurring', $subscription->billing_mode);
+        $this->assertTrue($subscription->trial_ends_at->isSameDay($subscription->started_at->copy()->addDays(7)));
+        $this->assertTrue($subscription->next_billing_at->isSameDay($subscription->trial_ends_at));
+        $this->assertNotNull($subscription->payment_source_id);
+        $this->assertNotNull($user->free_trial_used_at);
+
+        $this->assertDatabaseHas('subscription_limits', [
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'credits_remaining' => 1000,
+            'profiles_remaining' => 1,
+        ]);
+    }
+
+    public function test_trial_approved_event_without_payment_source_does_not_start_trial(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingPaymentOrder($user, SubscriptionPlan::Starter, 0, 'trial_setup');
+        $payload = $this->wompiPayload($paymentOrder, includePaymentSource: false);
+
+        $response = $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $payload, [
+            'X-Event-Checksum' => $this->eventChecksum($payload),
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Wompi event processed successfully.');
+
+        $paymentOrder->refresh();
+        $user->refresh();
+
+        $this->assertSame(PaymentOrderStatus::Error, $paymentOrder->status);
+        $this->assertNull($paymentOrder->subscription_id);
+        $this->assertNull($user->free_trial_used_at);
+        $this->assertSame(0, Subscription::where('user_id', $user->id)->count());
+    }
+
     public function test_duplicate_wompi_event_is_idempotent(): void
     {
         $user = User::factory()->create();
@@ -351,6 +472,7 @@ class PaymentControllerTest extends TestAPI
         User $user,
         SubscriptionPlan $plan = SubscriptionPlan::Starter,
         float $displayAmountUsd = 8,
+        string $billingReason = 'subscription_initial',
     ): PaymentOrder {
         $amountInCents = (int) round($displayAmountUsd * 4000 * 100);
 
@@ -359,6 +481,8 @@ class PaymentControllerTest extends TestAPI
             'provider' => PaymentProvider::Wompi,
             'reference' => 'VOI-'.$user->id.'-'.$this->faker->unique()->bothify('????####'),
             'plan' => $plan,
+            'recurring' => true,
+            'billing_reason' => $billingReason,
             'display_amount_usd' => $displayAmountUsd,
             'display_currency' => 'USD',
             'exchange_rate' => 4000,
@@ -372,21 +496,26 @@ class PaymentControllerTest extends TestAPI
     /**
      * @return array<string, mixed>
      */
-    private function wompiPayload(PaymentOrder $paymentOrder): array
+    private function wompiPayload(PaymentOrder $paymentOrder, bool $includePaymentSource = true): array
     {
+        $transaction = [
+            'id' => 'trx_'.$paymentOrder->reference,
+            'amount_in_cents' => $paymentOrder->amount_in_cents,
+            'reference' => $paymentOrder->reference,
+            'currency' => $paymentOrder->currency->value,
+            'status' => 'APPROVED',
+            'payment_method_type' => 'CARD',
+        ];
+
+        if ($includePaymentSource) {
+            $transaction['payment_source_id'] = 'ps_'.$paymentOrder->reference;
+        }
+
         return [
             'id' => 'evt_'.$paymentOrder->reference,
             'event' => 'transaction.updated',
             'data' => [
-                'transaction' => [
-                    'id' => 'trx_'.$paymentOrder->reference,
-                    'amount_in_cents' => $paymentOrder->amount_in_cents,
-                    'reference' => $paymentOrder->reference,
-                    'currency' => $paymentOrder->currency->value,
-                    'status' => 'APPROVED',
-                    'payment_source_id' => 'ps_'.$paymentOrder->reference,
-                    'payment_method_type' => 'CARD',
-                ],
+                'transaction' => $transaction,
             ],
             'environment' => 'test',
             'signature' => [

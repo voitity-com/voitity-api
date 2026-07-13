@@ -6,7 +6,9 @@ use App\Mail\PlatformNotificationMail;
 use App\Models\AppNotification;
 use App\Models\User;
 use App\Models\UserNotificationPreference;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class NotificationDispatcher
 {
@@ -32,10 +34,18 @@ class NotificationDispatcher
         }
 
         if (in_array('email', $channels, true) && (bool) ($config['email'] ?? false) && $this->canSendEmail($user, $key, $config)) {
-            Mail::to($user->email)->send(new PlatformNotificationMail(
-                user: $user,
-                message: $this->formatter->format($key, $user, $data),
-            ));
+            try {
+                Mail::to($user->email)->send(new PlatformNotificationMail(
+                    user: $user,
+                    message: $this->formatter->format($key, $user, $data),
+                ));
+            } catch (Throwable $e) {
+                Log::warning('Platform notification email could not be sent.', [
+                    'user_id' => $user->id,
+                    'notification_key' => $key,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $notification;

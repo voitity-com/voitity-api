@@ -7,6 +7,7 @@ use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
+use App\Enums\SubscriptionStatus;
 use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
 use App\Models\Subscription;
@@ -90,14 +91,15 @@ class SubscriptionBillingService
                 return [null, false];
             }
 
-            $pendingOrder = $this->pendingRenewalOrderFor($lockedSubscription);
+            $billingReason = $this->billingReasonFor($lockedSubscription);
+            $pendingOrder = $this->pendingRenewalOrderFor($lockedSubscription, $billingReason);
 
             if ($pendingOrder instanceof PaymentOrder) {
                 return [$pendingOrder, false];
             }
 
             return [
-                $this->createRenewalOrder($lockedSubscription, $paymentSource),
+                $this->createBillingOrder($lockedSubscription, $paymentSource, $billingReason),
                 true,
             ];
         });
@@ -140,6 +142,10 @@ class SubscriptionBillingService
             return 'pending';
         }
 
+        if ($paymentOrder->billing_reason === 'trial_conversion') {
+            $this->markTrialConversionFailed($paymentOrder);
+        }
+
         $this->dispatchRenewalNotifications($paymentOrder);
 
         return 'failed';
@@ -163,21 +169,21 @@ class SubscriptionBillingService
             && filled($paymentSource->provider_source_id);
     }
 
-    private function pendingRenewalOrderFor(Subscription $subscription): ?PaymentOrder
+    private function pendingRenewalOrderFor(Subscription $subscription, string $billingReason): ?PaymentOrder
     {
         return PaymentOrder::query()
             ->where('user_id', $subscription->user_id)
             ->where('payment_source_id', $subscription->payment_source_id)
             ->where('plan', $subscription->plan)
             ->where('recurring', true)
-            ->where('billing_reason', 'subscription_renewal')
+            ->where('billing_reason', $billingReason)
             ->where('status', PaymentOrderStatus::Pending)
             ->where('created_at', '>=', $subscription->renews_at)
             ->orderByDesc('id')
             ->first();
     }
 
-    private function createRenewalOrder(Subscription $subscription, PaymentSource $paymentSource): PaymentOrder
+    private function createBillingOrder(Subscription $subscription, PaymentSource $paymentSource, string $billingReason): PaymentOrder
     {
         $amounts = $this->amountsForPlan($subscription);
 
@@ -185,10 +191,10 @@ class SubscriptionBillingService
             'user_id' => $subscription->user_id,
             'payment_source_id' => $paymentSource->id,
             'provider' => PaymentProvider::Wompi,
-            'reference' => $this->uniqueReference($subscription->user_id),
+            'reference' => $this->uniqueReference($subscription->user_id, $billingReason),
             'plan' => $subscription->plan,
             'recurring' => true,
-            'billing_reason' => 'subscription_renewal',
+            'billing_reason' => $billingReason,
             'display_amount_usd' => $amounts['display_amount_usd'],
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $amounts['exchange_rate'],
@@ -197,6 +203,11 @@ class SubscriptionBillingService
             'currency' => PaymentCurrency::Cop,
             'status' => PaymentOrderStatus::Pending,
         ]);
+    }
+
+    private function billingReasonFor(Subscription $subscription): string
+    {
+        return $subscription->status === SubscriptionStatus::Trialing ? 'trial_conversion' : 'subscription_renewal';
     }
 
     /**
@@ -217,10 +228,12 @@ class SubscriptionBillingService
         ];
     }
 
-    private function uniqueReference(int $userId): string
+    private function uniqueReference(int $userId, string $billingReason): string
     {
+        $prefix = $billingReason === 'trial_conversion' ? 'VOI-TCV' : 'VOI-REN';
+
         do {
-            $reference = 'VOI-REN-'.$userId.'-'.Str::upper(Str::random(12));
+            $reference = $prefix.'-'.$userId.'-'.Str::upper(Str::random(12));
         } while (PaymentOrder::where('reference', $reference)->exists());
 
         return $reference;
@@ -239,7 +252,11 @@ class SubscriptionBillingService
         $data = $this->notificationDataForOrder($paymentOrder);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
-            $dispatcher->send($user, 'successful_subscription_renewal', $data);
+            $dispatcher->send(
+                $user,
+                $paymentOrder->billing_reason === 'trial_conversion' ? 'trial_converted_to_paid' : 'successful_subscription_renewal',
+                $data,
+            );
 
             return;
         }
@@ -250,7 +267,33 @@ class SubscriptionBillingService
             return;
         }
 
-        $dispatcher->send($user, 'failed_subscription_renewal', $data);
+        $dispatcher->send(
+            $user,
+            $paymentOrder->billing_reason === 'trial_conversion' ? 'trial_payment_failed' : 'failed_subscription_renewal',
+            $data,
+        );
+    }
+
+    private function markTrialConversionFailed(PaymentOrder $paymentOrder): void
+    {
+        DB::transaction(function () use ($paymentOrder): void {
+            /** @var Subscription|null $subscription */
+            $subscription = Subscription::query()
+                ->where('user_id', $paymentOrder->user_id)
+                ->where('active', true)
+                ->where('status', SubscriptionStatus::Trialing->value)
+                ->lockForUpdate()
+                ->latest('started_at')
+                ->first();
+
+            if (! $subscription instanceof Subscription) {
+                return;
+            }
+
+            $subscription->active = false;
+            $subscription->status = SubscriptionStatus::PastDue;
+            $subscription->save();
+        });
     }
 
     /**

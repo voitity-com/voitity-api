@@ -2,6 +2,7 @@
 
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
+use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
 use App\Models\Subscription;
@@ -77,7 +78,15 @@ Artisan::command('subscriptions:bill-recurring', function (): int {
     ));
 
     return Command::SUCCESS;
-})->purpose('Bill due paid recurring subscriptions through saved payment sources');
+})->purpose('Bill due recurring subscriptions and trial conversions through saved payment sources');
+
+Artisan::command('subscriptions:expire-ended', function (SubscriptionTrialService $trialService): int {
+    $expired = $trialService->expireEndedSubscriptions();
+
+    $this->info("Ended subscriptions expired: {$expired}");
+
+    return Command::SUCCESS;
+})->purpose('Expire subscriptions that were cancelled at period end');
 
 Artisan::command('notifications:subscription-renewal-reminders {--days=7}', function (NotificationDispatcher $dispatcher): int {
     $days = max(1, (int) $this->option('days'));
@@ -198,7 +207,8 @@ Artisan::command('notifications:service-notice {message}', function (
     return Command::SUCCESS;
 })->purpose('Send a service maintenance or degradation notice to users');
 
-Schedule::command('subscriptions:bill-recurring')->dailyAt('00:00');
+Schedule::command('subscriptions:bill-recurring')->hourly();
+Schedule::command('subscriptions:expire-ended')->hourlyAt(5);
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05');
 Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10');
 Schedule::command('notifications:subscription-renewal-reminders')->dailyAt('08:00');

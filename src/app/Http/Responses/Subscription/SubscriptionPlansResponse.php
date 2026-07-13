@@ -2,12 +2,19 @@
 
 namespace App\Http\Responses\Subscription;
 
+use App\Classes\Subscriptions\SubscriptionTrialService;
+use App\Models\User;
+
 class SubscriptionPlansResponse
 {
     /**
      * @param  array<string, mixed>  $plans
      */
-    public function __construct(private readonly array $plans) {}
+    public function __construct(
+        private readonly array $plans,
+        private readonly ?User $user = null,
+        private readonly ?SubscriptionTrialService $trialService = null,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -33,6 +40,28 @@ class SubscriptionPlansResponse
             'display_currency' => config('payment.display_currency', 'USD'),
             'processing_currency' => config('payment.processing_currency', 'COP'),
             'exchange_rate' => (float) config('payment.usd_cop_rate', 4000),
+            'trial' => $this->trialData(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function trialData(): array
+    {
+        $setupAmountUsd = max(0, round((float) config('subscriptions.trial.setup_amount_usd', 0), 2));
+        $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
+        $setupAmountInCents = (int) round($setupAmountUsd * $exchangeRate * 100);
+
+        return [
+            'enabled' => (bool) config('subscriptions.trial.enabled', true),
+            'available' => $this->user instanceof User && $this->trialService instanceof SubscriptionTrialService
+                ? $this->trialService->userCanStartTrial($this->user)
+                : false,
+            'days' => max(1, (int) config('subscriptions.trial.days', 7)),
+            'setup_amount_usd' => $setupAmountUsd,
+            'setup_amount_cop' => round($setupAmountInCents / 100, 2),
+            'setup_amount_in_cents' => $setupAmountInCents,
         ];
     }
 }
