@@ -736,7 +736,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/notifications?per_page=20&locale={{locale}}",
+              "raw": "{{base_url}}/api/notifications?page=1&per_page=20&locale={{locale}}&kind=all&read=all",
               "host": [
                 "{{base_url}}"
               ],
@@ -745,6 +745,62 @@
                 "notifications"
               ],
               "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number. Defaults to 1."
+                },
+                {
+                  "key": "per_page",
+                  "value": "20",
+                  "description": "Maximum 50."
+                },
+                {
+                  "key": "locale",
+                  "value": "{{locale}}",
+                  "description": "Optional locale used to format title/body."
+                },
+                {
+                  "key": "kind",
+                  "value": "all",
+                  "description": "Optional: all, notification, or log."
+                },
+                {
+                  "key": "read",
+                  "value": "all",
+                  "description": "Optional: all, unread, or read."
+                }
+              ]
+            },
+            "description": "Lists authenticated user notifications and logs, excluding dismissed items. Supports kind/read filters and returns most recent first. Requires token ability: user:read."
+          },
+          "response": []
+        },
+        {
+          "name": "List Bell Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?scope=bell&per_page=20&locale={{locale}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "bell",
+                  "description": "Returns only unread notifications visible in the top bell."
+                },
                 {
                   "key": "per_page",
                   "value": "20",
@@ -757,7 +813,7 @@
                 }
               ]
             },
-            "description": "Lists authenticated user app notifications, excluding dismissed notifications. Requires token ability: user:read."
+            "description": "Lists unread actionable notifications shown in the top bell. Logs and read items are excluded. Requires token ability: user:read."
           },
           "response": []
         },
@@ -823,7 +879,43 @@
                 "read-all"
               ]
             },
-            "description": "Marks all owned, non-dismissed notifications as read. Requires token ability: user:write."
+            "description": "Marks all owned, non-dismissed notifications as read. Add ?scope=bell to mark only items visible in the top bell. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Bell Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read-all?scope=bell",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "bell",
+                  "description": "Marks only unread top-bell notifications as read."
+                }
+              ]
+            },
+            "description": "Marks top-bell notifications as read without deleting them from the notification center. Requires token ability: user:write."
           },
           "response": []
         },

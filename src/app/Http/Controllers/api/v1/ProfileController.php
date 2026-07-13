@@ -773,23 +773,5 @@ class ProfileController extends Controller
             ...$baseData,
             'requirements' => $requirements,
         ]);
-
-        if (in_array('avatar', $missing, true)) {
-            $dispatcher->sendInApp($user, 'missing_avatar_required_to_publish_profile', $baseData);
-        }
-
-        if (in_array('voice', $missing, true)) {
-            $dispatcher->sendInApp($user, 'missing_cloned_voice_required_to_publish_profile', $baseData);
-        }
-
-        if (in_array('source', $missing, true)) {
-            $dispatcher->sendInApp($user, 'missing_approved_synchronized_source_required_to_publish_profile', $baseData);
-        }
-
-        if (array_intersect(['alias', 'name', 'description'], $missing) !== []) {
-            $dispatcher->sendInApp($user, 'missing_profile_alias_name_or_description', $baseData);
-        }
-
-        $dispatcher->sendInApp($user, 'profile_quality_incomplete', $baseData);
     }
 }

@@ -80,12 +80,20 @@ class NotificationDispatcher
      */
     private function createAppNotification(User $user, string $key, array $config, array $data): AppNotification
     {
+        $kind = (string) ($config['kind'] ?? 'notification');
+        $visibleInBell = array_key_exists('visible_in_bell', $config)
+            ? (bool) $config['visible_in_bell']
+            : $kind !== 'log';
+
         return AppNotification::create([
             'user_id' => $user->id,
             'notification_key' => $key,
             'category' => $config['category'] ?? null,
+            'kind' => $kind,
+            'visible_in_bell' => $visibleInBell,
             'data' => $data,
             'action_url' => $data['action_url'] ?? $config['action_url'] ?? null,
+            'read_at' => $visibleInBell ? null : now(),
         ]);
     }
 

@@ -379,12 +379,6 @@ class SubscriptionUsageRecorder
 
         $metric = (string) array_key_first($errors);
         $dispatcher = app(NotificationDispatcher::class);
-
-        $dispatcher->send($subscription->user, 'critical_plan_limit_reached', [
-            'metric' => $metric,
-            'plan' => $subscription->plan->value,
-        ]);
-
         $specificKey = $this->limitNotificationKey($metric);
 
         if ($specificKey) {
@@ -392,7 +386,19 @@ class SubscriptionUsageRecorder
                 'metric' => $metric,
                 'plan' => $subscription->plan->value,
             ]);
+
+            $dispatcher->sendEmail($subscription->user, 'critical_plan_limit_reached', [
+                'metric' => $metric,
+                'plan' => $subscription->plan->value,
+            ]);
+
+            return;
         }
+
+        $dispatcher->send($subscription->user, 'critical_plan_limit_reached', [
+            'metric' => $metric,
+            'plan' => $subscription->plan->value,
+        ]);
     }
 
     private function limitNotificationKey(string $metric): ?string

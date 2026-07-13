@@ -11,6 +11,8 @@ class AppNotification extends Model
         'user_id',
         'notification_key',
         'category',
+        'kind',
+        'visible_in_bell',
         'data',
         'action_url',
         'read_at',
@@ -21,6 +23,7 @@ class AppNotification extends Model
     {
         return [
             'data' => 'array',
+            'visible_in_bell' => 'boolean',
             'read_at' => 'datetime',
             'dismissed_at' => 'datetime',
         ];

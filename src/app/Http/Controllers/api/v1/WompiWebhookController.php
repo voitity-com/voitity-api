@@ -153,15 +153,11 @@ class WompiWebhookController extends Controller
         $data = $this->notificationDataForOrder($paymentOrder);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
-            $dispatcher->send($user, 'payment_approved', $data);
-
             if ($paymentOrder->billing_reason === 'subscription_renewal') {
                 $dispatcher->send($user, 'successful_subscription_renewal', $data);
             } else {
                 $dispatcher->send($user, 'successful_plan_purchase', $data);
             }
-
-            $dispatcher->send($user, 'plan_activated_or_changed', $data);
 
             return;
         }
@@ -172,12 +168,13 @@ class WompiWebhookController extends Controller
             return;
         }
 
-        $dispatcher->send($user, 'payment_rejected', $data);
-        $dispatcher->send($user, 'failed_payment', $data);
-
         if ($paymentOrder->billing_reason === 'subscription_renewal') {
             $dispatcher->send($user, 'failed_subscription_renewal', $data);
+
+            return;
         }
+
+        $dispatcher->send($user, 'failed_payment', $data);
     }
 
     /**

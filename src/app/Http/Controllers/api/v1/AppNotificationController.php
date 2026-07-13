@@ -30,11 +30,12 @@ class AppNotificationController extends Controller
             self::MAX_PER_PAGE
         );
         $locale = (string) $request->query('locale', $request->header('X-Locale', $user->locale ?: 'en'));
+        $scope = (string) $request->query('scope', 'all');
+        $kind = (string) $request->query('kind', 'all');
+        $read = (string) $request->query('read', 'all');
 
-        $notifications = $user->appNotifications()
-            ->whereNull('dismissed_at')
-            ->latest()
-            ->paginate($perPage);
+        $query = $this->filteredNotificationsQuery($user, $scope, $kind, $read);
+        $notifications = (clone $query)->latest()->paginate($perPage);
 
         return response()->json([
             'message' => 'Notifications retrieved successfully.',
@@ -43,10 +44,7 @@ class AppNotificationController extends Controller
                     ->map(fn (AppNotification $notification): array => $this->notificationToArray($notification, $locale))
                     ->values()
                     ->all(),
-                'unread_count' => $user->appNotifications()
-                    ->whereNull('read_at')
-                    ->whereNull('dismissed_at')
-                    ->count(),
+                'unread_count' => $this->bellUnreadCount($user),
                 'pagination' => [
                     'current_page' => $notifications->currentPage(),
                     'last_page' => $notifications->lastPage(),
@@ -85,6 +83,11 @@ class AppNotificationController extends Controller
         }
 
         $user->appNotifications()
+            ->when($request->query('scope') === 'bell', fn ($query) => $query->where('visible_in_bell', true))
+            ->when(
+                in_array($request->query('kind'), ['notification', 'log'], true),
+                fn ($query) => $query->where('kind', $request->query('kind'))
+            )
             ->whereNull('read_at')
             ->whereNull('dismissed_at')
             ->update(['read_at' => now(), 'updated_at' => now()]);
@@ -115,11 +118,14 @@ class AppNotificationController extends Controller
             'id' => $notification->id,
             'key' => $notification->notification_key,
             'category' => $notification->category,
+            'kind' => $notification->kind,
+            'visible_in_bell' => (bool) $notification->visible_in_bell,
             'title' => $message->title,
             'body' => $message->body,
             'action_label' => $message->actionLabel,
             'action_url' => $message->actionUrl,
             'read_at' => $notification->read_at?->toJSON(),
+            'dismissed_at' => $notification->dismissed_at?->toJSON(),
             'created_at' => $notification->created_at?->toJSON(),
         ];
     }
@@ -127,5 +133,24 @@ class AppNotificationController extends Controller
     private function localeFor(Request $request, User $user): string
     {
         return (string) $request->query('locale', $request->header('X-Locale', $user->locale ?: 'en'));
+    }
+
+    private function filteredNotificationsQuery(User $user, string $scope, string $kind, string $read)
+    {
+        return $user->appNotifications()
+            ->whereNull('dismissed_at')
+            ->when($scope === 'bell', fn ($query) => $query->where('visible_in_bell', true)->whereNull('read_at'))
+            ->when(in_array($kind, ['notification', 'log'], true), fn ($query) => $query->where('kind', $kind))
+            ->when($read === 'unread', fn ($query) => $query->whereNull('read_at'))
+            ->when($read === 'read', fn ($query) => $query->whereNotNull('read_at'));
+    }
+
+    private function bellUnreadCount(User $user): int
+    {
+        return $user->appNotifications()
+            ->where('visible_in_bell', true)
+            ->whereNull('read_at')
+            ->whereNull('dismissed_at')
+            ->count();
     }
 }

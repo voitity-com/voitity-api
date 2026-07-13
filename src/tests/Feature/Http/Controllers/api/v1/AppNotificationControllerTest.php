@@ -88,4 +88,81 @@ class AppNotificationControllerTest extends TestCase
 
         $this->assertSame(0, $user->appNotifications()->whereNull('read_at')->count());
     }
+
+    public function test_bell_scope_only_lists_unread_visible_notifications(): void
+    {
+        $user = User::factory()->create(['locale' => 'en']);
+        AppNotification::create([
+            'user_id' => $user->id,
+            'notification_key' => 'profile_activation_requirements_missing',
+            'category' => 'profile',
+            'data' => ['profile' => 'One', 'requirements' => 'avatar'],
+            'kind' => 'notification',
+            'visible_in_bell' => true,
+        ]);
+        AppNotification::create([
+            'user_id' => $user->id,
+            'notification_key' => 'profile_updated',
+            'category' => 'profile',
+            'data' => ['profile' => 'Two'],
+            'kind' => 'log',
+            'visible_in_bell' => false,
+            'read_at' => now(),
+        ]);
+        AppNotification::create([
+            'user_id' => $user->id,
+            'notification_key' => 'profile_deactivated',
+            'category' => 'profile',
+            'data' => ['profile' => 'Three'],
+            'kind' => 'notification',
+            'visible_in_bell' => true,
+            'read_at' => now(),
+        ]);
+        $token = $user->createToken('test-token', ['user:read'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT.'?scope=bell&locale=en')
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 1)
+            ->assertJsonCount(1, 'data.notifications')
+            ->assertJsonPath('data.notifications.0.key', 'profile_activation_requirements_missing')
+            ->assertJsonPath('data.notifications.0.kind', 'notification')
+            ->assertJsonPath('data.notifications.0.visible_in_bell', true);
+    }
+
+    public function test_it_filters_notification_center_by_kind_and_read_status(): void
+    {
+        $user = User::factory()->create(['locale' => 'en']);
+        AppNotification::create([
+            'user_id' => $user->id,
+            'notification_key' => 'profile_activation_requirements_missing',
+            'category' => 'profile',
+            'data' => ['profile' => 'One', 'requirements' => 'avatar'],
+            'kind' => 'notification',
+            'visible_in_bell' => true,
+        ]);
+        AppNotification::create([
+            'user_id' => $user->id,
+            'notification_key' => 'admin_impersonation_started',
+            'category' => 'admin',
+            'data' => ['user' => 'customer@example.com'],
+            'kind' => 'log',
+            'visible_in_bell' => false,
+            'read_at' => now(),
+        ]);
+        $token = $user->createToken('test-token', ['user:read'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT.'?kind=log&read=read&locale=en')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.notifications')
+            ->assertJsonPath('data.notifications.0.key', 'admin_impersonation_started')
+            ->assertJsonPath('data.notifications.0.kind', 'log');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT.'?kind=notification&read=unread&locale=en')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.notifications')
+            ->assertJsonPath('data.notifications.0.key', 'profile_activation_requirements_missing');
+    }
 }

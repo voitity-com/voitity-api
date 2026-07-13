@@ -18,6 +18,8 @@ return [
             'app' => true,
             'mandatory' => true,
             'category' => 'account',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/auth/custom/sign-in',
             'copy' => [
                 'en' => [
@@ -39,6 +41,8 @@ return [
             'app' => true,
             'mandatory' => true,
             'category' => 'account',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard',
             'copy' => [
                 'en' => [
@@ -366,6 +370,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'profile',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard/profiles',
             'copy' => [
                 'en' => ['title' => 'Profile created', 'body' => 'Profile :profile was created.'],
@@ -376,6 +382,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'profile',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Profile updated', 'body' => 'Profile :profile was updated.'],
                 'es' => ['title' => 'Perfil actualizado', 'body' => 'El perfil :profile fue actualizado.'],
@@ -459,6 +467,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'source',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Source uploaded', 'body' => ':source was uploaded to :profile.'],
                 'es' => ['title' => 'Fuente cargada', 'body' => ':source fue cargada en :profile.'],
@@ -468,6 +478,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'source',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Source processing started', 'body' => 'We started processing :source.'],
                 'es' => ['title' => 'Procesamiento iniciado', 'body' => 'Empezamos a procesar :source.'],
@@ -477,6 +489,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'source',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Source approved', 'body' => ':source was approved.'],
                 'es' => ['title' => 'Fuente aprobada', 'body' => ':source fue aprobada.'],
@@ -486,6 +500,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'source',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Source synchronized', 'body' => ':source is now synchronized with :profile.'],
                 'es' => ['title' => 'Fuente sincronizada', 'body' => ':source ya está sincronizada con :profile.'],
@@ -505,6 +521,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'source',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Source data ready to review', 'body' => 'Extracted data from :source is ready for review.'],
                 'es' => ['title' => 'Datos listos para revisar', 'body' => 'Los datos extraídos de :source están listos para revisión.'],
@@ -523,6 +541,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'avatar',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Avatar generation started', 'body' => 'Avatar generation started for :profile.'],
                 'es' => ['title' => 'Generación de avatar iniciada', 'body' => 'La generación de avatar inició para :profile.'],
@@ -551,6 +571,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'avatar',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Avatar activated', 'body' => 'The avatar for :profile was activated.'],
                 'es' => ['title' => 'Avatar activado', 'body' => 'El avatar de :profile fue activado.'],
@@ -560,6 +582,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'voice',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Voice cloning started', 'body' => 'Voice cloning started for :profile.'],
                 'es' => ['title' => 'Clonación de voz iniciada', 'body' => 'La clonación de voz inició para :profile.'],
@@ -627,6 +651,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'usage',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard/analytics',
             'copy' => [
                 'en' => ['title' => 'Usage updated', 'body' => 'Your plan usage was updated.'],
@@ -693,6 +719,8 @@ return [
             'app' => true,
             'mandatory' => true,
             'category' => 'billing',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard/settings/billing',
             'copy' => [
                 'en' => ['subject' => 'Your Bigmelo payment was approved', 'title' => 'Payment approved', 'body' => 'Your payment for :plan was approved for :amount.', 'action' => 'View billing'],
@@ -704,6 +732,8 @@ return [
             'app' => true,
             'mandatory' => true,
             'category' => 'billing',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard/settings/billing',
             'copy' => [
                 'en' => ['subject' => 'Your Bigmelo payment was rejected', 'title' => 'Payment rejected', 'body' => 'Your payment for :plan was rejected. Try again from billing.', 'action' => 'Open billing'],
@@ -715,6 +745,8 @@ return [
             'app' => true,
             'mandatory' => true,
             'category' => 'billing',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'action_url' => '/dashboard/settings/billing',
             'copy' => [
                 'en' => ['subject' => 'Your Bigmelo plan is active', 'title' => 'Plan active', 'body' => 'Your :plan plan is now active.', 'action' => 'View billing'],
@@ -725,6 +757,8 @@ return [
             'email' => false,
             'app' => true,
             'category' => 'admin',
+            'kind' => 'log',
+            'visible_in_bell' => false,
             'copy' => [
                 'en' => ['title' => 'Admin impersonation started', 'body' => 'You started viewing the admin as :user.'],
                 'es' => ['title' => 'Impersonación iniciada', 'body' => 'Empezaste a ver el admin como :user.'],

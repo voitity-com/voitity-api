@@ -121,7 +121,6 @@ class AdminUserController extends Controller
             'subscription_id' => $subscription->id,
         ];
         app(NotificationDispatcher::class)->send($user, 'admin_changed_user_plan', $notificationData);
-        app(NotificationDispatcher::class)->send($user, 'plan_activated_or_changed', $notificationData);
 
         $user
             ->load('activeSubscription')

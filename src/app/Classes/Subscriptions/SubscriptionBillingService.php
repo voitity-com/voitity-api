@@ -239,9 +239,7 @@ class SubscriptionBillingService
         $data = $this->notificationDataForOrder($paymentOrder);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
-            $dispatcher->send($user, 'payment_approved', $data);
             $dispatcher->send($user, 'successful_subscription_renewal', $data);
-            $dispatcher->send($user, 'plan_activated_or_changed', $data);
 
             return;
         }
@@ -252,8 +250,6 @@ class SubscriptionBillingService
             return;
         }
 
-        $dispatcher->send($user, 'payment_rejected', $data);
-        $dispatcher->send($user, 'failed_payment', $data);
         $dispatcher->send($user, 'failed_subscription_renewal', $data);
     }
 
