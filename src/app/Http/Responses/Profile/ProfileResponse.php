@@ -5,6 +5,7 @@ namespace App\Http\Responses\Profile;
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Models\Profile;
 use App\Models\Voice;
+use App\Services\ProfileConversationMessageService;
 
 class ProfileResponse
 {
@@ -32,6 +33,7 @@ class ProfileResponse
             'voice_description' => $activeVoice?->description,
             'voice_language_code' => $activeVoice?->language_code,
             'publication' => app(ProfilePublicationReadinessService::class)->evaluate($this->profile),
+            'conversation_messages' => app(ProfileConversationMessageService::class)->resolvedMessages($this->profile),
             'data' => $this->profile->data,
             'networks' => (object) ($this->profile->networks ?? []),
             'created_at' => $this->profile->created_at?->toJSON(),

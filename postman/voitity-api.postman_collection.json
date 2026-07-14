@@ -1317,6 +1317,192 @@
               "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 1,\n      \"user_id\": 1,\n      \"plan\": \"admin\",\n      \"plan_name\": \"Admin\",\n      \"unlimited\": true,\n      \"price_usd\": 0,\n      \"currency\": \"USD\",\n      \"interval\": \"monthly\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"free\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2026-08-09T00:00:00.000000Z\",\n      \"next_billing_at\": null\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"profiles\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_images\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 0,\n        \"profiles\": 0,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 0\n      },\n      \"by_type\": []\n    }\n  }\n}"
             }
           ]
+        },
+        {
+          "name": "Start Subscription Trial Checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.payment_order) {",
+                  "  pm.environment.set(\"payment_order_id\", json.data.payment_order.id);",
+                  "  pm.environment.set(\"payment_reference\", json.data.payment_order.reference);",
+                  "  if (json.data.payment_order.amounts) {",
+                  "    pm.environment.set(\"wompi_event_amount_in_cents\", String(json.data.payment_order.amounts.amount_in_cents));",
+                  "  }",
+                  "}",
+                  "if (json.data && json.data.checkout) {",
+                  "  pm.environment.set(\"wompi_checkout_url\", json.data.checkout.checkout_url);",
+                  "}",
+                  "pm.test('trial checkout creates a trial setup order', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "  pm.expect(json.data.payment_order.recurring).to.eql(true);",
+                  "  pm.expect(json.data.payment_order.billing_reason).to.eql('trial_setup');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscription/trial",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "trial"
+              ]
+            },
+            "description": "Creates a Wompi checkout for the free trial setup. It stores a reusable payment source and starts the trial after an approved Wompi event. Requires token ability: payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription Trial",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('trial cancellation is scheduled', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.subscription.cancel_at_period_end).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/trial/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "trial",
+                "cancel"
+              ]
+            },
+            "description": "Cancels a current free trial at period end. Access stays active until trial_ends_at and no automatic trial conversion charge is attempted. Requires token ability: payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription Renewal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('renewal cancellation is scheduled', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.subscription.cancel_at_period_end).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/renewal/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "renewal",
+                "cancel"
+              ]
+            },
+            "description": "Cancels automatic renewal for an active paid recurring subscription. Access stays active until renews_at. Requires token ability: payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Reactivate Subscription Renewal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('renewal is reactivated', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.subscription.cancel_at_period_end).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/renewal/reactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "renewal",
+                "reactivate"
+              ]
+            },
+            "description": "Reactivates a subscription or trial that was cancelled at period end before it expires. Requires token ability: payments:create."
+          },
+          "response": []
         }
       ]
     },
@@ -1730,6 +1916,161 @@
               ]
             },
             "description": "Uploads an audio recording, transcribes it, and returns text plus field limit metadata for description/personality. Requires token ability: profile:transcribe. Set profile_transcription_audio_file_path to a local audio file such as webm, mp3, wav, m4a, ogg, or flac. profile_transcription_field should be description or personality."
+          },
+          "response": []
+        },
+        {
+          "name": "List Profile Conversation Messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages"
+              ]
+            },
+            "description": "Lists the profile's configurable conversation messages: initial greeting and fallback when the AI cannot answer. Requires token ability: profile:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Conversation Messages",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial\": {\n    \"text\": \"{{profile_initial_message}}\"\n  },\n  \"fallback_no_answer\": {\n    \"text\": \"{{profile_fallback_no_answer_message}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages"
+              ]
+            },
+            "description": "Updates greeting/fallback texts. If a cloned active voice exists and no recorded audio is present, the API attempts to generate missing audio automatically. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Profile Conversation Message Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio",
+                "generate"
+              ]
+            },
+            "description": "Generates audio for initial or fallback_no_answer using the active cloned voice. Requires token ability: voice:use."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Profile Conversation Message Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{profile_conversation_audio_file_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio"
+              ]
+            },
+            "description": "Uploads a manually recorded audio for initial or fallback_no_answer. The matching text must already be enabled. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Profile Conversation Message Audio",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio"
+              ]
+            },
+            "description": "Removes the saved audio for initial or fallback_no_answer without deleting the text. Requires token ability: profile:write."
           },
           "response": []
         },

@@ -80,9 +80,16 @@ class SubscriptionLimitsResponse
             'active' => (bool) $this->subscription->active,
             'billing_mode' => $this->subscription->billing_mode,
             'cancel_at_period_end' => (bool) $this->subscription->cancel_at_period_end,
+            'cancelled_at' => $this->subscription->cancelled_at?->toJSON(),
             'started_at' => $this->subscription->started_at?->toJSON(),
             'renews_at' => $this->subscription->renews_at?->toJSON(),
+            'last_billed_at' => $this->subscription->last_billed_at?->toJSON(),
             'next_billing_at' => $this->subscription->next_billing_at?->toJSON(),
+            'trial_started_at' => $this->subscription->trial_started_at?->toJSON(),
+            'trial_ends_at' => $this->subscription->trial_ends_at?->toJSON(),
+            'trial_cancelled_at' => $this->subscription->trial_cancelled_at?->toJSON(),
+            'trial_converted_at' => $this->subscription->trial_converted_at?->toJSON(),
+            'trial_days_remaining' => $this->trialDaysRemaining(),
         ];
     }
 
@@ -147,6 +154,19 @@ class SubscriptionLimitsResponse
         $plan = $this->enumValue($this->subscription->plan);
 
         return (bool) config("subscriptions.plans.{$plan}.unlimited", false);
+    }
+
+    private function trialDaysRemaining(): ?int
+    {
+        if (! $this->subscription->trial_ends_at || $this->enumValue($this->subscription->status) !== 'trialing') {
+            return null;
+        }
+
+        if ($this->subscription->trial_ends_at->isPast()) {
+            return 0;
+        }
+
+        return now()->diffInDays($this->subscription->trial_ends_at, false) + 1;
     }
 
     private function usageValue(string $metric, mixed $value): int|float

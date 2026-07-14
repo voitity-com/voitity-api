@@ -61,6 +61,11 @@ class Profile extends Model
         return $this->hasMany(Message::class);
     }
 
+    public function conversationMessages(): HasMany
+    {
+        return $this->hasMany(ProfileConversationMessage::class);
+    }
+
     public function aiVideos(): HasMany
     {
         return $this->hasMany(AiVideo::class);

@@ -27,7 +27,7 @@ class ProfileController extends Controller
 {
     private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
 
-    private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,name,description,language_code,source_voice_id,source,active';
+    private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,user_id,name,description,language_code,source_voice_id,source,active';
 
     private const AVATAR_RESPONSE_COLUMNS = 'avatars:id,profile_id,file,status';
 
@@ -91,7 +91,12 @@ class ProfileController extends Controller
             }
 
             $profiles = $user->profiles()
-                ->with([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS])
+                ->with([
+                    self::VOICE_RESPONSE_COLUMNS,
+                    self::AVATAR_RESPONSE_COLUMNS,
+                    self::SOURCE_RESPONSE_COLUMNS,
+                    'conversationMessages',
+                ])
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -354,7 +359,12 @@ class ProfileController extends Controller
             $profile = Profile::where('alias', $alias)
                 ->where('active', true)
                 ->where('status', ProfileStatus::Published->value)
-                ->with([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS])
+                ->with([
+                    self::VOICE_RESPONSE_COLUMNS,
+                    self::AVATAR_RESPONSE_COLUMNS,
+                    self::SOURCE_RESPONSE_COLUMNS,
+                    'conversationMessages',
+                ])
                 ->first();
 
             if (! $profile) {
@@ -745,7 +755,12 @@ class ProfileController extends Controller
 
     private function loadProfileResponseRelations(Profile $profile): void
     {
-        $profile->loadMissing([self::VOICE_RESPONSE_COLUMNS, self::AVATAR_RESPONSE_COLUMNS, self::SOURCE_RESPONSE_COLUMNS]);
+        $profile->loadMissing([
+            self::VOICE_RESPONSE_COLUMNS,
+            self::AVATAR_RESPONSE_COLUMNS,
+            self::SOURCE_RESPONSE_COLUMNS,
+            'conversationMessages',
+        ]);
     }
 
     /**

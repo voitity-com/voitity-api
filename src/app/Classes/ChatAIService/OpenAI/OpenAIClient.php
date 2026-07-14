@@ -331,7 +331,7 @@ class OpenAIClient implements ChatAIClient
             }
         }
 
-        $prompt .= '. Only answer using the information in this prompt. If the requested information is not available here, say you do not have that information at this moment';
+        $prompt .= '. Only answer using the information in this prompt. If the requested information is not available here, start the answer exactly with [[BIGMELO_NO_ANSWER]] and then say you do not have that information at this moment';
         $prompt .= '. Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview';
         $prompt .= '. Always respond in character and maintain consistency with your defined role and personality.';
 

@@ -262,6 +262,153 @@ return [
                 ],
             ],
         ],
+        'trial_started' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo free trial started',
+                    'title' => 'Free trial started',
+                    'body' => 'Your :plan trial is active. You will be charged automatically when the trial ends unless you cancel first.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'Tu prueba gratis de Bigmelo comenzó',
+                    'title' => 'Prueba gratis iniciada',
+                    'body' => 'Tu prueba del plan :plan está activa. Se cobrará automáticamente cuando termine la prueba, salvo que canceles antes.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'trial_cancelled' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo trial was cancelled',
+                    'title' => 'Trial cancellation scheduled',
+                    'body' => 'Your :plan trial will stay active until :trial_ends_at. No automatic charge will be made.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'Tu prueba de Bigmelo fue cancelada',
+                    'title' => 'Cancelación de prueba programada',
+                    'body' => 'Tu prueba del plan :plan seguirá activa hasta :trial_ends_at. No se hará el cobro automático.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'trial_converted_to_paid' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo plan is now active',
+                    'title' => 'Trial converted to plan',
+                    'body' => 'Your :plan trial converted to a paid subscription for :amount. Your usage limits were reset.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'Tu plan de Bigmelo ya está activo',
+                    'title' => 'Prueba convertida a plan',
+                    'body' => 'Tu prueba del plan :plan pasó a suscripción pagada por :amount. Tus límites de uso se reiniciaron.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'trial_payment_failed' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo trial payment failed',
+                    'title' => 'Trial payment failed',
+                    'body' => 'We could not activate the paid :plan subscription after the trial. Start checkout again from billing.',
+                    'action' => 'Open billing',
+                ],
+                'es' => [
+                    'subject' => 'El pago de tu prueba de Bigmelo falló',
+                    'title' => 'Pago de prueba fallido',
+                    'body' => 'No pudimos activar la suscripción pagada :plan después de la prueba. Inicia el checkout de nuevo desde facturación.',
+                    'action' => 'Abrir facturación',
+                ],
+            ],
+        ],
+        'subscription_renewal_cancelled' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo renewal was cancelled',
+                    'title' => 'Renewal cancelled',
+                    'body' => 'Your :plan subscription will stay active until :renews_at and will not renew automatically.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'La renovación de Bigmelo fue cancelada',
+                    'title' => 'Renovación cancelada',
+                    'body' => 'Tu suscripción :plan seguirá activa hasta :renews_at y no se renovará automáticamente.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'subscription_renewal_reactivated' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo renewal was reactivated',
+                    'title' => 'Renewal reactivated',
+                    'body' => 'Automatic renewal is active again for your :plan subscription.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'La renovación de Bigmelo fue reactivada',
+                    'title' => 'Renovación reactivada',
+                    'body' => 'La renovación automática volvió a quedar activa para tu suscripción :plan.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'subscription_expired' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo subscription ended',
+                    'title' => 'Subscription ended',
+                    'body' => 'Your :plan subscription ended. You can start a new checkout from billing.',
+                    'action' => 'Open billing',
+                ],
+                'es' => [
+                    'subject' => 'Tu suscripción de Bigmelo terminó',
+                    'title' => 'Suscripción finalizada',
+                    'body' => 'Tu suscripción :plan terminó. Puedes iniciar un nuevo checkout desde facturación.',
+                    'action' => 'Abrir facturación',
+                ],
+            ],
+        ],
         'admin_changed_user_plan' => [
             'email' => true,
             'app' => true,

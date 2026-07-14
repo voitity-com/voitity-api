@@ -8,10 +8,11 @@ use App\Classes\VoiceService\VoiceService;
 use App\Enums\SubscriptionUsageType;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
+use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
-use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\ProfileConversationMessageService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -110,6 +111,11 @@ class CloneVoice implements ShouldQueue
                 $this->notifyVoiceOwner($voice, 'voice_cloned_successfully', [
                     'provider' => $clonedVoice->source,
                 ]);
+                $freshVoice = $voice->fresh();
+
+                if ($freshVoice instanceof Voice) {
+                    app(ProfileConversationMessageService::class)->generateMissingAudiosForVoice($freshVoice);
+                }
             } else {
                 $this->notifyVoiceOwner($voice, 'voice_cloning_failed', [
                     'reason' => $clonedVoice->status,
