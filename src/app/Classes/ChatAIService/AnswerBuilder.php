@@ -13,13 +13,15 @@ use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\ProfileConversationMessageService;
 use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
 {
     public function __construct(
         private readonly ChatAIClient $chatAIClient,
-        private readonly VoiceManager $voiceManager
+        private readonly VoiceManager $voiceManager,
+        private readonly ?ProfileConversationMessageService $conversationMessages = null
     ) {}
 
     public function getAnswer(Profile $profile, Message $question): AnswerResponse
@@ -51,22 +53,41 @@ class AnswerBuilder
             throw new ChatAIAnswerGenerationFailed($chatAIAnswer);
         }
 
-        $audio = $this->getAudio($profile, $chatAIAnswer->answer);
+        $answerText = $this->conversationMessages()->stripNoAnswerMarker($chatAIAnswer->answer);
+        $source = $chatAIAnswer->source;
+        $audioPayload = null;
+        $usesPreconfiguredAnswer = false;
 
-        $audioUrl = $audio?->getAudioUrl();
+        if ($this->conversationMessages()->shouldUseFallbackAnswer($profile, $chatAIAnswer->answer)) {
+            $fallback = $this->conversationMessages()->resolvedMessage(
+                $profile,
+                \App\Models\ProfileConversationMessage::TYPE_FALLBACK_NO_ANSWER
+            );
+            $answerText = (string) $fallback['text'];
+            $source = 'profile_conversation_message';
+            $audioPayload = $this->preconfiguredAudioPayload($fallback);
+            $usesPreconfiguredAnswer = true;
+        }
 
-        $audioPayload = $audio ? [
-            'audio_url' => $audioUrl,
-            'status' => $audio->status,
-            'metadata' => $audio->metadata,
-        ] : null;
+        if ($audioPayload === null && ! $usesPreconfiguredAnswer) {
+            $audio = $this->getAudio($profile, $answerText);
+            $audioUrl = $audio?->getAudioUrl();
+
+            $audioPayload = $audio ? [
+                'audio_url' => $audioUrl,
+                'status' => $audio->status,
+                'metadata' => $audio->metadata,
+            ] : null;
+        }
+
+        $audioUrl = $audioPayload['audio_url'] ?? null;
 
         $answerMessage = Message::create([
             'profile_id' => $profile->id,
             'chat_id' => $question->chat_id,
-            'text' => $chatAIAnswer->answer,
+            'text' => $answerText,
             'type' => 'answer',
-            'source' => $chatAIAnswer->source,
+            'source' => $source,
             'audio' => $audioUrl,
             'data' => [
                 'chat_ai' => $chatAIAnswer->toArray(),
@@ -146,5 +167,32 @@ class AnswerBuilder
             'service' => 'Voice audio provider',
             'message' => $reason,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     * @return array<string, mixed>|null
+     */
+    private function preconfiguredAudioPayload(array $message): ?array
+    {
+        if (empty($message['audio_url'])) {
+            return null;
+        }
+
+        return [
+            'audio_url' => $message['audio_url'],
+            'status' => $message['status'] ?? 'ready',
+            'metadata' => [
+                'source' => $message['audio_source'] ?? null,
+                'voice_id' => $message['voice_id'] ?? null,
+                'format' => $message['audio_format'] ?? null,
+                'preconfigured' => true,
+            ],
+        ];
+    }
+
+    private function conversationMessages(): ProfileConversationMessageService
+    {
+        return $this->conversationMessages ?? app(ProfileConversationMessageService::class);
     }
 }

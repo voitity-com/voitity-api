@@ -1920,6 +1920,161 @@
           "response": []
         },
         {
+          "name": "List Profile Conversation Messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages"
+              ]
+            },
+            "description": "Lists the profile's configurable conversation messages: initial greeting and fallback when the AI cannot answer. Requires token ability: profile:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Conversation Messages",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial\": {\n    \"text\": \"{{profile_initial_message}}\"\n  },\n  \"fallback_no_answer\": {\n    \"text\": \"{{profile_fallback_no_answer_message}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages"
+              ]
+            },
+            "description": "Updates greeting/fallback texts. If a cloned active voice exists and no recorded audio is present, the API attempts to generate missing audio automatically. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Profile Conversation Message Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio",
+                "generate"
+              ]
+            },
+            "description": "Generates audio for initial or fallback_no_answer using the active cloned voice. Requires token ability: voice:use."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Profile Conversation Message Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{profile_conversation_audio_file_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio"
+              ]
+            },
+            "description": "Uploads a manually recorded audio for initial or fallback_no_answer. The matching text must already be enabled. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Profile Conversation Message Audio",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/conversation-messages/{{profile_conversation_message_type}}/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "conversation-messages",
+                "{{profile_conversation_message_type}}",
+                "audio"
+              ]
+            },
+            "description": "Removes the saved audio for initial or fallback_no_answer without deleting the text. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
           "name": "Update Profile",
           "request": {
             "method": "PATCH",
