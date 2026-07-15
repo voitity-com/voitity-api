@@ -16,6 +16,8 @@ use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileIntegration;
+use App\Models\ProfileIntegrationMedia;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
@@ -246,6 +248,250 @@ class AnswerBuilderTest extends TestCase
         $response = $builder->getAnswer($profile, $question)->toArray();
 
         $this->assertNull($response['audio_url']);
+    }
+
+    public function test_get_answer_attaches_first_selected_instagram_media_for_photo_request(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muestrame una foto de Instagram',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'older',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/older.jpg',
+            'permalink' => 'https://www.instagram.com/p/older/',
+            'caption' => 'Older',
+            'observation' => 'Older note',
+            'selected' => true,
+            'taken_at' => now()->subDays(2),
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'newer',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/newer.jpg',
+            'permalink' => 'https://www.instagram.com/p/newer/',
+            'caption' => 'Newer',
+            'observation' => 'Newer note',
+            'selected' => true,
+            'taken_at' => now()->subDay(),
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: '**Aqui** tienes una foto de Instagram. ![Newer](https://www.instagram.com/p/newer/) [Ver foto](https://www.instagram.com/p/newer/)',
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Muestrame una foto de Instagram', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertStringNotContainsString('**', $response['text']);
+        $this->assertStringNotContainsString('![', $response['text']);
+        $this->assertStringNotContainsString('https://www.instagram.com/p/newer/', $response['text']);
+        $this->assertStringContainsString('Puedes ver más fotos en Instagram.', $response['text']);
+        $this->assertSame('https://example.com/newer.jpg', $response['media'][0]['image_url']);
+        $this->assertSame('https://www.instagram.com/p/newer/', $response['media'][0]['permalink']);
+        $this->assertSame('Newer note', $response['media'][0]['observation']);
+        $this->assertSame('instagram', $response['media'][0]['provider_key']);
+        $this->assertSame('Instagram', $response['media'][0]['provider_label']);
+    }
+
+    public function test_get_answer_uses_instagram_media_fallback_when_model_has_no_answer(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muestrame una foto de Instagram',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'media',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/media.jpg',
+            'permalink' => 'https://www.instagram.com/p/media/',
+            'caption' => 'Media',
+            'observation' => 'Media note',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: '[[BIGMELO_NO_ANSWER]] No tengo esa información en este momento.',
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Muestrame una foto de Instagram', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertStringNotContainsString('No tengo esa información', $response['text']);
+        $this->assertStringContainsString('Te comparto esta foto: Media note.', $response['text']);
+        $this->assertStringContainsString('Puedes ver más fotos en Instagram.', $response['text']);
+        $this->assertStringNotContainsString('https://www.instagram.com/p/media/', $response['text']);
+        $this->assertSame('https://example.com/media.jpg', $response['media'][0]['image_url']);
+    }
+
+    public function test_get_answer_does_not_send_raw_media_url_to_audio_generation(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $this->createActiveSubscriptionFor($user);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muestrame fotos',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $voice = Voice::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'name' => 'Primary voice',
+            'description' => 'desc',
+            'source_voice_id' => 'voice_123',
+            'source' => 'elevenlabs',
+            'is_verified' => true,
+            'active' => true,
+        ]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'media',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/media.jpg',
+            'permalink' => 'https://www.instagram.com/p/media/',
+            'caption' => 'Foto en Mexico',
+            'observation' => 'Mexico',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: 'Esta foto fue tomada en Mexico: https://www.instagram.com/p/media/',
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Muestrame fotos', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+
+        $spokenText = null;
+        $voiceClient = Mockery::mock(VoiceClient::class);
+        $voiceClient->shouldReceive('generateAudio')
+            ->once()
+            ->withArgs(function (Voice $providedVoice, string $text) use (&$spokenText, $voice) {
+                $spokenText = $text;
+
+                return $providedVoice->is($voice);
+            })
+            ->andReturn(new VoiceClientGeneratedAudio(
+                voice: $voice,
+                text: 'Esta foto fue tomada en Mexico. Puedes ver más fotos en Instagram.',
+                audioUrl: 'https://cdn.example.com/audio/photo.mp3',
+                audioContent: null,
+                audioFormat: 'mp3',
+                duration: 2.5,
+                status: 'success',
+                metadata: []
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')
+            ->once()
+            ->with('elevenlabs')
+            ->andReturn($voiceClient);
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame('https://cdn.example.com/audio/photo.mp3', $response['audio_url']);
+        $this->assertNotNull($spokenText);
+        $this->assertStringNotContainsString('http', $spokenText);
+        $this->assertStringContainsString('Instagram', $spokenText);
+        $this->assertStringNotContainsString('https://www.instagram.com/p/media/', $response['text']);
     }
 
     public function test_get_answer_handles_voice_driver_failure(): void

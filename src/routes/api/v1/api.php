@@ -11,6 +11,7 @@ use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\ProfileConversationMessageController;
+use App\Http\Controllers\api\v1\ProfileIntegrationController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
@@ -34,6 +35,8 @@ Route::get('/notifications', [AppNotificationController::class, 'index'])->middl
 Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::delete('/notifications/{notification}', [AppNotificationController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:user:write']);
+
+Route::get('/integrations/instagram/callback', [ProfileIntegrationController::class, 'instagramCallback']);
 
 Route::prefix('/admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
@@ -76,6 +79,12 @@ Route::prefix('/profile')->group(function () {
     Route::post('/{profile}/sources/cv', [ProfileKnowledgeController::class, 'storeCv'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/sources/{source}/file', [ProfileKnowledgeController::class, 'sourceFile'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/sources/{source}/approve', [ProfileKnowledgeController::class, 'approveSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/integrations', [ProfileIntegrationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/integrations/instagram/connect-url', [ProfileIntegrationController::class, 'instagramConnectUrl'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/integrations/instagram/sync', [ProfileIntegrationController::class, 'instagramSync'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/integrations/instagram/media', [ProfileIntegrationController::class, 'instagramMedia'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::put('/{profile}/integrations/instagram/media-selection', [ProfileIntegrationController::class, 'instagramUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/instagram', [ProfileIntegrationController::class, 'instagramDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);

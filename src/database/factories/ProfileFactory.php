@@ -20,6 +20,7 @@ class ProfileFactory extends Factory
             'description' => $this->faker->paragraph(),
             'genre' => 'na',
             'personality' => $this->faker->sentence(),
+            'locale' => 'es',
             'profession_key' => 'custom',
             'profession_template_version' => '2026-07',
             'active' => false,

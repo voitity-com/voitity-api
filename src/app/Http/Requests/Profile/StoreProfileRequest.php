@@ -4,6 +4,7 @@ namespace App\Http\Requests\Profile;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class StoreProfileRequest extends FormRequest
 {
@@ -20,6 +21,11 @@ class StoreProfileRequest extends FormRequest
                 'alias' => trim((string) $this->input('alias')),
             ]);
         }
+
+        $locale = Str::lower(trim((string) ($this->input('locale') ?? 'es')));
+        $this->merge([
+            'locale' => in_array($locale, ['en', 'es'], true) ? $locale : $this->input('locale'),
+        ]);
     }
 
     public function authorize(): bool
@@ -40,6 +46,7 @@ class StoreProfileRequest extends FormRequest
             'description' => 'required|string|max:500',
             'genre' => 'required|string|max:10',
             'personality' => 'required|string|max:200',
+            'locale' => ['sometimes', 'required', 'string', Rule::in(['en', 'es'])],
             'profession_key' => ['sometimes', 'string', 'max:80', Rule::in(array_keys(config('profile-professions.templates', [])))],
             'profession_template_version' => ['sometimes', 'string', 'max:40'],
         ];

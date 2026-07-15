@@ -19,6 +19,7 @@ class Profile extends Model
         'description',
         'genre',
         'personality',
+        'locale',
         'profession_key',
         'profession_template_version',
         'active',
@@ -30,6 +31,7 @@ class Profile extends Model
     protected $attributes = [
         'active' => false,
         'status' => ProfileStatus::Draft->value,
+        'locale' => 'es',
         'profession_key' => 'custom',
         'profession_template_version' => '2026-07',
         'networks' => '{}',
@@ -84,6 +86,16 @@ class Profile extends Model
     public function sources(): HasMany
     {
         return $this->hasMany(ProfileSource::class);
+    }
+
+    public function integrations(): HasMany
+    {
+        return $this->hasMany(ProfileIntegration::class);
+    }
+
+    public function integrationMedia(): HasMany
+    {
+        return $this->hasMany(ProfileIntegrationMedia::class);
     }
 
     public function facts(): HasMany

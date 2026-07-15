@@ -306,6 +306,10 @@ class OpenAIClient implements ChatAIClient
             $prompt .= " Your personality is {$profile->personality}.";
         }
 
+        $profileLocale = $this->normalizeProfileLocale($profile->locale ?? null);
+        $profileLanguage = $profileLocale === 'en' ? 'English' : 'Spanish';
+        $prompt .= ". Profile language: {$profileLanguage} ({$profileLocale}). Always answer in {$profileLanguage}, regardless of the visitor's language.";
+
         if (! empty($profile->data)) {
             $profileData = json_encode($profile->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -319,6 +323,13 @@ class OpenAIClient implements ChatAIClient
         if ($publicSocialLinks !== null) {
             $prompt .= ". Public social links (authoritative): {$publicSocialLinks}";
             $prompt .= '. If asked for social networks, usernames, Instagram, GitHub, LinkedIn, or where to see more content, answer using these exact links. Treat these links as available profile information and do not say you do not have them';
+        }
+
+        $selectedInstagramMedia = $this->buildSelectedInstagramMediaPrompt($profile, $currentMessageId);
+
+        if ($selectedInstagramMedia !== null) {
+            $prompt .= ". Selected Instagram media available for visitor conversations: {$selectedInstagramMedia}";
+            $prompt .= '. If the visitor asks for photos, pictures, images, posts, or visual memories, use this selected media item as the current photo. Use provider_label, observation, caption, and date as factual context. Mention where the photo was taken only when observation or caption reasonably indicates a place. Keep the answer short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches the media and external link separately. Do not invent photos, places, providers, or links outside this list';
         }
 
         $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
@@ -362,6 +373,48 @@ class OpenAIClient implements ChatAIClient
         }
 
         return implode('; ', $links);
+    }
+
+    private function buildSelectedInstagramMediaPrompt(Profile $profile, ?int $currentMessageId = null): ?string
+    {
+        $media = $profile->integrationMedia()
+            ->where('provider', 'instagram')
+            ->where('selected', true)
+            ->orderByDesc('taken_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type']);
+
+        if ($media->isEmpty()) {
+            return null;
+        }
+
+        if ($currentMessageId !== null) {
+            $media = collect([
+                $media->values()[max(0, ($currentMessageId - 1) % $media->count())],
+            ]);
+        } else {
+            $media = $media->take(1);
+        }
+
+        $items = $media->map(fn ($item): array => [
+            'id' => $item->id,
+            'provider_key' => 'instagram',
+            'provider_label' => 'Instagram',
+            'type' => $item->media_type,
+            'caption' => $item->caption,
+            'observation' => $item->observation,
+            'permalink' => $item->permalink,
+            'date' => $item->taken_at?->toDateString(),
+        ])->values()->all();
+        $json = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $json !== false ? $json : null;
+    }
+
+    private function normalizeProfileLocale(?string $locale): string
+    {
+        return in_array($locale, ['en', 'es'], true) ? $locale : 'es';
     }
 
     private function socialNetworkName(string $network): string

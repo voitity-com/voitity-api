@@ -23,6 +23,7 @@ class ProfileResponse
             'description' => $this->profile->description,
             'genre' => $this->profile->genre,
             'personality' => $this->profile->personality,
+            'locale' => $this->profile->locale ?: 'es',
             'profession_key' => $this->profile->profession_key,
             'profession_template_version' => $this->profile->profession_template_version,
             'active' => (bool) $this->profile->active,
