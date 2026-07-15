@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
-    private const DEFAULT_VOICE_LANGUAGE_CODE = 'es';
+    private const DEFAULT_PROFILE_LOCALE = 'es';
 
     private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,user_id,name,description,language_code,source_voice_id,source,active';
 
@@ -217,7 +217,7 @@ class ProfileController extends Controller
             'user_id' => $profile->user_id,
             'name' => $profile->name,
             'description' => $profile->description,
-            'language_code' => self::DEFAULT_VOICE_LANGUAGE_CODE,
+            'language_code' => $this->normalizeProfileLocale($profile->locale),
             'source_voice_id' => null,
             'source' => null,
             'is_verified' => false,
@@ -226,6 +226,11 @@ class ProfileController extends Controller
         ]);
 
         return $voice;
+    }
+
+    private function normalizeProfileLocale(?string $locale): string
+    {
+        return in_array($locale, ['en', 'es'], true) ? $locale : self::DEFAULT_PROFILE_LOCALE;
     }
 
     /**

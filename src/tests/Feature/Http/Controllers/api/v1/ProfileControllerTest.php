@@ -33,10 +33,11 @@ class ProfileControllerTest extends TestAPI
                 'alias' => str_repeat('a', 101),
                 // 'description' => missing
                 'genre' => 'toolongforgenre', // too long
+                'locale' => 'fr',
                 // 'personality' => missing
             ]);
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['name', 'alias', 'description', 'genre', 'personality']);
+        $response->assertJsonValidationErrors(['name', 'alias', 'description', 'genre', 'locale', 'personality']);
     }
 
     public function test_unauthorized_user_can_not_create_profile()
@@ -55,6 +56,7 @@ class ProfileControllerTest extends TestAPI
             'alias' => 'Demo Alias',
             'description' => $this->faker->text(200),
             'genre' => 'male',
+            'locale' => 'en',
             'personality' => $this->faker->text(100),
         ];
 
@@ -77,16 +79,18 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($profile_data['name'], $new_profile->name);
         $this->assertEquals($profile_data['alias'], $new_profile->alias);
         $this->assertEquals($profile_data['description'], $new_profile->description);
+        $this->assertSame('en', $new_profile->locale);
         $this->assertFalse((bool) $new_profile->active);
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $this->assertSame($new_profile->user_id, $baseVoice->user_id);
         $this->assertSame($new_profile->name, $baseVoice->name);
         $this->assertSame($new_profile->description, $baseVoice->description);
-        $this->assertSame('es', $baseVoice->language_code);
+        $this->assertSame('en', $baseVoice->language_code);
         $this->assertTrue((bool) $baseVoice->active);
         $this->assertNull($baseVoice->source);
         $this->assertNull($baseVoice->source_voice_id);
         $response->assertJsonPath('data.alias', $profile_data['alias']);
+        $response->assertJsonPath('data.locale', 'en');
         $response->assertJsonPath('data.active', false);
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
         $response->assertJsonPath('data.voice', false);
@@ -486,6 +490,7 @@ class ProfileControllerTest extends TestAPI
             'alias' => 'Updated Alias',
             'description' => $this->faker->text(200),
             'genre' => 'female',
+            'locale' => 'en',
         ];
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
@@ -499,9 +504,11 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($new_data['alias'], $new_profile->alias);
         $this->assertEquals($new_data['description'], $new_profile->description);
         $this->assertEquals($new_data['genre'], $new_profile->genre);
+        $this->assertSame('en', $new_profile->locale);
         $this->assertFalse((bool) $new_profile->active);
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $response->assertJsonPath('data.alias', $new_data['alias']);
+        $response->assertJsonPath('data.locale', 'en');
         $response->assertJsonPath('data.status', ProfileStatus::Draft->value);
     }
 

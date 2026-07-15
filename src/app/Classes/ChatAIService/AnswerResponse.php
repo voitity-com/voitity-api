@@ -9,7 +9,8 @@ class AnswerResponse
     public function __construct(
         private readonly Message $answerMessage,
         private readonly ChatAIAnswer $chatAIAnswer,
-        private readonly ?array $audioPayload = null
+        private readonly ?array $audioPayload = null,
+        private readonly array $mediaPayload = []
     ) {
     }
 
@@ -24,6 +25,7 @@ class AnswerResponse
             'text' => $this->answerMessage->text,
             'audio_url' => $this->answerMessage->audio ?? ($this->audioPayload['audio_url'] ?? null),
             'source' => $this->answerMessage->source,
+            'media' => $this->mediaPayload,
             'data' => $payload,
         ];
     }
