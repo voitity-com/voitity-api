@@ -55,13 +55,35 @@ class AnswerBuilder
         }
 
         $rawAnswerText = $chatAIAnswer->answer;
-        $answerText = $this->conversationMessages()->stripNoAnswerMarker($rawAnswerText);
+        $structuredAnswer = $this->parseStructuredAnswer($rawAnswerText);
+        $answerText = $this->conversationMessages()->stripNoAnswerMarker(
+            $structuredAnswer['answer'] ?? $rawAnswerText
+        );
         $source = $chatAIAnswer->source;
         $audioPayload = null;
         $usesPreconfiguredAnswer = false;
-        $mediaPayload = $this->mediaPayloadForQuestion($profile, $question);
+        $structuredMediaIds = $structuredAnswer !== null && $structuredAnswer['media_action'] === 'show'
+            ? $structuredAnswer['media_ids']
+            : [];
+        $mediaPayload = $structuredAnswer !== null
+            ? $this->mediaPayloadForIds($profile, $structuredMediaIds)
+            : $this->fallbackMediaPayloadForQuestion($profile, $question);
+        $mediaPayloadWasReplaced = false;
 
-        if ($mediaPayload !== []) {
+        if ($structuredAnswer !== null && $mediaPayload === [] && $this->shouldFallbackAttachMedia($question)) {
+            $mediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question);
+        }
+
+        if ($structuredAnswer !== null && $this->shouldPreferUnseenMedia($question, $mediaPayload)) {
+            $fallbackMediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question);
+
+            if ($fallbackMediaPayload !== []) {
+                $mediaPayload = $fallbackMediaPayload;
+                $mediaPayloadWasReplaced = true;
+            }
+        }
+
+        if ($mediaPayload !== [] && ($mediaPayloadWasReplaced || $this->answerIndicatesNoAnswer($answerText))) {
             $answerText = $this->mediaFallbackAnswer($mediaPayload, $profile);
         } elseif ($this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
             if ($mediaPayload === []) {
@@ -212,9 +234,9 @@ class AnswerBuilder
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function mediaPayloadForQuestion(Profile $profile, Message $question): array
+    private function fallbackMediaPayloadForQuestion(Profile $profile, Message $question): array
     {
-        if (! $this->looksLikeMediaRequest($question->text)) {
+        if (! $this->shouldFallbackAttachMedia($question)) {
             return [];
         }
 
@@ -224,10 +246,52 @@ class AnswerBuilder
             return [];
         }
 
-        $index = max(0, ((int) $question->id - 1) % count($media));
-        $item = $media[$index];
+        $item = $this->fallbackMediaItem($media, $question);
 
-        return [[
+        return $item !== null ? [$this->mediaItemToPayload($item)] : [];
+    }
+
+    /**
+     * @param  array<int|string>  $ids
+     * @return array<int, array<string, mixed>>
+     */
+    private function mediaPayloadForIds(Profile $profile, array $ids): array
+    {
+        $ids = collect($ids)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $media = app(InstagramIntegrationService::class)->selectedMediaForPrompt($profile);
+
+        if ($media === []) {
+            return [];
+        }
+
+        $mediaById = collect($media)->keyBy(fn (array $item): int => (int) ($item['id'] ?? 0));
+
+        return collect($ids)
+            ->map(fn (int $id) => $mediaById->get($id))
+            ->filter(fn ($item): bool => is_array($item))
+            ->map(fn (array $item): array => $this->mediaItemToPayload($item))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function mediaItemToPayload(array $item): array
+    {
+        return [
+            'id' => $item['id'] ?? null,
             'type' => 'instagram_media',
             'provider' => $item['provider_label'] ?? $item['provider'] ?? 'Instagram',
             'provider_key' => $item['provider_key'] ?? 'instagram',
@@ -237,7 +301,30 @@ class AnswerBuilder
             'caption' => $item['caption'] ?? null,
             'observation' => $item['observation'] ?? null,
             'taken_at' => $item['taken_at'] ?? null,
-        ]];
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $media
+     * @return array<string, mixed>|null
+     */
+    private function fallbackMediaItem(array $media, Message $question): ?array
+    {
+        if ($this->looksLikeAnotherMediaRequest($question->text) || $this->looksLikeAnyMediaChoice($question->text)) {
+            $shownIds = $this->recentShownMediaIds($question);
+
+            foreach ($media as $item) {
+                $itemId = (int) ($item['id'] ?? 0);
+
+                if ($itemId > 0 && ! in_array($itemId, $shownIds, true)) {
+                    return $item;
+                }
+            }
+
+            return null;
+        }
+
+        return $media[0] ?? null;
     }
 
     private function looksLikeMediaRequest(string $text): bool
@@ -251,6 +338,204 @@ class AnswerBuilder
         }
 
         return false;
+    }
+
+    private function shouldFallbackAttachMedia(Message $question): bool
+    {
+        if ($this->looksLikeMediaReferenceQuestion($question->text)) {
+            return false;
+        }
+
+        if ($this->looksLikeMediaRequest($question->text)) {
+            return true;
+        }
+
+        return ($this->looksLikeAnotherMediaRequest($question->text)
+            && $this->recentShownMediaIds($question) !== [])
+            || ($this->looksLikeAnyMediaChoice($question->text)
+                && $this->recentConversationMentionsMedia($question));
+    }
+
+    private function looksLikeAnotherMediaRequest(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+        $asksAnother = preg_match('/\b(otra|otro|otras|otros|another|more|m[aá]s)\b/u', $normalized) === 1;
+        $hasShowIntent = preg_match('/\b(muestra|mu[eé]strame|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
+        $isShortFollowUp = preg_match('/^\s*(otra|otro|another|more|m[aá]s)\s*[?!.]*\s*$/u', $normalized) === 1;
+
+        return $asksAnother && ($hasShowIntent || $isShortFollowUp || $this->looksLikeMediaRequest($text));
+    }
+
+    private function looksLikeAnyMediaChoice(string $text): bool
+    {
+        $normalized = trim(mb_strtolower($text));
+
+        if (mb_strlen($normalized) > 48) {
+            return false;
+        }
+
+        return preg_match('/\b(cualquiera|whatever|whichever)\b/u', $normalized) === 1
+            || preg_match('/\b(la|el|una|uno)\s+que\s+quieras\b/u', $normalized) === 1
+            || preg_match('/\b(any|anyone|anything)\b/u', $normalized) === 1;
+    }
+
+    private function looksLikeMediaReferenceQuestion(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+
+        $hasReference = preg_match('/\b(esa|ese|esta|este|that|this|anterior|previous|last)\b/u', $normalized) === 1;
+        $asksContext = preg_match('/\b(d[oó]nde|donde|where|cu[aá]ndo|cuando|when|qu[eé]|que|what)\b/u', $normalized) === 1;
+
+        return $hasReference && $asksContext;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $mediaPayload
+     */
+    private function shouldPreferUnseenMedia(Message $question, array $mediaPayload): bool
+    {
+        if ($mediaPayload === []) {
+            return false;
+        }
+
+        if (! $this->looksLikeAnotherMediaRequest($question->text) && ! $this->looksLikeAnyMediaChoice($question->text)) {
+            return false;
+        }
+
+        $shownIds = $this->recentShownMediaIds($question);
+
+        if ($shownIds === []) {
+            return false;
+        }
+
+        foreach ($mediaPayload as $media) {
+            $mediaId = (int) ($media['id'] ?? 0);
+
+            if ($mediaId <= 0 || ! in_array($mediaId, $shownIds, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function recentShownMediaIds(Message $question): array
+    {
+        if (! $question->chat_id) {
+            return [];
+        }
+
+        return Message::query()
+            ->where('chat_id', $question->chat_id)
+            ->where('type', 'answer')
+            ->where('id', '<', $question->id)
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['data'])
+            ->flatMap(function (Message $message): array {
+                $media = $message->data['media'] ?? [];
+
+                if (! is_array($media)) {
+                    return [];
+                }
+
+                return collect($media)
+                    ->map(fn ($item): int => is_array($item) ? (int) ($item['id'] ?? 0) : 0)
+                    ->filter(fn (int $id): bool => $id > 0)
+                    ->all();
+            })
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function recentConversationMentionsMedia(Message $question): bool
+    {
+        if (! $question->chat_id) {
+            return false;
+        }
+
+        return Message::query()
+            ->where('chat_id', $question->chat_id)
+            ->where('id', '<', $question->id)
+            ->orderByDesc('id')
+            ->limit(6)
+            ->pluck('text')
+            ->contains(fn ($text): bool => is_string($text) && $this->looksLikeMediaRequest($text));
+    }
+
+    /**
+     * @return array{answer: string, media_action: string|null, media_ids: array<int>}|null
+     */
+    private function parseStructuredAnswer(string $answer): ?array
+    {
+        $trimmed = trim($answer);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $jsonText = $this->extractJsonObject($trimmed);
+
+        if ($jsonText === null) {
+            return null;
+        }
+
+        $payload = json_decode($jsonText, true);
+
+        if (! is_array($payload) || ! array_key_exists('answer', $payload)) {
+            return null;
+        }
+
+        $mediaIds = [];
+
+        if (isset($payload['media_ids']) && is_array($payload['media_ids'])) {
+            $mediaIds = collect($payload['media_ids'])
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $mediaAction = is_scalar($payload['media_action'] ?? null)
+            ? mb_strtolower((string) $payload['media_action'])
+            : null;
+
+        if (! in_array($mediaAction, ['show', 'none'], true)) {
+            $mediaAction = $mediaIds !== [] ? 'show' : 'none';
+        }
+
+        return [
+            'answer' => is_scalar($payload['answer']) ? (string) $payload['answer'] : '',
+            'media_action' => $mediaAction,
+            'media_ids' => $mediaIds,
+        ];
+    }
+
+    private function extractJsonObject(string $text): ?string
+    {
+        if (str_starts_with($text, '```')) {
+            $text = (string) preg_replace('/^```(?:json)?\s*/i', '', $text);
+            $text = (string) preg_replace('/\s*```$/', '', $text);
+            $text = trim($text);
+        }
+
+        if (str_starts_with($text, '{') && str_ends_with($text, '}')) {
+            return $text;
+        }
+
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+
+        return substr($text, $start, $end - $start + 1);
     }
 
     /**
@@ -277,8 +562,11 @@ class AnswerBuilder
         $providerLabel = $this->mediaProviderLabel($media);
         $providerMentioned = $providerLabel !== null && str_contains($normalizedAnswer, mb_strtolower($providerLabel));
         $morePhotosMentioned = preg_match('/\b(ver|ve|mirar|mira|see|view|watch|look)\b.*\b(m[aá]s|more)\b/u', $normalizedAnswer) === 1;
+        $providerPattern = $providerLabel !== null ? preg_quote(mb_strtolower($providerLabel), '/') : null;
+        $providerLinkMentioned = $providerPattern !== null
+            && preg_match('/(?:\b(ver(?:la|lo|las|los)?|ve|mirar|mira|see|view|watch|look)\b[^.?!]{0,80}\b'.$providerPattern.'\b|\b'.$providerPattern.'\b[^.?!]{0,80}\b(ver(?:la|lo|las|los)?|ve|mirar|mira|see|view|watch|look)\b)/u', $normalizedAnswer) === 1;
 
-        if (($providerMentioned && $morePhotosMentioned) || str_contains($normalizedAnswer, $normalizedHint)) {
+        if (($providerMentioned && ($morePhotosMentioned || $providerLinkMentioned)) || str_contains($normalizedAnswer, $normalizedHint)) {
             return $answerText;
         }
 
@@ -452,8 +740,14 @@ class AnswerBuilder
         return str_contains($answerText, '[[BIGMELO_NO_ANSWER]]')
             || str_contains($normalized, 'no tengo esa información')
             || str_contains($normalized, 'no tengo informacion')
+            || str_contains($normalized, 'no puedo responder')
+            || str_contains($normalized, 'pregúntame otra cosa')
+            || str_contains($normalized, 'preguntame otra cosa')
             || str_contains($normalized, 'do not have that information')
-            || str_contains($normalized, "don't have that information");
+            || str_contains($normalized, "don't have that information")
+            || str_contains($normalized, 'cannot answer')
+            || str_contains($normalized, "can't answer")
+            || str_contains($normalized, 'ask me something else');
     }
 
     private function normalizeMarkdownMediaSyntax(string $answerText): string

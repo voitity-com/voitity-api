@@ -10,6 +10,8 @@ use App\Classes\ChatAIService\OpenAI\OpenAIClient;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileIntegration;
+use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -180,6 +182,110 @@ class OpenAIClientTest extends TestCase
                 && ! str_contains($systemPrompt, 'prior-message-1')
                 && ! str_contains($systemPrompt, 'current-question')
                 && ! str_contains($systemPrompt, 'other-chat-message');
+        });
+    }
+
+    #[Test]
+    public function it_marks_the_most_recently_shown_instagram_media_in_the_system_prompt(): void
+    {
+        Log::spy();
+
+        Http::fake([
+            'https://fake-openai.test/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => '{"answer":"Fue en Amsterdam.","media_action":"none","media_ids":[]}'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 120,
+                    'completion_tokens' => 60,
+                    'total_tokens' => 180,
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Lex',
+            'description' => 'Lawyer assistant',
+            'genre' => 'legal',
+            'personality' => 'friendly',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $rome = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'rome',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/rome.jpg',
+            'permalink' => 'https://www.instagram.com/p/rome/',
+            'caption' => 'Roma',
+            'observation' => 'Roma',
+            'selected' => true,
+            'taken_at' => now()->subDay(),
+        ]);
+        $amsterdam = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'amsterdam',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/amsterdam.jpg',
+            'permalink' => 'https://www.instagram.com/p/amsterdam/',
+            'caption' => 'Amsterdam',
+            'observation' => 'Amsterdam',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+
+        Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Aquí tienes una foto en Roma.',
+            'type' => 'answer',
+            'source' => 'openai',
+            'data' => ['media' => [['id' => $rome->id]]],
+        ]);
+        Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Aquí tienes otra foto en Amsterdam.',
+            'type' => 'answer',
+            'source' => 'openai',
+            'data' => ['media' => [['id' => $amsterdam->id]]],
+        ]);
+        $currentQuestion = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Dónde fue esa foto?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $client = $this->makeClient();
+        $client->getAnswer($profile, $currentQuestion->text, $chat->id, $currentQuestion->id);
+
+        Http::assertSent(function ($request) use ($amsterdam) {
+            $systemPrompt = $request->data()['messages'][0]['content'];
+            $recentlyShownPosition = strpos($systemPrompt, 'Most recently shown media item in this chat:');
+
+            return $recentlyShownPosition !== false
+                && str_contains(substr($systemPrompt, $recentlyShownPosition), '"id":'.$amsterdam->id)
+                && str_contains(substr($systemPrompt, $recentlyShownPosition), '"observation":"Amsterdam"')
+                && str_contains($systemPrompt, '"cualquiera", "la que quieras", "any", "whatever"')
+                && str_contains($systemPrompt, 'For references like "esa foto"');
         });
     }
 
