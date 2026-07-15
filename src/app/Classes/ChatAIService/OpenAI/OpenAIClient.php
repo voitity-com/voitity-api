@@ -325,14 +325,13 @@ class OpenAIClient implements ChatAIClient
             $prompt .= '. If asked for social networks, usernames, Instagram, GitHub, LinkedIn, or where to see more content, answer using these exact links. Treat these links as available profile information and do not say you do not have them';
         }
 
-        $selectedInstagramMedia = $this->buildSelectedInstagramMediaPrompt($profile, $currentMessageId);
+        $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
+        $selectedInstagramMedia = $this->buildSelectedInstagramMediaPrompt($profile);
 
         if ($selectedInstagramMedia !== null) {
             $prompt .= ". Selected Instagram media available for visitor conversations: {$selectedInstagramMedia}";
-            $prompt .= '. If the visitor asks for photos, pictures, images, posts, or visual memories, use this selected media item as the current photo. Use provider_label, observation, caption, and date as factual context. Mention where the photo was taken only when observation or caption reasonably indicates a place. Keep the answer short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches the media and external link separately. Do not invent photos, places, providers, or links outside this list';
+            $prompt .= '. If the visitor asks for photos, pictures, images, posts, or visual memories, choose one selected media item and set media_action to "show" with its id in media_ids. If the visitor first asks what photos are available and then follows up with "cualquiera", "la que quieras", "any", "whatever", or similar, treat that as permission to choose one selected media item and set media_action to "show". For follow-ups such as "another", "otra", or "more", choose a selected media id that is not in recent assistant media_ids when possible. For follow-ups such as "that photo", "esa foto", "where was that photo", or "dónde fue esa foto", answer about the most recently shown media item in this chat and keep media_action as "none" unless the visitor explicitly asks to show it again. Use provider_label, observation, caption, and date as factual context. Mention where the photo was taken only when observation or caption reasonably indicates a place. Keep photo answers short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches the media and external link separately. Do not invent photos, places, providers, or links outside this list';
         }
-
-        $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
 
         if ($recentMessages !== []) {
             $recentMessagesJson = json_encode($recentMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -342,9 +341,16 @@ class OpenAIClient implements ChatAIClient
             }
         }
 
+        $recentlyShownInstagramMedia = $this->buildRecentlyShownInstagramMediaPrompt($profile, $recentMessages);
+
+        if ($recentlyShownInstagramMedia !== null) {
+            $prompt .= ". Most recently shown media item in this chat: {$recentlyShownInstagramMedia}. For references like \"esa foto\", \"esa imagen\", \"that photo\", or \"where was that photo\", use this media item first";
+        }
+
         $prompt .= '. Only answer using the information in this prompt. If the requested information is not available here, start the answer exactly with [[BIGMELO_NO_ANSWER]] and then say you do not have that information at this moment';
         $prompt .= '. Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview';
         $prompt .= '. Always respond in character and maintain consistency with your defined role and personality.';
+        $prompt .= '. Return a JSON object only, without surrounding text. The JSON object must have exactly these keys: "answer" as the natural-language answer string, "media_action" as "none" or "show", and "media_ids" as an array of selected media ids to attach. Use "media_action":"none" and an empty media_ids array when no photo should be attached.';
 
         return $prompt;
     }
@@ -375,7 +381,7 @@ class OpenAIClient implements ChatAIClient
         return implode('; ', $links);
     }
 
-    private function buildSelectedInstagramMediaPrompt(Profile $profile, ?int $currentMessageId = null): ?string
+    private function buildSelectedInstagramMediaPrompt(Profile $profile): ?string
     {
         $media = $profile->integrationMedia()
             ->where('provider', 'instagram')
@@ -383,18 +389,10 @@ class OpenAIClient implements ChatAIClient
             ->orderByDesc('taken_at')
             ->orderByDesc('id')
             ->limit(10)
-            ->get(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type']);
+            ->get(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type', 'media_url', 'thumbnail_url']);
 
         if ($media->isEmpty()) {
             return null;
-        }
-
-        if ($currentMessageId !== null) {
-            $media = collect([
-                $media->values()[max(0, ($currentMessageId - 1) % $media->count())],
-            ]);
-        } else {
-            $media = $media->take(1);
         }
 
         $items = $media->map(fn ($item): array => [
@@ -405,6 +403,7 @@ class OpenAIClient implements ChatAIClient
             'caption' => $item->caption,
             'observation' => $item->observation,
             'permalink' => $item->permalink,
+            'image_url' => $item->media_url ?: $item->thumbnail_url,
             'date' => $item->taken_at?->toDateString(),
         ])->values()->all();
         $json = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -415,6 +414,56 @@ class OpenAIClient implements ChatAIClient
     private function normalizeProfileLocale(?string $locale): string
     {
         return in_array($locale, ['en', 'es'], true) ? $locale : 'es';
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $recentMessages
+     */
+    private function buildRecentlyShownInstagramMediaPrompt(Profile $profile, array $recentMessages): ?string
+    {
+        $mediaId = null;
+
+        for ($index = count($recentMessages) - 1; $index >= 0; $index--) {
+            $message = $recentMessages[$index];
+
+            if (($message['role'] ?? null) !== 'assistant' || empty($message['media_ids']) || ! is_array($message['media_ids'])) {
+                continue;
+            }
+
+            $candidateId = (int) ($message['media_ids'][0] ?? 0);
+
+            if ($candidateId > 0) {
+                $mediaId = $candidateId;
+                break;
+            }
+        }
+
+        if ($mediaId === null) {
+            return null;
+        }
+
+        $media = $profile->integrationMedia()
+            ->where('provider', 'instagram')
+            ->whereKey($mediaId)
+            ->first(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type', 'media_url', 'thumbnail_url']);
+
+        if (! $media) {
+            return null;
+        }
+
+        $json = json_encode([
+            'id' => $media->id,
+            'provider_key' => 'instagram',
+            'provider_label' => 'Instagram',
+            'type' => $media->media_type,
+            'caption' => $media->caption,
+            'observation' => $media->observation,
+            'permalink' => $media->permalink,
+            'image_url' => $media->media_url ?: $media->thumbnail_url,
+            'date' => $media->taken_at?->toDateString(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $json !== false ? $json : null;
     }
 
     private function socialNetworkName(string $network): string
@@ -433,7 +482,7 @@ class OpenAIClient implements ChatAIClient
     }
 
     /**
-     * @return array<int, array{role: string, text: string}>
+     * @return array<int, array<string, mixed>>
      */
     private function getRecentChatMessages(Profile $profile, ?int $chatId, ?int $currentMessageId): array
     {
@@ -447,13 +496,39 @@ class OpenAIClient implements ChatAIClient
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit(6)
-            ->get(['id', 'type', 'text', 'created_at'])
+            ->get(['id', 'type', 'text', 'data', 'created_at'])
             ->reverse()
             ->values()
-            ->map(fn ($message) => [
-                'role' => $message->type === 'answer' ? 'assistant' : 'user',
-                'text' => $message->text,
-            ])
+            ->map(function ($message): array {
+                $payload = [
+                    'role' => $message->type === 'answer' ? 'assistant' : 'user',
+                    'text' => $message->text,
+                ];
+                $mediaIds = $this->messageMediaIds($message->data ?? null);
+
+                if ($mediaIds !== []) {
+                    $payload['media_ids'] = $mediaIds;
+                }
+
+                return $payload;
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function messageMediaIds(mixed $data): array
+    {
+        if (! is_array($data) || ! isset($data['media']) || ! is_array($data['media'])) {
+            return [];
+        }
+
+        return collect($data['media'])
+            ->map(fn ($item): int => is_array($item) ? (int) ($item['id'] ?? 0) : 0)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
             ->all();
     }
 
