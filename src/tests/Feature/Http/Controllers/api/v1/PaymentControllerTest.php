@@ -13,12 +13,19 @@ use App\Models\PaymentOrder;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 
 class PaymentControllerTest extends TestAPI
 {
     private const CHECKOUT_ENDPOINT = '/api/payments/wompi/checkout';
 
     private const TRIAL_ENDPOINT = '/api/subscription/trial';
+
+    private const TRIAL_PAYMENT_SOURCE_SETUP_ENDPOINT = '/api/subscription/trial/payment-source-setup';
+
+    private const SUBSCRIPTION_PAYMENT_SOURCE_SETUP_ENDPOINT = '/api/subscription/payment-source-setup';
+
+    private const SUBSCRIPTION_PAYMENT_SOURCE_ENDPOINT = '/api/subscription/payment-source';
 
     private const PLANS_ENDPOINT = '/api/subscription/plans';
 
@@ -40,6 +47,7 @@ class PaymentControllerTest extends TestAPI
         Config::set('payment.drivers.wompi.events_secret', 'test_events_key');
         Config::set('payment.drivers.wompi.checkout_url', 'https://checkout.wompi.co/p/');
         Config::set('payment.drivers.wompi.widget_url', 'https://checkout.wompi.co/widget.js');
+        Config::set('payment.drivers.wompi.api_url', 'https://sandbox.wompi.co/v1');
         Config::set('subscriptions.trial.enabled', true);
         Config::set('subscriptions.trial.days', 7);
         Config::set('subscriptions.trial.setup_amount_usd', 0);
@@ -80,39 +88,163 @@ class PaymentControllerTest extends TestAPI
         $this->assertTrue($plans->get('starter_annual')['purchasable']);
     }
 
-    public function test_user_can_create_trial_checkout_for_starter_plan(): void
+    public function test_user_can_get_trial_payment_source_setup(): void
     {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/merchants/pub_test_key' => Http::response([
+                'data' => [
+                    'presigned_acceptance' => [
+                        'acceptance_token' => 'acceptance-token',
+                        'permalink' => 'https://wompi.test/terms.pdf',
+                    ],
+                    'presigned_personal_data_auth' => [
+                        'acceptance_token' => 'personal-auth-token',
+                        'permalink' => 'https://wompi.test/privacy.pdf',
+                    ],
+                ],
+            ]),
+        ]);
+
         $user = User::factory()->create();
         $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson(self::TRIAL_ENDPOINT, ['plan' => 'starter']);
+            ->getJson(self::TRIAL_PAYMENT_SOURCE_SETUP_ENDPOINT);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Subscription trial payment source setup retrieved successfully.');
+        $response->assertJsonPath('data.source', 'wompi');
+        $response->assertJsonPath('data.public_key', 'pub_test_key');
+        $response->assertJsonPath('data.api_url', 'https://sandbox.wompi.co/v1');
+        $response->assertJsonPath('data.acceptance.acceptance_token', 'acceptance-token');
+        $response->assertJsonPath('data.personal_data_auth.acceptance_token', 'personal-auth-token');
+    }
+
+    public function test_user_can_get_subscription_payment_source_setup(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/merchants/pub_test_key' => Http::response([
+                'data' => [
+                    'presigned_acceptance' => [
+                        'acceptance_token' => 'acceptance-token',
+                        'permalink' => 'https://wompi.test/terms.pdf',
+                    ],
+                    'presigned_personal_data_auth' => [
+                        'acceptance_token' => 'personal-auth-token',
+                        'permalink' => 'https://wompi.test/privacy.pdf',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::SUBSCRIPTION_PAYMENT_SOURCE_SETUP_ENDPOINT);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Subscription payment source setup retrieved successfully.');
+        $response->assertJsonPath('data.source', 'wompi');
+        $response->assertJsonPath('data.public_key', 'pub_test_key');
+        $response->assertJsonPath('data.acceptance.acceptance_token', 'acceptance-token');
+        $response->assertJsonPath('data.personal_data_auth.acceptance_token', 'personal-auth-token');
+    }
+
+    public function test_user_can_start_trial_with_active_payment_source(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3891,
+                    'type' => 'CARD',
+                    'status' => 'AVAILABLE',
+                    'public_data' => [
+                        'brand' => 'VISA',
+                        'last_four' => '4242',
+                        'exp_month' => '06',
+                        'exp_year' => '29',
+                    ],
+                ],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::TRIAL_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_4242',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                    'session_id' => 'session-1',
+                    'customer_data' => [
+                        'device_id' => 'device-1',
+                        'full_name' => $user->name,
+                    ],
+                ],
+            ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('message', 'Subscription trial checkout created successfully.');
+        $response->assertJsonPath('message', 'Subscription trial started successfully.');
+        $response->assertJsonPath('data.subscription.plan', 'starter');
+        $response->assertJsonPath('data.subscription.status', 'trialing');
+        $response->assertJsonPath('data.payment_source.provider_source_id', '3891');
+        $response->assertJsonPath('data.payment_source.status', 'active');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
         $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 0);
         $response->assertJsonPath('data.payment_order.amounts.amount_cop', 0);
         $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 0);
-        $response->assertJsonPath('data.payment_order.status', 'pending');
+        $response->assertJsonPath('data.payment_order.status', 'approved');
         $response->assertJsonPath('data.payment_order.recurring', true);
         $response->assertJsonPath('data.payment_order.billing_reason', 'trial_setup');
-        $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
 
+        $user->refresh();
+        $this->assertNotNull($user->free_trial_used_at);
         $this->assertDatabaseHas('payment_orders', [
             'user_id' => $user->id,
             'plan' => 'starter',
             'provider' => 'wompi',
-            'status' => 'pending',
+            'status' => 'approved',
             'recurring' => true,
             'billing_reason' => 'trial_setup',
             'amount_in_cents' => 0,
             'currency' => 'COP',
         ]);
+        $this->assertDatabaseHas('payment_sources', [
+            'user_id' => $user->id,
+            'provider' => 'wompi',
+            'provider_source_id' => '3891',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => 'starter',
+            'status' => 'trialing',
+            'active' => true,
+            'billing_mode' => 'recurring',
+        ]);
+
+        Http::assertSent(function ($request) use ($user): bool {
+            return $request->url() === 'https://sandbox.wompi.co/v1/payment_sources'
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
+                && $request['type'] === 'CARD'
+                && $request['token'] === 'tok_test_4242'
+                && $request['customer_email'] === $user->email
+                && $request['acceptance_token'] === 'acceptance-token'
+                && $request['accept_personal_auth'] === 'personal-auth-token'
+                && $request['session_id'] === 'session-1'
+                && $request['customer_data']['device_id'] === 'device-1';
+        });
     }
 
-    public function test_user_with_existing_subscription_can_not_create_trial_checkout(): void
+    public function test_user_with_existing_subscription_can_not_start_trial(): void
     {
         $user = User::factory()->create();
         Subscription::query()->create([
@@ -129,10 +261,272 @@ class PaymentControllerTest extends TestAPI
         $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson(self::TRIAL_ENDPOINT, ['plan' => 'starter']);
+            ->postJson(self::TRIAL_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_4242',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                ],
+            ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('message', 'Free trial is only available before the first subscription.');
+    }
+
+    public function test_user_can_start_paid_subscription_with_payment_source(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3891,
+                    'type' => 'CARD',
+                    'status' => 'AVAILABLE',
+                    'public_data' => [
+                        'brand' => 'VISA',
+                        'last_four' => '4242',
+                    ],
+                ],
+            ], 201),
+            'https://sandbox.wompi.co/v1/transactions' => Http::response([
+                'data' => [
+                    'id' => 'trx_initial_1',
+                    'status' => 'APPROVED',
+                    'amount_in_cents' => 3200000,
+                    'currency' => 'COP',
+                ],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::SUBSCRIPTION_PAYMENT_SOURCE_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_4242',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                    'session_id' => 'session-1',
+                    'customer_data' => [
+                        'device_id' => 'device-1',
+                        'full_name' => $user->name,
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('message', 'Subscription payment source checkout processed successfully.');
+        $response->assertJsonPath('data.subscription.plan', 'starter');
+        $response->assertJsonPath('data.subscription.status', 'first');
+        $response->assertJsonPath('data.payment_source.provider_source_id', '3891');
+        $response->assertJsonPath('data.payment_source.status', 'active');
+        $response->assertJsonPath('data.payment_order.user_id', $user->id);
+        $response->assertJsonPath('data.payment_order.plan', 'starter');
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 8);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 3200000);
+        $response->assertJsonPath('data.payment_order.status', 'approved');
+        $response->assertJsonPath('data.payment_order.recurring', true);
+        $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
+
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'plan' => 'starter',
+            'provider' => 'wompi',
+            'status' => 'approved',
+            'recurring' => true,
+            'billing_reason' => 'subscription_initial',
+            'amount_in_cents' => 3200000,
+            'currency' => 'COP',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => 'starter',
+            'status' => 'first',
+            'active' => true,
+            'billing_mode' => 'recurring',
+        ]);
+
+        Http::assertSent(function ($request) use ($user): bool {
+            return $request->url() === 'https://sandbox.wompi.co/v1/transactions'
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
+                && $request['amount_in_cents'] === 3200000
+                && $request['currency'] === 'COP'
+                && $request['customer_email'] === $user->email
+                && $request['payment_source_id'] === 3891
+                && $request['recurrent'] === true
+                && str_starts_with((string) $request['reference'], 'VOI-SUB-'.$user->id.'-');
+        });
+    }
+
+    public function test_paid_subscription_started_with_payment_source_can_be_renewed_by_job(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3891,
+                    'type' => 'CARD',
+                    'status' => 'AVAILABLE',
+                    'public_data' => [
+                        'brand' => 'VISA',
+                        'last_four' => '4242',
+                    ],
+                ],
+            ], 201),
+            'https://sandbox.wompi.co/v1/transactions' => Http::sequence()
+                ->push([
+                    'data' => [
+                        'id' => 'trx_initial_1',
+                        'status' => 'APPROVED',
+                        'amount_in_cents' => 3200000,
+                        'currency' => 'COP',
+                    ],
+                ], 201)
+                ->push([
+                    'data' => [
+                        'id' => 'trx_renewal_1',
+                        'status' => 'APPROVED',
+                        'amount_in_cents' => 3200000,
+                        'currency' => 'COP',
+                    ],
+                ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::SUBSCRIPTION_PAYMENT_SOURCE_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_4242',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                ],
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.payment_order.status', 'approved');
+
+        $subscription = Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('active', true)
+            ->firstOrFail();
+        $subscription->forceFill([
+            'renews_at' => now()->subMinute(),
+            'next_billing_at' => now()->subMinute(),
+        ])->save();
+
+        $this->artisan('subscriptions:bill-recurring')
+            ->expectsOutput('Recurring billing processed: 1. Approved: 1. Pending: 0. Failed: 0. Skipped: 0.')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'billing_reason' => 'subscription_initial',
+            'status' => 'approved',
+            'amount_in_cents' => 3200000,
+        ]);
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'billing_reason' => 'subscription_renewal',
+            'status' => 'approved',
+            'amount_in_cents' => 3200000,
+        ]);
+        $this->assertSame(2, PaymentOrder::query()->where('user_id', $user->id)->where('status', 'approved')->count());
+
+        $activeSubscription = Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('active', true)
+            ->firstOrFail();
+
+        $this->assertNotSame($subscription->id, $activeSubscription->id);
+        $this->assertSame(SubscriptionStatus::Renewed, $activeSubscription->status);
+        $this->assertNotNull($activeSubscription->payment_source_id);
+    }
+
+    public function test_declined_initial_payment_source_charge_does_not_activate_subscription(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3891,
+                    'type' => 'CARD',
+                    'status' => 'AVAILABLE',
+                ],
+            ], 201),
+            'https://sandbox.wompi.co/v1/transactions' => Http::response([
+                'data' => [
+                    'id' => 'trx_initial_declined',
+                    'status' => 'DECLINED',
+                    'amount_in_cents' => 3200000,
+                    'currency' => 'COP',
+                ],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::SUBSCRIPTION_PAYMENT_SOURCE_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_declined',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                ],
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.subscription', null);
+        $response->assertJsonPath('data.payment_order.status', 'declined');
+        $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
+
+        $this->assertSame(0, Subscription::where('user_id', $user->id)->count());
+        $this->assertDatabaseHas('payment_orders', [
+            'user_id' => $user->id,
+            'status' => 'declined',
+            'billing_reason' => 'subscription_initial',
+        ]);
+    }
+
+    public function test_pending_payment_source_does_not_start_trial(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3892,
+                    'type' => 'CARD',
+                    'status' => 'PENDING',
+                ],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::TRIAL_ENDPOINT, [
+                'plan' => 'starter',
+                'payment_source' => [
+                    'type' => 'CARD',
+                    'token' => 'tok_test_pending',
+                    'acceptance_token' => 'acceptance-token',
+                    'accept_personal_auth' => 'personal-auth-token',
+                ],
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Wompi did not confirm an active reusable payment source.');
+
+        $this->assertDatabaseCount('payment_sources', 0);
+        $this->assertDatabaseCount('payment_orders', 0);
+        $this->assertDatabaseCount('subscriptions', 0);
     }
 
     public function test_user_can_create_wompi_checkout_for_starter_plan(): void

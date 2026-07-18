@@ -304,6 +304,8 @@ class SubscriptionLimitsControllerTest extends TestAPI
 
     private function createActiveStarterSubscriptionFor(User $user): Subscription
     {
+        Carbon::setTestNow(Carbon::parse('2026-06-18 10:00:00'));
+
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'plan' => SubscriptionPlan::Starter,

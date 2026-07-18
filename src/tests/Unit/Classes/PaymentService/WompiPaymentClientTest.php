@@ -3,6 +3,7 @@
 namespace Tests\Unit\Classes\PaymentService;
 
 use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Classes\PaymentService\Wompi\WompiPaymentClient;
 use Illuminate\Support\Facades\Http;
@@ -74,6 +75,82 @@ class WompiPaymentClientTest extends TestCase
     }
 
     #[Test]
+    public function it_gets_wompi_payment_source_setup_tokens(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/merchants/pub_test_key' => Http::response([
+                'data' => [
+                    'presigned_acceptance' => [
+                        'acceptance_token' => 'acceptance-token',
+                        'permalink' => 'https://wompi.test/terms.pdf',
+                    ],
+                    'presigned_personal_data_auth' => [
+                        'acceptance_token' => 'personal-auth-token',
+                        'permalink' => 'https://wompi.test/privacy.pdf',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $setup = $this->client()->paymentSourceSetup();
+
+        $this->assertSame('wompi', $setup->source);
+        $this->assertSame('pub_test_key', $setup->publicKey);
+        $this->assertSame('https://sandbox.wompi.co/v1', $setup->apiUrl);
+        $this->assertSame('acceptance-token', $setup->acceptanceToken);
+        $this->assertSame('personal-auth-token', $setup->personalDataAuthToken);
+        $this->assertSame('https://wompi.test/terms.pdf', $setup->acceptancePermalink);
+    }
+
+    #[Test]
+    public function it_creates_wompi_payment_source(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
+                'data' => [
+                    'id' => 3891,
+                    'type' => 'CARD',
+                    'status' => 'AVAILABLE',
+                    'public_data' => [
+                        'brand' => 'VISA',
+                        'last_four' => '4242',
+                    ],
+                ],
+            ], 201),
+        ]);
+
+        $paymentSource = $this->client()->createPaymentSource(new PaymentSourceCreateRequest(
+            customerEmail: 'user@example.com',
+            type: 'CARD',
+            token: 'tok_test_4242',
+            acceptanceToken: 'acceptance-token',
+            acceptPersonalAuth: 'personal-auth-token',
+            sessionId: 'session-1',
+            customerData: ['device_id' => 'device-1'],
+        ));
+
+        $this->assertTrue($paymentSource->isActive());
+        $this->assertSame('3891', $paymentSource->providerSourceId);
+        $this->assertSame('CARD', $paymentSource->type);
+        $this->assertSame('AVAILABLE', $paymentSource->providerStatus);
+        $this->assertSame('active', $paymentSource->status);
+        $this->assertSame('VISA', $paymentSource->publicData['brand']);
+        $this->assertSame('[redacted]', $paymentSource->requestPayload['token']);
+
+        Http::assertSent(function ($request): bool {
+            return $request->url() === 'https://sandbox.wompi.co/v1/payment_sources'
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
+                && $request['type'] === 'CARD'
+                && $request['token'] === 'tok_test_4242'
+                && $request['customer_email'] === 'user@example.com'
+                && $request['acceptance_token'] === 'acceptance-token'
+                && $request['accept_personal_auth'] === 'personal-auth-token'
+                && $request['session_id'] === 'session-1'
+                && $request['customer_data']['device_id'] === 'device-1';
+        });
+    }
+
+    #[Test]
     public function it_charges_wompi_payment_source_as_recurring_transaction(): void
     {
         Http::fake([
@@ -112,6 +189,67 @@ class WompiPaymentClientTest extends TestCase
                 && $request['customer_email'] === 'user@example.com'
                 && $request['signature'] === hash('sha256', 'VOI-REN-1-TEST3200000COPtest_integrity_key');
         });
+    }
+
+    #[Test]
+    public function it_gets_wompi_payment_source_charge_status(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/transactions/trx_pending_1' => Http::response([
+                'data' => [
+                    'id' => 'trx_pending_1',
+                    'reference' => 'VOI-TCV-1-TEST',
+                    'status' => 'APPROVED',
+                    'amount_in_cents' => 3200000,
+                    'currency' => 'COP',
+                ],
+            ]),
+        ]);
+
+        $charge = $this->client()->getPaymentSourceCharge(
+            providerTransactionId: 'trx_pending_1',
+            reference: 'VOI-TCV-1-TEST',
+            amountInCents: 3200000,
+            currency: 'COP',
+        );
+
+        $this->assertTrue($charge->isSuccessful());
+        $this->assertSame('approved', $charge->status);
+        $this->assertSame('trx_pending_1', $charge->providerTransactionId);
+        $this->assertSame('APPROVED', $charge->providerStatus);
+
+        Http::assertSent(function ($request): bool {
+            return $request->url() === 'https://sandbox.wompi.co/v1/transactions/trx_pending_1'
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key';
+        });
+    }
+
+    #[Test]
+    public function it_marks_payment_source_charge_lookup_as_error_when_transaction_does_not_match(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/transactions/trx_pending_1' => Http::response([
+                'data' => [
+                    'id' => 'trx_pending_1',
+                    'reference' => 'VOI-TCV-OTHER',
+                    'status' => 'APPROVED',
+                    'amount_in_cents' => 100,
+                    'currency' => 'COP',
+                ],
+            ]),
+        ]);
+
+        $charge = $this->client()->getPaymentSourceCharge(
+            providerTransactionId: 'trx_pending_1',
+            reference: 'VOI-TCV-1-TEST',
+            amountInCents: 3200000,
+            currency: 'COP',
+        );
+
+        $this->assertFalse($charge->isSuccessful());
+        $this->assertSame('error', $charge->status);
+        $this->assertSame('APPROVED', $charge->providerStatus);
+        $this->assertSame('transaction_mismatch', $charge->rawResponse['local_error']);
     }
 
     #[Test]

@@ -6,6 +6,7 @@ use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Models\Profile;
+use App\Services\Integrations\ProfileMediaPromptService;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -78,7 +79,7 @@ class OpenAIClient implements ChatAIClient
 
         try {
             // Build the system prompt based on profile data
-            $systemPrompt = $this->buildSystemPrompt($profile, $chatId, $currentMessageId);
+            $systemPrompt = $this->buildSystemPrompt($profile, $message, $chatId, $currentMessageId);
 
             $response = $this->postJsonWithRetry($requestUrl, [
                 'model' => $this->defaultModel,
@@ -94,6 +95,7 @@ class OpenAIClient implements ChatAIClient
                 ],
                 'max_tokens' => 1000,
                 'temperature' => 0.7,
+                'response_format' => ['type' => 'json_object'],
             ]);
 
             $responseData = $response->json();
@@ -286,7 +288,7 @@ class OpenAIClient implements ChatAIClient
     /**
      * Build a system prompt based on profile data.
      */
-    private function buildSystemPrompt(Profile $profile, ?int $chatId = null, ?int $currentMessageId = null): string
+    private function buildSystemPrompt(Profile $profile, string $message, ?int $chatId = null, ?int $currentMessageId = null): string
     {
         $prompt = $profile->name
             ? "Your name is: {$profile->name}"
@@ -326,11 +328,12 @@ class OpenAIClient implements ChatAIClient
         }
 
         $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
-        $selectedInstagramMedia = $this->buildSelectedInstagramMediaPrompt($profile);
+        $mediaService = app(ProfileMediaPromptService::class);
+        $selectedMedia = $this->buildSelectedMediaPrompt($mediaService->selectedMediaForPrompt($profile));
 
-        if ($selectedInstagramMedia !== null) {
-            $prompt .= ". Selected Instagram media available for visitor conversations: {$selectedInstagramMedia}";
-            $prompt .= '. If the visitor asks for photos, pictures, images, posts, or visual memories, choose one selected media item and set media_action to "show" with its id in media_ids. If the visitor first asks what photos are available and then follows up with "cualquiera", "la que quieras", "any", "whatever", or similar, treat that as permission to choose one selected media item and set media_action to "show". For follow-ups such as "another", "otra", or "more", choose a selected media id that is not in recent assistant media_ids when possible. For follow-ups such as "that photo", "esa foto", "where was that photo", or "dónde fue esa foto", answer about the most recently shown media item in this chat and keep media_action as "none" unless the visitor explicitly asks to show it again. Use provider_label, observation, caption, and date as factual context. Mention where the photo was taken only when observation or caption reasonably indicates a place. Keep photo answers short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches the media and external link separately. Do not invent photos, places, providers, or links outside this list';
+        if ($selectedMedia !== null) {
+            $prompt .= ". Selected media available for visitor conversations before constraints: {$selectedMedia}";
+            $prompt .= '. Infer from the current message and recent chat whether the visitor is asking for media. When media is requested, set media_request to true and fill constraints from the meaning of the request, not from a fixed phrase list. Constraint keys are include_providers, exclude_providers, include_source_types, exclude_source_types, and require_unseen. Provider values must use provider_key values from the selected media list. Source type values must use source_type values from the selected media list. The social_network source_type means media from social platforms; if the visitor asks for media outside or inside a kind of source, express that through source type constraints. When the visitor names a provider_key or provider_label from the selected media list, use provider constraints for that named provider, not source type constraints. Do not convert a provider exclusion into a source type exclusion; excluding one provider still allows other providers with the same source_type. Apply constraints before choosing media_ids. If at least one selected media item matches the inferred constraints and the visitor wants to see media, choose one matching id and set media_action to "show"; do not answer that no photo is available. If no selected media matches the inferred constraints, set media_action to "none", media_ids to [], and answer briefly that no matching photo is available. For follow-up references to a previously shown media item, answer using the most recently shown media item and keep media_action as "none" unless the visitor asks to show another media item. Use provider_label, observation, caption, and date as factual context. Mention where the photo was taken only when observation or caption reasonably indicates a place. Keep photo answers short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches media and external links separately. Do not invent photos, places, providers, source types, or links outside the selected media list';
         }
 
         if ($recentMessages !== []) {
@@ -341,16 +344,18 @@ class OpenAIClient implements ChatAIClient
             }
         }
 
-        $recentlyShownInstagramMedia = $this->buildRecentlyShownInstagramMediaPrompt($profile, $recentMessages);
+        $recentlyShownInstagramMedia = $this->buildRecentlyShownMediaPrompt($profile, $recentMessages);
 
         if ($recentlyShownInstagramMedia !== null) {
             $prompt .= ". Most recently shown media item in this chat: {$recentlyShownInstagramMedia}. For references like \"esa foto\", \"esa imagen\", \"that photo\", or \"where was that photo\", use this media item first";
         }
 
-        $prompt .= '. Only answer using the information in this prompt. If the requested information is not available here, start the answer exactly with [[BIGMELO_NO_ANSWER]] and then say you do not have that information at this moment';
+        $prompt .= '. Only answer using the information in this prompt. For non-media requests, if the requested information is not available here, start the answer exactly with [[BIGMELO_NO_ANSWER]] and then say you do not have that information at this moment';
+        $prompt .= '. A media request with no selected media matching the inferred constraints is answerable from the selected media inventory. For that case, do not use [[BIGMELO_NO_ANSWER]]; set media_request to true, media_action to "none", media_ids to [], keep the inferred constraints, and answer that no matching photo is available';
         $prompt .= '. Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview';
         $prompt .= '. Always respond in character and maintain consistency with your defined role and personality.';
-        $prompt .= '. Return a JSON object only, without surrounding text. The JSON object must have exactly these keys: "answer" as the natural-language answer string, "media_action" as "none" or "show", and "media_ids" as an array of selected media ids to attach. Use "media_action":"none" and an empty media_ids array when no photo should be attached.';
+        $prompt .= '. The answer string must be 200 characters or fewer.';
+        $prompt .= '. Return a JSON object only, without surrounding text. The JSON object must have exactly these keys: "answer" as the natural-language answer string, "media_request" as a boolean, "media_action" as "none" or "show", "media_ids" as an array of selected media ids to attach, and "constraints" as an object with include_providers, exclude_providers, include_source_types, exclude_source_types arrays and require_unseen boolean. Use "media_action":"none" and an empty media_ids array when no photo should be attached.';
 
         return $prompt;
     }
@@ -381,30 +386,26 @@ class OpenAIClient implements ChatAIClient
         return implode('; ', $links);
     }
 
-    private function buildSelectedInstagramMediaPrompt(Profile $profile): ?string
+    /**
+     * @param  array<int, array<string, mixed>>  $media
+     */
+    private function buildSelectedMediaPrompt(array $media): ?string
     {
-        $media = $profile->integrationMedia()
-            ->where('provider', 'instagram')
-            ->where('selected', true)
-            ->orderByDesc('taken_at')
-            ->orderByDesc('id')
-            ->limit(10)
-            ->get(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type', 'media_url', 'thumbnail_url']);
-
-        if ($media->isEmpty()) {
+        if ($media === []) {
             return null;
         }
 
-        $items = $media->map(fn ($item): array => [
-            'id' => $item->id,
-            'provider_key' => 'instagram',
-            'provider_label' => 'Instagram',
-            'type' => $item->media_type,
-            'caption' => $item->caption,
-            'observation' => $item->observation,
-            'permalink' => $item->permalink,
-            'image_url' => $item->media_url ?: $item->thumbnail_url,
-            'date' => $item->taken_at?->toDateString(),
+        $items = collect($media)->map(fn (array $item): array => [
+            'id' => $item['id'] ?? null,
+            'provider_key' => $item['provider_key'] ?? null,
+            'provider_label' => $item['provider_label'] ?? null,
+            'source_type' => $item['source_type'] ?? null,
+            'type' => $item['media_type'] ?? null,
+            'caption' => $item['caption'] ?? null,
+            'observation' => $item['observation'] ?? null,
+            'permalink' => $item['permalink'] ?? null,
+            'image_url' => $item['image_url'] ?? null,
+            'date' => $item['taken_at'] ?? null,
         ])->values()->all();
         $json = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -419,7 +420,7 @@ class OpenAIClient implements ChatAIClient
     /**
      * @param  array<int, array<string, mixed>>  $recentMessages
      */
-    private function buildRecentlyShownInstagramMediaPrompt(Profile $profile, array $recentMessages): ?string
+    private function buildRecentlyShownMediaPrompt(Profile $profile, array $recentMessages): ?string
     {
         $mediaId = null;
 
@@ -443,18 +444,18 @@ class OpenAIClient implements ChatAIClient
         }
 
         $media = $profile->integrationMedia()
-            ->where('provider', 'instagram')
             ->whereKey($mediaId)
-            ->first(['id', 'caption', 'observation', 'permalink', 'taken_at', 'media_type', 'media_url', 'thumbnail_url']);
+            ->first(['id', 'provider', 'caption', 'observation', 'permalink', 'taken_at', 'media_type', 'media_url', 'thumbnail_url']);
 
         if (! $media) {
             return null;
         }
 
+        $mediaService = app(ProfileMediaPromptService::class);
         $json = json_encode([
             'id' => $media->id,
-            'provider_key' => 'instagram',
-            'provider_label' => 'Instagram',
+            'provider_key' => $media->provider,
+            'provider_label' => $mediaService->providerLabel($media->provider),
             'type' => $media->media_type,
             'caption' => $media->caption,
             'observation' => $media->observation,
@@ -464,6 +465,19 @@ class OpenAIClient implements ChatAIClient
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $json !== false ? $json : null;
+    }
+
+    /**
+     * @param  array<int, string>  $providers
+     */
+    private function providerListForPrompt(array $providers): string
+    {
+        $providers = array_values(array_filter(array_map(
+            fn (string $provider): string => trim($provider),
+            $providers
+        )));
+
+        return $providers !== [] ? implode(', ', $providers) : 'none';
     }
 
     private function socialNetworkName(string $network): string

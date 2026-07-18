@@ -6,8 +6,11 @@ use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
+use App\Classes\PaymentService\PaymentSourceSetup;
 use App\Classes\PaymentService\PaymentWebhook;
 use App\Classes\Subscriptions\SubscriptionBillingService;
 use App\Classes\Subscriptions\SubscriptionPlanActivator;
@@ -88,6 +91,9 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertSame($paymentOrder->id, $activeSubscription->source_payment_order_id);
         $this->assertNotNull($activeSubscription->last_billed_at);
         $this->assertNotNull($activeSubscription->next_billing_at);
+
+        $paymentSource->refresh();
+        $this->assertNotNull($paymentSource->last_used_at);
     }
 
     #[Test]
@@ -134,6 +140,171 @@ class SubscriptionBillingServiceTest extends TestCase
         ], $summary);
         $this->assertCount(0, $paymentClient->charges);
         $this->assertDatabaseCount('payment_orders', 1);
+    }
+
+    #[Test]
+    public function it_refreshes_pending_recurring_charge_before_finishing_billing(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config([
+            'payment.pending_charge_poll_attempts' => 1,
+            'payment.pending_charge_poll_delay_ms' => 0,
+            'payment.usd_cop_rate' => 4000,
+        ]);
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $this->dueSubscription($user, $paymentSource);
+        $paymentClient = new FakeRecurringPaymentClient('PENDING', 'APPROVED');
+
+        $summary = $this->billingService($paymentClient)->billDueRecurringSubscriptions();
+
+        $this->assertSame([
+            'processed' => 1,
+            'approved' => 1,
+            'pending' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ], $summary);
+        $this->assertCount(1, $paymentClient->lookups);
+        $this->assertSame(PaymentOrderStatus::Approved, PaymentOrder::query()->firstOrFail()->status);
+    }
+
+    #[Test]
+    public function it_does_not_bill_trial_before_free_period_ends(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $this->trialSubscription($user, $paymentSource, [
+            'started_at' => now()->subDays(2),
+            'trial_started_at' => now()->subDays(2),
+            'trial_ends_at' => now()->addDays(5),
+            'renews_at' => now()->addDays(5),
+            'next_billing_at' => now()->addDays(5),
+        ]);
+        $paymentClient = new FakeRecurringPaymentClient('APPROVED');
+
+        $summary = $this->billingService($paymentClient)->billDueRecurringSubscriptions();
+
+        $this->assertSame([
+            'processed' => 0,
+            'approved' => 0,
+            'pending' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ], $summary);
+        $this->assertCount(0, $paymentClient->charges);
+        $this->assertDatabaseCount('payment_orders', 0);
+    }
+
+    #[Test]
+    public function it_skips_cancelled_trial_at_period_end_without_charging(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $this->trialSubscription($user, $paymentSource, [
+            'started_at' => now()->subDays(7),
+            'trial_started_at' => now()->subDays(7),
+            'trial_ends_at' => now()->subMinute(),
+            'renews_at' => now()->subMinute(),
+            'next_billing_at' => now()->subMinute(),
+            'cancel_at_period_end' => true,
+            'cancelled_at' => now()->subDay(),
+            'trial_cancelled_at' => now()->subDay(),
+        ]);
+        $paymentClient = new FakeRecurringPaymentClient('APPROVED');
+
+        $summary = $this->billingService($paymentClient)->billDueRecurringSubscriptions();
+
+        $this->assertSame([
+            'processed' => 0,
+            'approved' => 0,
+            'pending' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ], $summary);
+        $this->assertCount(0, $paymentClient->charges);
+        $this->assertDatabaseCount('payment_orders', 0);
+    }
+
+    #[Test]
+    public function it_marks_trial_past_due_when_conversion_charge_is_declined(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config(['payment.usd_cop_rate' => 4000]);
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $trial = $this->trialSubscription($user, $paymentSource, [
+            'started_at' => now()->subDays(7),
+            'trial_started_at' => now()->subDays(7),
+            'trial_ends_at' => now()->subMinute(),
+            'renews_at' => now()->subMinute(),
+            'next_billing_at' => now()->subMinute(),
+        ]);
+        $paymentClient = new FakeRecurringPaymentClient('DECLINED');
+
+        $summary = $this->billingService($paymentClient)->billDueRecurringSubscriptions();
+
+        $this->assertSame([
+            'processed' => 1,
+            'approved' => 0,
+            'pending' => 0,
+            'failed' => 1,
+            'skipped' => 0,
+        ], $summary);
+
+        $paymentOrder = PaymentOrder::query()->firstOrFail();
+        $trial->refresh();
+
+        $this->assertSame(PaymentOrderStatus::Declined, $paymentOrder->status);
+        $this->assertSame('trial_conversion', $paymentOrder->billing_reason);
+        $this->assertFalse($trial->active);
+        $this->assertSame(SubscriptionStatus::PastDue, $trial->status);
+    }
+
+    #[Test]
+    public function it_charges_annual_amount_when_annual_trial_converts(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config(['payment.usd_cop_rate' => 4000]);
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $this->trialSubscription($user, $paymentSource, [
+            'plan' => SubscriptionPlan::StarterAnnual,
+            'started_at' => now()->subDays(7),
+            'trial_started_at' => now()->subDays(7),
+            'trial_ends_at' => now()->subMinute(),
+            'renews_at' => now()->subMinute(),
+            'next_billing_at' => now()->subMinute(),
+        ]);
+        $paymentClient = new FakeRecurringPaymentClient('APPROVED');
+
+        $summary = $this->billingService($paymentClient)->billDueRecurringSubscriptions();
+
+        $this->assertSame([
+            'processed' => 1,
+            'approved' => 1,
+            'pending' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ], $summary);
+
+        $paymentOrder = PaymentOrder::query()->firstOrFail();
+        $activeSubscription = Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('active', true)
+            ->firstOrFail();
+
+        $this->assertSame(32000000, $paymentClient->charges[0]->amountInCents);
+        $this->assertSame(32000000, $paymentOrder->amount_in_cents);
+        $this->assertSame(SubscriptionPlan::StarterAnnual, $activeSubscription->plan);
+        $this->assertTrue($activeSubscription->renews_at->isSameDay(now()->copy()->addYear()));
     }
 
     #[Test]
@@ -215,6 +386,27 @@ class SubscriptionBillingServiceTest extends TestCase
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function trialSubscription(User $user, PaymentSource $paymentSource, array $overrides = []): Subscription
+    {
+        return Subscription::query()->create(array_merge([
+            'user_id' => $user->id,
+            'payment_source_id' => $paymentSource->id,
+            'plan' => SubscriptionPlan::Starter,
+            'billing_mode' => 'recurring',
+            'started_at' => now()->subDays(7),
+            'trial_started_at' => now()->subDays(7),
+            'trial_ends_at' => now()->subMinute(),
+            'renews_at' => now()->subMinute(),
+            'status' => SubscriptionStatus::Trialing,
+            'active' => true,
+            'cancel_at_period_end' => false,
+            'next_billing_at' => now()->subMinute(),
+        ], $overrides));
+    }
+
     private function pendingRenewalOrder(User $user, Subscription $subscription, PaymentSource $paymentSource): PaymentOrder
     {
         return PaymentOrder::query()->create([
@@ -245,24 +437,34 @@ class FakeRecurringPaymentClient implements PaymentClient
      */
     public array $charges = [];
 
-    public function __construct(private readonly string $providerStatus) {}
+    /**
+     * @var array<int, string>
+     */
+    public array $lookups = [];
+
+    public function __construct(
+        private readonly string $providerStatus,
+        private readonly ?string $lookupProviderStatus = null,
+    ) {}
 
     public function createPayment(PaymentRequest $request): PaymentIntent
     {
         throw new RuntimeException('Checkout creation is not used by recurring billing tests.');
     }
 
+    public function paymentSourceSetup(): PaymentSourceSetup
+    {
+        throw new RuntimeException('Payment source setup is not used by recurring billing tests.');
+    }
+
+    public function createPaymentSource(PaymentSourceCreateRequest $request): PaymentSourceCreateResult
+    {
+        throw new RuntimeException('Payment source creation is not used by recurring billing tests.');
+    }
+
     public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
     {
         $this->charges[] = $request;
-        $status = match ($this->providerStatus) {
-            'APPROVED' => 'approved',
-            'DECLINED' => 'declined',
-            'VOIDED' => 'voided',
-            'ERROR' => 'error',
-            'EXPIRED' => 'expired',
-            default => 'pending',
-        };
 
         return new PaymentSourceCharge(
             source: 'wompi',
@@ -271,7 +473,7 @@ class FakeRecurringPaymentClient implements PaymentClient
             currency: $request->currency,
             providerTransactionId: 'trx_'.$request->reference,
             providerStatus: $this->providerStatus,
-            status: $status,
+            status: $this->statusFor($this->providerStatus),
             httpStatus: 201,
             rawResponse: [
                 'data' => [
@@ -282,8 +484,47 @@ class FakeRecurringPaymentClient implements PaymentClient
         );
     }
 
+    public function getPaymentSourceCharge(
+        string $providerTransactionId,
+        string $reference,
+        int $amountInCents,
+        string $currency,
+    ): PaymentSourceCharge {
+        $providerStatus = $this->lookupProviderStatus ?? $this->providerStatus;
+        $this->lookups[] = $providerTransactionId;
+
+        return new PaymentSourceCharge(
+            source: 'wompi',
+            reference: $reference,
+            amountInCents: $amountInCents,
+            currency: $currency,
+            providerTransactionId: $providerTransactionId,
+            providerStatus: $providerStatus,
+            status: $this->statusFor($providerStatus),
+            httpStatus: 200,
+            rawResponse: [
+                'data' => [
+                    'reference' => $reference,
+                    'status' => $providerStatus,
+                ],
+            ],
+        );
+    }
+
     public function parseWebhook(array $headers, string $payload): PaymentWebhook
     {
         throw new RuntimeException('Webhook parsing is not used by recurring billing tests.');
+    }
+
+    private function statusFor(string $providerStatus): string
+    {
+        return match ($providerStatus) {
+            'APPROVED' => 'approved',
+            'DECLINED' => 'declined',
+            'VOIDED' => 'voided',
+            'ERROR' => 'error',
+            'EXPIRED' => 'expired',
+            default => 'pending',
+        };
     }
 }

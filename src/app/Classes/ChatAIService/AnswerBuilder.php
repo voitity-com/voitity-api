@@ -12,13 +12,15 @@ use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
-use App\Services\Integrations\InstagramIntegrationService;
+use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileConversationMessageService;
 use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
 {
+    private const MAX_ANSWER_CHARACTERS = 200;
+
     public function __construct(
         private readonly ChatAIClient $chatAIClient,
         private readonly VoiceManager $voiceManager,
@@ -56,6 +58,20 @@ class AnswerBuilder
 
         $rawAnswerText = $chatAIAnswer->answer;
         $structuredAnswer = $this->parseStructuredAnswer($rawAnswerText);
+        $mediaService = app(ProfileMediaPromptService::class);
+        $mediaContext = $structuredAnswer !== null
+            ? $mediaService->analyzeStructuredRequest(
+                $profile,
+                $structuredAnswer,
+                $question->chat_id,
+                $question->id
+            )
+            : $mediaService->analyze(
+                $profile,
+                $question->text,
+                $question->chat_id,
+                $question->id
+            );
         $answerText = $this->conversationMessages()->stripNoAnswerMarker(
             $structuredAnswer['answer'] ?? $rawAnswerText
         );
@@ -66,26 +82,51 @@ class AnswerBuilder
             ? $structuredAnswer['media_ids']
             : [];
         $mediaPayload = $structuredAnswer !== null
-            ? $this->mediaPayloadForIds($profile, $structuredMediaIds)
-            : $this->fallbackMediaPayloadForQuestion($profile, $question);
+            ? $this->mediaPayloadForIds($structuredMediaIds, $mediaContext['candidate_media'])
+            : $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
         $mediaPayloadWasReplaced = false;
+        $usesMediaRuleAnswer = false;
 
-        if ($structuredAnswer !== null && $mediaPayload === [] && $this->shouldFallbackAttachMedia($question)) {
-            $mediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question);
+        if (
+            $structuredAnswer !== null
+            && $mediaPayload === []
+            && ($mediaContext['wants_media'] ?? false)
+            && (($structuredAnswer['media_action'] ?? null) === 'show' || $this->answerIndicatesNoAnswer($answerText))
+            && (($structuredAnswer['media_action'] ?? null) === 'show' || $this->shouldForceShowAvailableMedia($question, $mediaContext))
+            && $this->shouldFallbackAttachMedia($question, $mediaContext)
+        ) {
+            $mediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
+            $mediaPayloadWasReplaced = $mediaPayload !== [] && $structuredMediaIds !== [];
         }
 
-        if ($structuredAnswer !== null && $this->shouldPreferUnseenMedia($question, $mediaPayload)) {
-            $fallbackMediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question);
+        if ($mediaContext['wants_media'] && $mediaPayload === [] && $mediaContext['candidate_media'] === []) {
+            $invalidStructuredMediaSelection = $structuredAnswer !== null
+                && ($structuredAnswer['media_action'] ?? null) === 'show'
+                && $structuredMediaIds !== [];
 
-            if ($fallbackMediaPayload !== []) {
-                $mediaPayload = $fallbackMediaPayload;
-                $mediaPayloadWasReplaced = true;
+            if ($invalidStructuredMediaSelection || $this->answerIndicatesNoAnswer($answerText) || trim($answerText) === '') {
+                $answerText = $this->noMatchingMediaAnswer($mediaContext, $profile);
+                $source = 'profile_media_rules';
             }
+
+            $usesMediaRuleAnswer = true;
+        }
+
+        if (
+            $structuredAnswer !== null
+            && ($mediaContext['wants_media'] ?? false)
+            && $mediaPayload === []
+            && ($mediaContext['candidate_media'] ?? []) !== []
+            && $this->answerIndicatesNoAnswer($answerText)
+        ) {
+            $answerText = $this->noMatchingMediaAnswer($mediaContext, $profile);
+            $source = 'profile_media_rules';
+            $usesMediaRuleAnswer = true;
         }
 
         if ($mediaPayload !== [] && ($mediaPayloadWasReplaced || $this->answerIndicatesNoAnswer($answerText))) {
             $answerText = $this->mediaFallbackAnswer($mediaPayload, $profile);
-        } elseif ($this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
+        } elseif (! $usesMediaRuleAnswer && $this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
             if ($mediaPayload === []) {
                 $fallback = $this->conversationMessages()->resolvedMessage(
                     $profile,
@@ -98,7 +139,10 @@ class AnswerBuilder
             }
         }
 
-        $displayAnswerText = $this->appendMediaHint($answerText, $mediaPayload, $profile);
+        $displayAnswerText = $this->limitAnswerText(
+            $this->appendMediaHint($answerText, $mediaPayload, $profile),
+            self::MAX_ANSWER_CHARACTERS
+        );
         $audioText = $this->spokenTextForAnswer($displayAnswerText);
 
         if ($audioPayload === null && ! $usesPreconfiguredAnswer) {
@@ -234,13 +278,13 @@ class AnswerBuilder
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function fallbackMediaPayloadForQuestion(Profile $profile, Message $question): array
+    private function fallbackMediaPayloadForQuestion(Profile $profile, Message $question, array $mediaContext): array
     {
-        if (! $this->shouldFallbackAttachMedia($question)) {
+        if (! $this->shouldFallbackAttachMedia($question, $mediaContext)) {
             return [];
         }
 
-        $media = app(InstagramIntegrationService::class)->selectedMediaForPrompt($profile);
+        $media = $mediaContext['candidate_media'] ?? [];
 
         if ($media === []) {
             return [];
@@ -255,7 +299,7 @@ class AnswerBuilder
      * @param  array<int|string>  $ids
      * @return array<int, array<string, mixed>>
      */
-    private function mediaPayloadForIds(Profile $profile, array $ids): array
+    private function mediaPayloadForIds(array $ids, array $candidateMedia): array
     {
         $ids = collect($ids)
             ->map(fn ($id): int => (int) $id)
@@ -268,13 +312,11 @@ class AnswerBuilder
             return [];
         }
 
-        $media = app(InstagramIntegrationService::class)->selectedMediaForPrompt($profile);
-
-        if ($media === []) {
+        if ($candidateMedia === []) {
             return [];
         }
 
-        $mediaById = collect($media)->keyBy(fn (array $item): int => (int) ($item['id'] ?? 0));
+        $mediaById = collect($candidateMedia)->keyBy(fn (array $item): int => (int) ($item['id'] ?? 0));
 
         return collect($ids)
             ->map(fn (int $id) => $mediaById->get($id))
@@ -292,10 +334,11 @@ class AnswerBuilder
     {
         return [
             'id' => $item['id'] ?? null,
-            'type' => 'instagram_media',
+            'type' => 'integration_media',
             'provider' => $item['provider_label'] ?? $item['provider'] ?? 'Instagram',
             'provider_key' => $item['provider_key'] ?? 'instagram',
             'provider_label' => $item['provider_label'] ?? $item['provider'] ?? 'Instagram',
+            'source_type' => $item['source_type'] ?? 'integration',
             'image_url' => $item['image_url'] ?? null,
             'permalink' => $item['permalink'] ?? null,
             'caption' => $item['caption'] ?? null,
@@ -327,6 +370,27 @@ class AnswerBuilder
         return $media[0] ?? null;
     }
 
+    private function shouldForceShowAvailableMedia(Message $question, array $mediaContext): bool
+    {
+        if (($mediaContext['candidate_media'] ?? []) === []) {
+            return false;
+        }
+
+        $text = $question->text;
+
+        return $this->looksLikeExplicitMediaShowRequest($text)
+            || ($this->looksLikeAnyMediaChoice($text) && $this->recentConversationMentionsMedia($question))
+            || ($this->looksLikeAnotherMediaRequest($text) && $this->recentShownMediaIds($question) !== []);
+    }
+
+    private function looksLikeExplicitMediaShowRequest(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+        $hasShowIntent = preg_match('/\b(muestra|mu[eé]strame|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
+
+        return $hasShowIntent && ($this->looksLikeMediaRequest($text) || $this->looksLikeAnyMediaChoice($text));
+    }
+
     private function looksLikeMediaRequest(string $text): bool
     {
         $normalized = mb_strtolower($text);
@@ -340,10 +404,14 @@ class AnswerBuilder
         return false;
     }
 
-    private function shouldFallbackAttachMedia(Message $question): bool
+    private function shouldFallbackAttachMedia(Message $question, array $mediaContext): bool
     {
         if ($this->looksLikeMediaReferenceQuestion($question->text)) {
             return false;
+        }
+
+        if ($mediaContext['wants_media'] ?? false) {
+            return true;
         }
 
         if ($this->looksLikeMediaRequest($question->text)) {
@@ -374,7 +442,7 @@ class AnswerBuilder
             return false;
         }
 
-        return preg_match('/\b(cualquiera|whatever|whichever)\b/u', $normalized) === 1
+        return preg_match('/\b(cualquier|cualquiera|whatever|whichever)\b/u', $normalized) === 1
             || preg_match('/\b(la|el|una|uno)\s+que\s+quieras\b/u', $normalized) === 1
             || preg_match('/\b(any|anyone|anything)\b/u', $normalized) === 1;
     }
@@ -468,7 +536,13 @@ class AnswerBuilder
     }
 
     /**
-     * @return array{answer: string, media_action: string|null, media_ids: array<int>}|null
+     * @return array{
+     *     answer: string,
+     *     media_request: bool,
+     *     media_action: string|null,
+     *     media_ids: array<int>,
+     *     constraints: array<string, mixed>
+     * }|null
      */
     private function parseStructuredAnswer(string $answer): ?array
     {
@@ -509,10 +583,14 @@ class AnswerBuilder
             $mediaAction = $mediaIds !== [] ? 'show' : 'none';
         }
 
+        $mediaRequest = filter_var($payload['media_request'] ?? null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+
         return [
             'answer' => is_scalar($payload['answer']) ? (string) $payload['answer'] : '',
+            'media_request' => $mediaRequest ?? ($mediaAction === 'show' || $mediaIds !== []),
             'media_action' => $mediaAction,
             'media_ids' => $mediaIds,
+            'constraints' => is_array($payload['constraints'] ?? null) ? $payload['constraints'] : [],
         ];
     }
 
@@ -590,6 +668,64 @@ class AnswerBuilder
         ]);
 
         return implode(' ', $sentences);
+    }
+
+    /**
+     * @param  array<string, mixed>  $mediaContext
+     */
+    private function noMatchingMediaAnswer(array $mediaContext, Profile $profile): string
+    {
+        $locale = $this->profileLocale($profile);
+        $availableLabels = $mediaContext['available_provider_labels'] ?? [];
+        $includedProviders = $mediaContext['included_providers'] ?? [];
+        $excludedProviders = $mediaContext['excluded_providers'] ?? [];
+        $excludedSourceTypes = $mediaContext['excluded_source_types'] ?? [];
+        $useUnseen = (bool) ($mediaContext['use_unseen'] ?? false);
+
+        if ($useUnseen) {
+            return $locale === 'en'
+                ? 'I do not have more photos available right now.'
+                : 'No tengo más fotos disponibles por ahora.';
+        }
+
+        if (is_array($includedProviders) && $includedProviders !== []) {
+            $requestedLabels = collect($includedProviders)
+                ->map(fn (string $provider): string => app(ProfileMediaPromptService::class)->providerLabel($provider))
+                ->values()
+                ->all();
+            $providers = $this->humanList($requestedLabels, $locale);
+
+            return $locale === 'en'
+                ? "I do not have photos available on {$providers} right now."
+                : "No tengo fotos disponibles en {$providers} por ahora.";
+        }
+
+        if (
+            (
+                (is_array($excludedProviders) && $excludedProviders !== [])
+                || (is_array($excludedSourceTypes) && $excludedSourceTypes !== [])
+            )
+            && is_array($availableLabels)
+            && $availableLabels !== []
+        ) {
+            $providers = $this->humanList($availableLabels, $locale);
+
+            return $locale === 'en'
+                ? "Right now I only have photos from {$providers}."
+                : "Por ahora solo tengo fotos de {$providers}.";
+        }
+
+        if (is_array($availableLabels) && $availableLabels !== []) {
+            $providers = $this->humanList($availableLabels, $locale);
+
+            return $locale === 'en'
+                ? "Right now I only have photos from {$providers}."
+                : "Por ahora solo tengo fotos de {$providers}.";
+        }
+
+        return $locale === 'en'
+            ? 'I do not have photos available right now.'
+            : 'No tengo fotos disponibles por ahora.';
     }
 
     /**
@@ -733,14 +869,65 @@ class AnswerBuilder
         return rtrim(mb_substr($text, 0, max(0, $limit - 1))).'...';
     }
 
+    private function limitAnswerText(string $text, int $limit): string
+    {
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        if (mb_strlen($text) <= $limit) {
+            return $text;
+        }
+
+        $truncated = rtrim(mb_substr($text, 0, max(0, $limit - 3)));
+        $lastSpace = mb_strrpos($truncated, ' ');
+
+        if ($lastSpace !== false && $lastSpace >= (int) floor($limit * 0.65)) {
+            $truncated = rtrim(mb_substr($truncated, 0, $lastSpace));
+        }
+
+        return rtrim($truncated, " \t\n\r\0\x0B.,;:").'...';
+    }
+
+    /**
+     * @param  array<int, string>  $items
+     */
+    private function humanList(array $items, string $locale): string
+    {
+        $items = array_values(array_filter(array_map(
+            fn (string $item): string => trim($item),
+            $items
+        )));
+
+        if ($items === []) {
+            return '';
+        }
+
+        if (count($items) === 1) {
+            return $items[0];
+        }
+
+        $last = array_pop($items);
+        $joiner = $locale === 'en' ? ' and ' : ' y ';
+
+        return implode(', ', $items).$joiner.$last;
+    }
+
     private function answerIndicatesNoAnswer(string $answerText): bool
     {
         $normalized = mb_strtolower($answerText);
+        $declinesMedia = preg_match('/\bno\s+(?:tengo|hay)\b[^.?!]{0,100}\b(foto|fotos|imagen|im[aá]genes|photo|photos|image|images)\b/u', $normalized) === 1;
 
         return str_contains($answerText, '[[BIGMELO_NO_ANSWER]]')
+            || $declinesMedia
             || str_contains($normalized, 'no tengo esa información')
             || str_contains($normalized, 'no tengo informacion')
             || str_contains($normalized, 'no puedo responder')
+            || str_contains($normalized, 'no hay fotos disponibles')
+            || str_contains($normalized, 'no tengo otras fotos')
+            || str_contains($normalized, 'no tengo más fotos')
+            || str_contains($normalized, 'no tengo mas fotos')
+            || str_contains($normalized, 'no matching photo')
+            || str_contains($normalized, 'no other photos')
+            || str_contains($normalized, 'no more photos')
             || str_contains($normalized, 'pregúntame otra cosa')
             || str_contains($normalized, 'preguntame otra cosa')
             || str_contains($normalized, 'do not have that information')
