@@ -3,6 +3,7 @@
 namespace App\Classes\Subscriptions;
 
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
@@ -118,16 +119,23 @@ class SubscriptionBillingService
             recurrent: true,
         ));
 
+        if ($charge->isPending() && $charge->providerTransactionId) {
+            $charge = $this->resolvePendingCharge($paymentOrder, $charge);
+        }
+
+        $chargedAt = now();
+
         $paymentOrder->provider_transaction_id = $charge->providerTransactionId;
         $paymentOrder->wompi_status = $charge->providerStatus;
         $paymentOrder->raw_provider_payload = $charge->toArray();
         $paymentOrder->status = PaymentOrderStatus::from($charge->status);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
-            $paymentOrder->paid_at = now();
+            $paymentOrder->paid_at = $chargedAt;
         }
 
         $paymentOrder->save();
+        $paymentOrder->paymentSource?->forceFill(['last_used_at' => $chargedAt])->save();
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
             $this->subscriptionPlanActivator->activateForPaymentOrder($paymentOrder);
@@ -149,6 +157,33 @@ class SubscriptionBillingService
         $this->dispatchRenewalNotifications($paymentOrder);
 
         return 'failed';
+    }
+
+    private function resolvePendingCharge(PaymentOrder $paymentOrder, PaymentSourceCharge $charge): PaymentSourceCharge
+    {
+        $attempts = max(0, (int) config('payment.pending_charge_poll_attempts', 3));
+        $delayMs = max(0, (int) config('payment.pending_charge_poll_delay_ms', 500));
+
+        for ($attempt = 0; $attempt < $attempts; $attempt++) {
+            if ($delayMs > 0) {
+                usleep($delayMs * 1000);
+            }
+
+            $refreshedCharge = $this->paymentService->getPaymentSourceCharge(
+                providerTransactionId: (string) $charge->providerTransactionId,
+                reference: $paymentOrder->reference,
+                amountInCents: $paymentOrder->amount_in_cents,
+                currency: $paymentOrder->currency->value,
+            );
+
+            if (! $refreshedCharge->isPending()) {
+                return $refreshedCharge;
+            }
+
+            $charge = $refreshedCharge;
+        }
+
+        return $charge;
     }
 
     private function isDueForBilling(Subscription $subscription, Carbon $now): bool

@@ -2790,9 +2790,146 @@
                 "messages"
               ]
             },
-            "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id."
+            "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id. Chat answers are limited to 200 characters and can include a media array when the profile attaches a selected integration photo."
           },
           "response": []
+        },
+        {
+          "name": "Send Message - Photo Excluding Provider",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  if (json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                  "  if (json.data.message_id) pm.environment.set('message_id', json.data.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Muéstrame una foto que no sea de Instagram\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messages"
+              ]
+            },
+            "description": "Exercises AI-inferred media constraints for selected integration media. The AI returns provider/source constraints, and the backend validates attached media against those constraints. If the profile only has excluded photos, the response should not include media and should say no matching photo is available. If other providers exist, the backend can attach one of those instead."
+          },
+          "response": [
+            {
+              "name": "Photo From Another Provider",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"Muéstrame una foto que no sea de Instagram\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "messages"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Message stored successfully.\",\n  \"data\": {\n    \"chat_id\": 42,\n    \"message_id\": 1051,\n    \"text\": \"Te comparto esta foto. Puedes ver más fotos en Facebook.\",\n    \"audio_url\": null,\n    \"source\": \"openai\",\n    \"status\": \"success\",\n    \"media\": [\n      {\n        \"id\": 77,\n        \"type\": \"integration_media\",\n        \"provider\": \"Facebook\",\n        \"provider_key\": \"facebook\",\n        \"provider_label\": \"Facebook\",\n        \"source_type\": \"social_network\",\n        \"image_url\": \"https://example.com/fb.jpg\",\n        \"permalink\": \"https://www.facebook.com/photo/fb/\",\n        \"caption\": \"FB\",\n        \"observation\": \"Facebook note\",\n        \"taken_at\": \"2026-07-17\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "No Matching Provider",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"Muéstrame una foto que no sea de Instagram\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/messages",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "messages"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Message stored successfully.\",\n  \"data\": {\n    \"chat_id\": 42,\n    \"message_id\": 1052,\n    \"text\": \"No tengo fotos de otras fuentes por ahora.\",\n    \"audio_url\": null,\n    \"source\": \"openai\",\n    \"status\": \"success\",\n    \"media\": []\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Send Audio Message - New Chat",

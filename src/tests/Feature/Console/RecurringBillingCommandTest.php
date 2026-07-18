@@ -5,8 +5,11 @@ namespace Tests\Feature\Console;
 use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
 use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
+use App\Classes\PaymentService\PaymentSourceSetup;
 use App\Classes\PaymentService\PaymentWebhook;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -221,6 +224,16 @@ class ConsoleRecurringPaymentClient implements PaymentClient
         throw new RuntimeException('Checkout creation is not used by recurring billing command tests.');
     }
 
+    public function paymentSourceSetup(): PaymentSourceSetup
+    {
+        throw new RuntimeException('Payment source setup is not used by recurring billing command tests.');
+    }
+
+    public function createPaymentSource(PaymentSourceCreateRequest $request): PaymentSourceCreateResult
+    {
+        throw new RuntimeException('Payment source creation is not used by recurring billing command tests.');
+    }
+
     public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
     {
         $this->charges[] = $request;
@@ -237,6 +250,30 @@ class ConsoleRecurringPaymentClient implements PaymentClient
             rawResponse: [
                 'data' => [
                     'reference' => $request->reference,
+                    'status' => $this->providerStatus,
+                ],
+            ],
+        );
+    }
+
+    public function getPaymentSourceCharge(
+        string $providerTransactionId,
+        string $reference,
+        int $amountInCents,
+        string $currency,
+    ): PaymentSourceCharge {
+        return new PaymentSourceCharge(
+            source: 'wompi',
+            reference: $reference,
+            amountInCents: $amountInCents,
+            currency: $currency,
+            providerTransactionId: $providerTransactionId,
+            providerStatus: $this->providerStatus,
+            status: $this->providerStatus === 'APPROVED' ? 'approved' : 'pending',
+            httpStatus: 200,
+            rawResponse: [
+                'data' => [
+                    'reference' => $reference,
                     'status' => $this->providerStatus,
                 ],
             ],

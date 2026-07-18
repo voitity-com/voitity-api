@@ -11,9 +11,28 @@ class PaymentService
         return $this->paymentClient->createPayment($request);
     }
 
+    public function paymentSourceSetup(): PaymentSourceSetup
+    {
+        return $this->paymentClient->paymentSourceSetup();
+    }
+
+    public function createPaymentSource(PaymentSourceCreateRequest $request): PaymentSourceCreateResult
+    {
+        return $this->paymentClient->createPaymentSource($request);
+    }
+
     public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
     {
         return $this->paymentClient->chargePaymentSource($request);
+    }
+
+    public function getPaymentSourceCharge(
+        string $providerTransactionId,
+        string $reference,
+        int $amountInCents,
+        string $currency,
+    ): PaymentSourceCharge {
+        return $this->paymentClient->getPaymentSourceCharge($providerTransactionId, $reference, $amountInCents, $currency);
     }
 
     /**

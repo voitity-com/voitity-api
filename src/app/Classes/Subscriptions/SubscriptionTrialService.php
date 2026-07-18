@@ -2,8 +2,8 @@
 
 namespace App\Classes\Subscriptions;
 
-use App\Classes\PaymentService\PaymentIntent;
-use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentService;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
@@ -11,6 +11,7 @@ use App\Enums\PaymentProvider;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Models\PaymentOrder;
+use App\Models\PaymentSource;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
@@ -27,59 +28,41 @@ class SubscriptionTrialService
     ) {}
 
     /**
-     * @return array{payment_order:PaymentOrder,intent:PaymentIntent}
+     * @return array{subscription:Subscription,payment_source:PaymentSource,payment_order:PaymentOrder,provider_source:PaymentSourceCreateResult}
      */
-    public function startTrialCheckout(User $user, SubscriptionPlan $plan, PaymentService $paymentService): array
+    public function startTrialWithPaymentSource(
+        User $user,
+        SubscriptionPlan $plan,
+        PaymentService $paymentService,
+        PaymentSourceCreateRequest $paymentSourceRequest,
+    ): array
     {
         $this->ensureTrialCanStart($user, $plan);
 
-        $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
+        $providerSource = $paymentService->createPaymentSource($paymentSourceRequest);
 
-        if ($exchangeRate <= 0) {
-            throw new RuntimeException('Invalid USD to COP exchange rate configuration.');
+        if (! $providerSource->isActive()) {
+            throw new RuntimeException('Wompi did not confirm an active reusable payment source.');
         }
 
-        $displayAmountUsd = max(0, round((float) config('subscriptions.trial.setup_amount_usd', 0), 2));
-        $amountInCents = (int) round($displayAmountUsd * $exchangeRate * 100);
-        $amountCop = round($amountInCents / 100, 2);
-        $expiresAt = now()->addMinutes(max(1, (int) config('payment.checkout_expires_in_minutes', 60)));
+        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource): array {
+            /** @var User $lockedUser */
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->ensureTrialCanStart($lockedUser, $plan);
+            $paymentSource = $this->localPaymentSourceFor($lockedUser, $providerSource, $paymentSourceRequest->metadata);
+            $paymentOrder = $this->createTrialSetupOrder($lockedUser, $plan, $paymentSource, $providerSource);
 
-        /** @var PaymentOrder $paymentOrder */
-        $paymentOrder = PaymentOrder::create([
-            'user_id' => $user->id,
-            'provider' => PaymentProvider::Wompi,
-            'reference' => $this->uniqueReference($user->id),
-            'plan' => $plan,
-            'recurring' => true,
-            'billing_reason' => 'trial_setup',
-            'display_amount_usd' => $displayAmountUsd,
-            'display_currency' => PaymentCurrency::Usd,
-            'exchange_rate' => $exchangeRate,
-            'amount_cop' => $amountCop,
-            'amount_in_cents' => $amountInCents,
-            'currency' => PaymentCurrency::Cop,
-            'status' => PaymentOrderStatus::Pending,
-            'expires_at' => $expiresAt,
-        ]);
+            return [$paymentSource, $paymentOrder];
+        });
 
-        $intent = $paymentService->createPayment(new PaymentRequest(
-            reference: $paymentOrder->reference,
-            amountInCents: $paymentOrder->amount_in_cents,
-            currency: $paymentOrder->currency->value,
-            redirectUrl: $this->redirectUrlFor($paymentOrder),
-            expirationTime: $expiresAt,
-            customerData: $this->customerDataFor($user),
-        ));
-
-        $paymentOrder->checkout_url = $intent->checkoutUrl;
-        $paymentOrder->raw_provider_payload = $intent->toArray();
-        $paymentOrder->save();
-
-        app(NotificationDispatcher::class)->sendInApp($user, 'payment_pending', $this->notificationDataForOrder($paymentOrder));
+        $subscription = $this->activateTrialFromPaymentOrder($paymentOrder);
+        $this->dispatchSubscriptionNotification($user, 'trial_started', $subscription);
 
         return [
+            'subscription' => $subscription,
+            'payment_source' => $paymentSource,
             'payment_order' => $paymentOrder,
-            'intent' => $intent,
+            'provider_source' => $providerSource,
         ];
     }
 
@@ -332,46 +315,90 @@ class SubscriptionTrialService
         return $reference;
     }
 
-    private function redirectUrlFor(PaymentOrder $paymentOrder): ?string
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function localPaymentSourceFor(User $user, PaymentSourceCreateResult $providerSource, array $metadata = []): PaymentSource
     {
-        $redirectUrl = config('payment.redirect_url');
+        $existingSource = PaymentSource::query()
+            ->where('provider', PaymentProvider::Wompi)
+            ->where('provider_source_id', $providerSource->providerSourceId)
+            ->first();
 
-        if (! is_string($redirectUrl) || trim($redirectUrl) === '') {
-            return null;
+        if ($existingSource instanceof PaymentSource && $existingSource->user_id !== $user->id) {
+            throw new RuntimeException('The payment source belongs to another account.');
         }
 
-        $redirectUrl = trim($redirectUrl);
-        $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+        $attributes = [
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => $providerSource->providerSourceId,
+            'type' => $providerSource->type,
+            'status' => $providerSource->status,
+            'reusable' => $providerSource->reusable,
+            'metadata' => $this->paymentSourceMetadata($providerSource, $metadata),
+            'verified_at' => $providerSource->isActive() ? now() : null,
+        ];
 
-        return $redirectUrl.$separator.http_build_query([
-            'payment_order_id' => $paymentOrder->id,
+        if ($existingSource instanceof PaymentSource) {
+            $existingSource->fill($attributes);
+            $existingSource->save();
+
+            return $existingSource;
+        }
+
+        /** @var PaymentSource $paymentSource */
+        $paymentSource = PaymentSource::query()->create($attributes);
+
+        return $paymentSource;
+    }
+
+    private function createTrialSetupOrder(
+        User $user,
+        SubscriptionPlan $plan,
+        PaymentSource $paymentSource,
+        PaymentSourceCreateResult $providerSource,
+    ): PaymentOrder {
+        $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
+
+        if ($exchangeRate <= 0) {
+            throw new RuntimeException('Invalid USD to COP exchange rate configuration.');
+        }
+
+        /** @var PaymentOrder $paymentOrder */
+        $paymentOrder = PaymentOrder::query()->create([
+            'user_id' => $user->id,
+            'payment_source_id' => $paymentSource->id,
+            'provider' => PaymentProvider::Wompi,
+            'reference' => $this->uniqueReference($user->id),
+            'plan' => $plan,
+            'recurring' => true,
+            'billing_reason' => 'trial_setup',
+            'display_amount_usd' => 0,
+            'display_currency' => PaymentCurrency::Usd,
+            'exchange_rate' => $exchangeRate,
+            'amount_cop' => 0,
+            'amount_in_cents' => 0,
+            'currency' => PaymentCurrency::Cop,
+            'status' => PaymentOrderStatus::Approved,
+            'wompi_status' => $providerSource->providerStatus,
+            'raw_provider_payload' => $providerSource->toArray(),
         ]);
+
+        return $paymentOrder;
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function notificationDataForOrder(PaymentOrder $paymentOrder): array
+    private function paymentSourceMetadata(PaymentSourceCreateResult $providerSource, array $metadata = []): array
     {
-        return [
-            'plan' => $paymentOrder->plan->value,
-            'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
-            'payment_order_id' => $paymentOrder->id,
-            'reference' => $paymentOrder->reference,
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function customerDataFor(User $user): array
-    {
-        $data = [
-            'email' => $user->email,
-            'full-name' => $user->name,
-        ];
-
-        return array_filter($data, fn (?string $value): bool => filled($value));
+        return array_filter([
+            'provider_status' => $providerSource->providerStatus,
+            'public_data' => $providerSource->publicData,
+            'metadata' => $metadata,
+            'http_status' => $providerSource->httpStatus,
+        ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
     private function dispatchSubscriptionNotification(User $user, string $type, Subscription $subscription): void

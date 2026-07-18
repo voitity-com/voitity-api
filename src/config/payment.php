@@ -8,6 +8,8 @@ return [
     'usd_cop_rate' => (float) env('PAYMENTS_USD_COP_RATE', 4000),
     'redirect_url' => env('PAYMENTS_REDIRECT_URL'),
     'checkout_expires_in_minutes' => (int) env('PAYMENTS_CHECKOUT_EXPIRES_IN_MINUTES', 60),
+    'pending_charge_poll_attempts' => (int) env('PAYMENTS_PENDING_CHARGE_POLL_ATTEMPTS', 3),
+    'pending_charge_poll_delay_ms' => (int) env('PAYMENTS_PENDING_CHARGE_POLL_DELAY_MS', 500),
 
     'drivers' => [
         'wompi' => [

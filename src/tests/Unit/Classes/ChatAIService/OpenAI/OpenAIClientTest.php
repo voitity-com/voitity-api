@@ -94,6 +94,7 @@ class OpenAIClientTest extends TestCase
 
             return $request->url() === 'https://fake-openai.test/v1/chat/completions'
                 && $payload['model'] === 'gpt-4o-mini'
+                && $payload['response_format'] === ['type' => 'json_object']
                 && $payload['messages'][0]['role'] === 'system'
                 && str_starts_with($systemPrompt, 'Your name is: '.$profile->name)
                 && str_contains($systemPrompt, '. '.$profile->description)
@@ -284,8 +285,99 @@ class OpenAIClientTest extends TestCase
             return $recentlyShownPosition !== false
                 && str_contains(substr($systemPrompt, $recentlyShownPosition), '"id":'.$amsterdam->id)
                 && str_contains(substr($systemPrompt, $recentlyShownPosition), '"observation":"Amsterdam"')
-                && str_contains($systemPrompt, '"cualquiera", "la que quieras", "any", "whatever"')
+                && str_contains($systemPrompt, 'Infer from the current message and recent chat whether the visitor is asking for media')
                 && str_contains($systemPrompt, 'For references like "esa foto"');
+        });
+    }
+
+    #[Test]
+    public function it_includes_all_selected_media_and_structured_media_constraints_in_the_system_prompt(): void
+    {
+        Log::spy();
+
+        Http::fake([
+            'https://fake-openai.test/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => '{"answer":"Te comparto una foto.","media_action":"show","media_ids":[]}'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 120,
+                    'completion_tokens' => 60,
+                    'total_tokens' => 180,
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Lex',
+            'description' => 'Lawyer assistant',
+            'genre' => 'legal',
+            'personality' => 'friendly',
+        ]);
+        $instagram = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $facebook = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => 'facebook',
+            'provider_user_id' => 'fb_123',
+            'username' => 'bigmelo.fb',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $instagramMedia = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $instagram->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'ig-media',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/ig.jpg',
+            'permalink' => 'https://www.instagram.com/p/ig/',
+            'caption' => 'IG',
+            'observation' => 'IG note',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $facebookMedia = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $facebook->id,
+            'profile_id' => $profile->id,
+            'provider' => 'facebook',
+            'provider_media_id' => 'fb-media',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/fb.jpg',
+            'permalink' => 'https://www.facebook.com/photo/fb/',
+            'caption' => 'FB',
+            'observation' => 'FB note',
+            'selected' => true,
+            'taken_at' => now()->subDay(),
+        ]);
+
+        $client = $this->makeClient();
+        $client->getAnswer($profile, 'Muéstrame una foto que no sea de Instagram');
+
+        Http::assertSent(function ($request) use ($facebookMedia, $instagramMedia) {
+            $systemPrompt = $request->data()['messages'][0]['content'];
+
+            return str_contains($systemPrompt, 'Selected media available for visitor conversations before constraints')
+                && str_contains($systemPrompt, '"id":'.$facebookMedia->id)
+                && str_contains($systemPrompt, '"provider_label":"Facebook"')
+                && str_contains($systemPrompt, '"source_type":"social_network"')
+                && str_contains($systemPrompt, '"id":'.$instagramMedia->id)
+                && str_contains($systemPrompt, '"provider_label":"Instagram"')
+                && str_contains($systemPrompt, 'fill constraints from the meaning of the request')
+                && str_contains($systemPrompt, 'Apply constraints before choosing media_ids')
+                && str_contains($systemPrompt, '"constraints" as an object')
+                && str_contains($systemPrompt, 'The answer string must be 200 characters or fewer');
         });
     }
 

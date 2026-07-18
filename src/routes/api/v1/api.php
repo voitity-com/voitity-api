@@ -117,6 +117,9 @@ Route::prefix('/avatar')->group(function () {
 Route::prefix('/subscription')->group(function () {
     Route::get('/plans', [SubscriptionPlansController::class, 'index'])->middleware(['auth:sanctum', 'abilities:subscription-plans:read']);
     Route::get('/limits', [SubscriptionLimitsController::class, 'show'])->middleware(['auth:sanctum', 'abilities:subscription-limits:read']);
+    Route::get('/payment-source-setup', [SubscriptionActionsController::class, 'paymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::post('/payment-source', [SubscriptionActionsController::class, 'startSubscriptionWithPaymentSource'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::get('/trial/payment-source-setup', [SubscriptionActionsController::class, 'trialPaymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create']);
     Route::post('/trial', [SubscriptionActionsController::class, 'startTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
     Route::post('/trial/cancel', [SubscriptionActionsController::class, 'cancelTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
     Route::post('/renewal/cancel', [SubscriptionActionsController::class, 'cancelRenewal'])->middleware(['auth:sanctum', 'abilities:payments:create']);

@@ -5,8 +5,11 @@ namespace App\Classes\PaymentService\Wompi;
 use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
 use App\Classes\PaymentService\PaymentRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
+use App\Classes\PaymentService\PaymentSourceSetup;
 use App\Classes\PaymentService\PaymentWebhook;
 use DateTimeInterface;
 use Illuminate\Http\Client\Response;
@@ -97,6 +100,100 @@ class WompiPaymentClient implements PaymentClient
         );
     }
 
+    public function paymentSourceSetup(): PaymentSourceSetup
+    {
+        $this->ensurePaymentSourceSetupConfig();
+
+        $requestUrl = $this->normalizedApiUrl().'/merchants/'.rawurlencode((string) $this->publicKey);
+        $response = Http::acceptJson()->get($requestUrl);
+        $responseData = $this->responseData($response);
+        $data = is_array($responseData['data'] ?? null) ? $responseData['data'] : [];
+        $acceptance = is_array($data['presigned_acceptance'] ?? null) ? $data['presigned_acceptance'] : [];
+        $personalDataAuth = is_array($data['presigned_personal_data_auth'] ?? null)
+            ? $data['presigned_personal_data_auth']
+            : [];
+        $acceptanceToken = $this->stringOrNull($acceptance['acceptance_token'] ?? null);
+        $personalDataAuthToken = $this->stringOrNull($personalDataAuth['acceptance_token'] ?? null);
+
+        if (! $response->successful() || ! $acceptanceToken || ! $personalDataAuthToken) {
+            throw new InvalidArgumentException('Wompi acceptance tokens are required to create payment sources.');
+        }
+
+        return new PaymentSourceSetup(
+            source: 'wompi',
+            publicKey: (string) $this->publicKey,
+            apiUrl: $this->normalizedApiUrl(),
+            environment: $this->environment,
+            acceptanceToken: $acceptanceToken,
+            acceptancePermalink: $this->stringOrNull($acceptance['permalink'] ?? null),
+            personalDataAuthToken: $personalDataAuthToken,
+            personalDataAuthPermalink: $this->stringOrNull($personalDataAuth['permalink'] ?? null),
+            rawResponse: $responseData,
+        );
+    }
+
+    public function createPaymentSource(PaymentSourceCreateRequest $request): PaymentSourceCreateResult
+    {
+        $this->ensurePaymentSourceCreateConfig();
+
+        $requestUrl = $this->normalizedApiUrl().'/payment_sources';
+        $payload = [
+            'type' => strtoupper($request->type),
+            'token' => $request->token,
+            'customer_email' => $request->customerEmail,
+            'acceptance_token' => $request->acceptanceToken,
+            'accept_personal_auth' => $request->acceptPersonalAuth,
+        ];
+
+        if ($request->sessionId) {
+            $payload['session_id'] = $request->sessionId;
+        }
+
+        if ($request->customerData !== []) {
+            $payload['customer_data'] = $request->customerData;
+        }
+
+        try {
+            $response = Http::withToken((string) $this->privateKey)
+                ->acceptJson()
+                ->asJson()
+                ->post($requestUrl, $payload);
+            $responseData = $this->responseData($response);
+            $paymentSource = is_array($responseData['data'] ?? null) ? $responseData['data'] : $responseData;
+            $providerStatus = $this->stringOrNull($paymentSource['status'] ?? null);
+            $status = $response->successful()
+                ? self::normalizePaymentSourceStatus($providerStatus)
+                : 'error';
+            $publicData = is_array($paymentSource['public_data'] ?? null) ? $paymentSource['public_data'] : [];
+
+            return new PaymentSourceCreateResult(
+                source: 'wompi',
+                providerSourceId: $this->stringOrNull($paymentSource['id'] ?? null),
+                type: $this->stringOrNull($paymentSource['type'] ?? null) ?? strtoupper($request->type),
+                providerStatus: $providerStatus,
+                status: $status,
+                reusable: in_array($status, ['active', 'pending'], true),
+                httpStatus: $response->status(),
+                requestUrl: $requestUrl,
+                requestPayload: $this->redactedPaymentSourcePayload($payload),
+                publicData: $publicData,
+                rawResponse: $responseData,
+            );
+        } catch (Throwable $e) {
+            return new PaymentSourceCreateResult(
+                source: 'wompi',
+                providerSourceId: null,
+                type: strtoupper($request->type),
+                providerStatus: null,
+                status: 'error',
+                reusable: false,
+                requestUrl: $requestUrl,
+                requestPayload: $this->redactedPaymentSourcePayload($payload),
+                rawResponse: ['error' => $e->getMessage()],
+            );
+        }
+    }
+
     public function chargePaymentSource(PaymentSourceChargeRequest $request): PaymentSourceCharge
     {
         $this->ensureChargeConfig();
@@ -134,6 +231,16 @@ class WompiPaymentClient implements PaymentClient
                 ? self::normalizeProviderStatus($providerStatus)
                 : 'error';
 
+            if ($response->successful() && ! $this->transactionMatchesExpected(
+                $transaction,
+                $request->reference,
+                $request->amountInCents,
+                $request->currency,
+            )) {
+                $status = 'error';
+                $responseData['local_error'] = 'transaction_mismatch';
+            }
+
             return new PaymentSourceCharge(
                 source: 'wompi',
                 reference: $request->reference,
@@ -158,6 +265,64 @@ class WompiPaymentClient implements PaymentClient
                 status: 'error',
                 requestUrl: $requestUrl,
                 requestPayload: $payload,
+                rawResponse: ['error' => $e->getMessage()],
+            );
+        }
+    }
+
+    public function getPaymentSourceCharge(
+        string $providerTransactionId,
+        string $reference,
+        int $amountInCents,
+        string $currency,
+    ): PaymentSourceCharge {
+        $this->ensureChargeConfig();
+
+        $requestUrl = $this->normalizedApiUrl().'/transactions/'.rawurlencode($providerTransactionId);
+
+        try {
+            $response = Http::withToken((string) $this->privateKey)
+                ->acceptJson()
+                ->get($requestUrl);
+            $responseData = $this->responseData($response);
+            $transaction = is_array($responseData['data'] ?? null) ? $responseData['data'] : $responseData;
+            $providerStatus = $this->stringOrNull($transaction['status'] ?? null);
+            $status = $response->successful()
+                ? self::normalizeProviderStatus($providerStatus)
+                : 'error';
+
+            if ($response->successful() && ! $this->transactionMatchesExpected(
+                $transaction,
+                $reference,
+                $amountInCents,
+                $currency,
+            )) {
+                $status = 'error';
+                $responseData['local_error'] = 'transaction_mismatch';
+            }
+
+            return new PaymentSourceCharge(
+                source: 'wompi',
+                reference: $this->stringOrNull($transaction['reference'] ?? null) ?? $reference,
+                amountInCents: $this->intOrNull($transaction['amount_in_cents'] ?? null) ?? $amountInCents,
+                currency: $this->stringOrNull($transaction['currency'] ?? null) ?? $currency,
+                providerTransactionId: $this->stringOrNull($transaction['id'] ?? null) ?? $providerTransactionId,
+                providerStatus: $providerStatus,
+                status: $status,
+                httpStatus: $response->status(),
+                requestUrl: $requestUrl,
+                rawResponse: $responseData,
+            );
+        } catch (Throwable $e) {
+            return new PaymentSourceCharge(
+                source: 'wompi',
+                reference: $reference,
+                amountInCents: $amountInCents,
+                currency: $currency,
+                providerTransactionId: $providerTransactionId,
+                providerStatus: null,
+                status: 'error',
+                requestUrl: $requestUrl,
                 rawResponse: ['error' => $e->getMessage()],
             );
         }
@@ -247,6 +412,17 @@ class WompiPaymentClient implements PaymentClient
         };
     }
 
+    public static function normalizePaymentSourceStatus(?string $status): string
+    {
+        return match (strtoupper((string) $status)) {
+            'ACTIVE', 'APPROVED', 'AVAILABLE' => 'active',
+            'DECLINED' => 'declined',
+            'VOIDED' => 'voided',
+            'ERROR' => 'error',
+            default => 'pending',
+        };
+    }
+
     /**
      * @param  array<string, string>  $parameters
      */
@@ -271,6 +447,20 @@ class WompiPaymentClient implements PaymentClient
     {
         if (! $this->publicKey || ! $this->integritySecret) {
             throw new InvalidArgumentException('Wompi public key and integrity secret are required.');
+        }
+    }
+
+    private function ensurePaymentSourceSetupConfig(): void
+    {
+        if (! $this->publicKey || ! $this->apiUrl) {
+            throw new InvalidArgumentException('Wompi public key and API URL are required.');
+        }
+    }
+
+    private function ensurePaymentSourceCreateConfig(): void
+    {
+        if (! $this->privateKey || ! $this->apiUrl) {
+            throw new InvalidArgumentException('Wompi private key and API URL are required.');
         }
     }
 
@@ -419,5 +609,48 @@ class WompiPaymentClient implements PaymentClient
     private function normalizedPaymentSourceId(string $paymentSourceProviderId): int|string
     {
         return ctype_digit($paymentSourceProviderId) ? (int) $paymentSourceProviderId : $paymentSourceProviderId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $transaction
+     */
+    private function transactionMatchesExpected(array $transaction, string $reference, int $amountInCents, string $currency): bool
+    {
+        $transactionReference = $this->stringOrNull($transaction['reference'] ?? null);
+
+        if ($transactionReference !== null && $transactionReference !== $reference) {
+            return false;
+        }
+
+        $transactionAmount = $this->intOrNull($transaction['amount_in_cents'] ?? null);
+
+        if ($transactionAmount !== null && $transactionAmount !== $amountInCents) {
+            return false;
+        }
+
+        $transactionCurrency = $this->stringOrNull($transaction['currency'] ?? null);
+
+        return $transactionCurrency === null || $transactionCurrency === $currency;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function redactedPaymentSourcePayload(array $payload): array
+    {
+        if (isset($payload['token'])) {
+            $payload['token'] = '[redacted]';
+        }
+
+        if (isset($payload['acceptance_token'])) {
+            $payload['acceptance_token'] = '[redacted]';
+        }
+
+        if (isset($payload['accept_personal_auth'])) {
+            $payload['accept_personal_auth'] = '[redacted]';
+        }
+
+        return $payload;
     }
 }
