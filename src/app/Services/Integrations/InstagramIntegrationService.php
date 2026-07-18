@@ -135,7 +135,6 @@ class InstagramIntegrationService
                         'provider_media_id' => $providerMediaId,
                     ]
                 );
-                $isNew = ! $media->exists;
 
                 $media->forceFill([
                     'profile_id' => $integration->profile_id,
@@ -149,7 +148,7 @@ class InstagramIntegrationService
                     'metadata' => $item,
                 ]);
 
-                if ($isNew && is_string($caption) && trim($caption) !== '') {
+                if (filled($caption) && ! filled($media->observation)) {
                     $media->observation = $caption;
                 }
 
@@ -183,17 +182,30 @@ class InstagramIntegrationService
         DB::transaction(function () use ($integration, $itemsById, $mediaIds): void {
             foreach ($mediaIds as $mediaId) {
                 $item = $itemsById->get($mediaId);
-
-                ProfileIntegrationMedia::query()
+                $media = ProfileIntegrationMedia::query()
                     ->where('profile_integration_id', $integration->id)
                     ->whereKey($mediaId)
-                    ->update([
-                        'selected' => (bool) ($item['selected'] ?? false),
-                        'observation' => isset($item['observation'])
-                            ? trim((string) $item['observation'])
-                            : null,
-                        'updated_at' => now(),
-                    ]);
+                    ->first();
+
+                if (! $media instanceof ProfileIntegrationMedia) {
+                    continue;
+                }
+
+                $observation = null;
+
+                if (is_array($item) && array_key_exists('observation', $item)) {
+                    $candidate = trim((string) $item['observation']);
+                    $observation = $candidate !== '' ? $candidate : null;
+                }
+
+                if ($observation === null && filled($media->caption)) {
+                    $observation = $media->caption;
+                }
+
+                $media->forceFill([
+                    'selected' => is_array($item) && (bool) ($item['selected'] ?? false),
+                    'observation' => $observation,
+                ])->save();
             }
         });
 
@@ -221,7 +233,7 @@ class InstagramIntegrationService
                 'image_url' => $media->thumbnail_url ?: $media->media_url,
                 'permalink' => $media->permalink,
                 'caption' => $media->caption,
-                'observation' => $media->observation,
+                'observation' => filled($media->observation) ? $media->observation : $media->caption,
                 'taken_at' => $media->taken_at?->toDateString(),
             ])
             ->filter(fn (array $media): bool => filled($media['image_url'] ?? null) || filled($media['permalink'] ?? null))

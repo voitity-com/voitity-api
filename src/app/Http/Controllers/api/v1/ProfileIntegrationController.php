@@ -292,7 +292,7 @@ class ProfileIntegrationController extends Controller
             'thumbnail_url' => $media->thumbnail_url,
             'permalink' => $media->permalink,
             'caption' => $media->caption,
-            'observation' => $media->observation,
+            'observation' => filled($media->observation) ? $media->observation : $media->caption,
             'selected' => $media->selected,
             'taken_at' => $media->taken_at?->toIso8601String(),
         ];

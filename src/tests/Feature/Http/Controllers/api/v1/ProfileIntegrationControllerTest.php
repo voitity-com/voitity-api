@@ -61,6 +61,27 @@ class ProfileIntegrationControllerTest extends TestAPI
             ->assertJsonPath('data.selection_limit', 10);
     }
 
+    public function test_instagram_media_endpoint_uses_caption_as_default_observation(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createInstagramIntegration($profile, $user);
+        $media = $this->createInstagramMedia($integration, [
+            'caption' => 'Caption from Instagram',
+            'observation' => null,
+            'selected' => true,
+        ]);
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson("/api/profile/{$profile->id}/integrations/instagram/media");
+
+        $response->assertOk()
+            ->assertJsonPath('data.media.0.id', $media->id)
+            ->assertJsonPath('data.media.0.caption', 'Caption from Instagram')
+            ->assertJsonPath('data.media.0.observation', 'Caption from Instagram');
+    }
+
     public function test_instagram_callback_exchanges_token_syncs_media_and_redirects_to_admin(): void
     {
         $this->useEncryptionKey();
@@ -183,6 +204,24 @@ class ProfileIntegrationControllerTest extends TestAPI
         $this->assertSame('Caption selected', $payload[0]['caption']);
         $this->assertSame('https://example.com/media.jpg', $payload[0]['image_url']);
         $this->assertSame('https://www.instagram.com/p/media/', $payload[0]['permalink']);
+    }
+
+    public function test_selected_instagram_media_prompt_uses_caption_when_observation_is_empty(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createInstagramIntegration($profile, $user);
+
+        $this->createInstagramMedia($integration, [
+            'caption' => 'Caption for chat context',
+            'observation' => '',
+            'selected' => true,
+        ]);
+
+        $payload = app(InstagramIntegrationService::class)->selectedMediaForPrompt($profile);
+
+        $this->assertCount(1, $payload);
+        $this->assertSame('Caption for chat context', $payload[0]['observation']);
     }
 
     private function createInstagramIntegration(Profile $profile, User $user): ProfileIntegration
