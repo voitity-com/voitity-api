@@ -420,6 +420,7 @@ class ProfileMediaPromptService
                 '/\b(?:sin|excepto|salvo)\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
                 '/\bfuera\s+de\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
                 '/\b(?:distint[oa]s?|diferente[s]?)\s+de\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
+                '/\bno\s+(?:de|en)\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
                 '/\bque\s+no\s+(?:sea|sean|est[eé]|est[eé]n|tenga|tengan|venga|vengan|provenga|provengan)(?:\s+(?:en|de))?\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
                 '/\bno\s+(?:sea|sean|est[eé]|est[eé]n|tenga|tengan|venga|vengan|provenga|provengan)(?:\s+(?:en|de))?\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',
                 '/\b(?:not|without|except|exclude|outside|other\s+than)\b[^.?!]{0,50}(?<![\pL\pN])'.$providerPattern.'(?![\pL\pN])/iu',

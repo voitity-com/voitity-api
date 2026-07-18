@@ -781,7 +781,7 @@ class AnswerBuilderTest extends TestCase
                     'exclude_providers' => [],
                     'include_source_types' => [],
                     'exclude_source_types' => [],
-                    'require_unseen' => true,
+                    'require_unseen' => false,
                 ],
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             status: 'success'
@@ -1314,7 +1314,7 @@ class AnswerBuilderTest extends TestCase
         $chatAiAnswer = new ChatAIAnswer(
             source: 'openai',
             answer: json_encode([
-                'answer' => 'No tengo otras fotos para mostrarte en este momento. Si deseas ver más, puedes visitar mi Instagram.',
+                'answer' => 'No puedo responder eso. Pregúntame otra cosa.',
                 'media_request' => true,
                 'media_action' => 'none',
                 'media_ids' => [],
@@ -1340,6 +1340,102 @@ class AnswerBuilderTest extends TestCase
 
         $this->assertSame($unseen->id, $response['media'][0]['id']);
         $this->assertStringNotContainsString('No tengo otras fotos', $response['text']);
+        $this->assertStringContainsString('Amsterdam', $response['text']);
+        $this->assertLessThanOrEqual(200, mb_strlen($response['text']));
+    }
+
+    public function test_get_answer_recovers_targeted_media_when_ai_mentions_matching_place_without_media_id(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'rome',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/rome.jpg',
+            'permalink' => 'https://www.instagram.com/p/rome/',
+            'caption' => 'Roma',
+            'observation' => 'Roma',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $amsterdam = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'amsterdam',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/amsterdam.jpg',
+            'permalink' => 'https://www.instagram.com/p/amsterdam/',
+            'caption' => null,
+            'observation' => 'Amsterdam',
+            'selected' => true,
+            'taken_at' => now()->subDay(),
+        ]);
+        Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'He tomado fotos en Roma y Ámsterdam.',
+            'type' => 'answer',
+            'source' => 'openai',
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Dejame ver la de Paises Bajos',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'No tengo una foto específica de Ámsterdam disponible en este momento. Si deseas, puedo mostrarte otra foto que tomé en Roma.',
+                'media_request' => true,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => [
+                    'include_providers' => [],
+                    'exclude_providers' => [],
+                    'include_source_types' => ['social_network'],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Dejame ver la de Paises Bajos', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($amsterdam->id, $response['media'][0]['id']);
+        $this->assertStringNotContainsString('No tengo una foto', $response['text']);
         $this->assertStringContainsString('Amsterdam', $response['text']);
         $this->assertLessThanOrEqual(200, mb_strlen($response['text']));
     }

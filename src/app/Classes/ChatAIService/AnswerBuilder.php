@@ -59,19 +59,30 @@ class AnswerBuilder
         $rawAnswerText = $chatAIAnswer->answer;
         $structuredAnswer = $this->parseStructuredAnswer($rawAnswerText);
         $mediaService = app(ProfileMediaPromptService::class);
-        $mediaContext = $structuredAnswer !== null
-            ? $mediaService->analyzeStructuredRequest(
-                $profile,
-                $structuredAnswer,
-                $question->chat_id,
-                $question->id
-            )
-            : $mediaService->analyze(
+        if ($structuredAnswer !== null) {
+            $mediaContext = $this->mergeStructuredMediaContextWithText(
+                $mediaService,
+                $mediaService->analyzeStructuredRequest(
+                    $profile,
+                    $structuredAnswer,
+                    $question->chat_id,
+                    $question->id
+                ),
+                $mediaService->analyze(
+                    $profile,
+                    $question->text,
+                    $question->chat_id,
+                    $question->id
+                )
+            );
+        } else {
+            $mediaContext = $mediaService->analyze(
                 $profile,
                 $question->text,
                 $question->chat_id,
                 $question->id
             );
+        }
         $answerText = $this->conversationMessages()->stripNoAnswerMarker(
             $structuredAnswer['answer'] ?? $rawAnswerText
         );
@@ -86,6 +97,30 @@ class AnswerBuilder
             : $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
+
+        if ($structuredAnswer !== null && $this->shouldPreferUnseenMedia($question, $mediaPayload)) {
+            $unseenMediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
+
+            if ($unseenMediaPayload !== []) {
+                $mediaPayload = $unseenMediaPayload;
+                $mediaPayloadWasReplaced = true;
+            }
+        }
+
+        if (
+            $structuredAnswer !== null
+            && $mediaPayload === []
+            && ($mediaContext['wants_media'] ?? false)
+            && ($mediaContext['candidate_media'] ?? []) !== []
+            && (
+                ($structuredAnswer['media_action'] ?? null) === 'show'
+                || $this->answerIndicatesNoAnswer($answerText)
+                || $this->looksLikeSpecificMediaShowRequest($question)
+            )
+        ) {
+            $mediaPayload = $this->targetedMediaPayloadForQuestion($question, $mediaContext, $answerText);
+            $mediaPayloadWasReplaced = $mediaPayload !== [];
+        }
 
         if (
             $structuredAnswer !== null
@@ -119,7 +154,9 @@ class AnswerBuilder
             && ($mediaContext['candidate_media'] ?? []) !== []
             && $this->answerIndicatesNoAnswer($answerText)
         ) {
-            $answerText = $this->noMatchingMediaAnswer($mediaContext, $profile);
+            $answerText = $this->hasMediaConstraints($mediaContext) || $this->answerDeclinesOtherMedia($answerText)
+                ? $this->noMatchingMediaAnswer($mediaContext, $profile)
+                : $this->mediaAvailabilityAnswer($mediaContext, $profile);
             $source = 'profile_media_rules';
             $usesMediaRuleAnswer = true;
         }
@@ -175,6 +212,95 @@ class AnswerBuilder
         ]);
 
         return new AnswerResponse($answerMessage, $chatAIAnswer, $audioPayload, $mediaPayload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $structuredContext
+     * @param  array<string, mixed>  $textContext
+     * @return array<string, mixed>
+     */
+    private function mergeStructuredMediaContextWithText(
+        ProfileMediaPromptService $mediaService,
+        array $structuredContext,
+        array $textContext
+    ): array {
+        $structuredConstraints = $mediaService->normalizeConstraints($structuredContext['constraints'] ?? []);
+        $textConstraints = $mediaService->normalizeConstraints($textContext['constraints'] ?? []);
+        $excludedProviders = $this->uniqueStrings([
+            ...$structuredConstraints['exclude_providers'],
+            ...$textConstraints['exclude_providers'],
+        ]);
+        $excludedSourceTypes = $this->uniqueStrings([
+            ...$structuredConstraints['exclude_source_types'],
+            ...$textConstraints['exclude_source_types'],
+        ]);
+        $includedProviders = array_values(array_diff($this->uniqueStrings([
+            ...$structuredConstraints['include_providers'],
+            ...$textConstraints['include_providers'],
+        ]), $excludedProviders));
+        $includedSourceTypes = array_values(array_diff($this->uniqueStrings([
+            ...$structuredConstraints['include_source_types'],
+            ...$textConstraints['include_source_types'],
+        ]), $excludedSourceTypes));
+
+        $constraints = [
+            'include_providers' => $includedProviders,
+            'exclude_providers' => $excludedProviders,
+            'include_source_types' => $includedSourceTypes,
+            'exclude_source_types' => $excludedSourceTypes,
+            'require_unseen' => (bool) $structuredConstraints['require_unseen'] || (bool) $textConstraints['require_unseen'],
+        ];
+        $availableMedia = is_array($structuredContext['available_media'] ?? null)
+            ? $structuredContext['available_media']
+            : ($textContext['available_media'] ?? []);
+        $shownMediaIds = $this->uniqueIntegers([
+            ...($structuredContext['shown_media_ids'] ?? []),
+            ...($textContext['shown_media_ids'] ?? []),
+        ]);
+        $candidateMedia = $mediaService->candidateMediaForConstraints($availableMedia, $constraints, $shownMediaIds);
+
+        return array_merge($structuredContext, [
+            'wants_media' => (bool) ($structuredContext['wants_media'] ?? false) || (bool) ($textContext['wants_media'] ?? false),
+            'use_unseen' => (bool) $constraints['require_unseen'],
+            'constraints' => $constraints,
+            'included_providers' => $includedProviders,
+            'excluded_providers' => $excludedProviders,
+            'included_source_types' => $includedSourceTypes,
+            'excluded_source_types' => $excludedSourceTypes,
+            'shown_media_ids' => $shownMediaIds,
+            'available_media' => $availableMedia,
+            'candidate_media' => $candidateMedia,
+            'available_provider_labels' => $mediaService->providerLabels($availableMedia),
+            'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
+        ]);
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     * @return array<int, string>
+     */
+    private function uniqueStrings(array $values): array
+    {
+        return collect($values)
+            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->map(fn (string $value): string => trim($value))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     * @return array<int, int>
+     */
+    private function uniqueIntegers(array $values): array
+    {
+        return collect($values)
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function getAudio(Profile $profile, string $text): ?VoiceClientGeneratedAudio
@@ -296,6 +422,23 @@ class AnswerBuilder
     }
 
     /**
+     * @param  array<string, mixed>  $mediaContext
+     * @return array<int, array<string, mixed>>
+     */
+    private function targetedMediaPayloadForQuestion(Message $question, array $mediaContext, string $answerText): array
+    {
+        $media = $mediaContext['candidate_media'] ?? [];
+
+        if ($media === []) {
+            return [];
+        }
+
+        $item = $this->targetedMediaItem($media, $question, $answerText);
+
+        return $item !== null ? [$this->mediaItemToPayload($item)] : [];
+    }
+
+    /**
      * @param  array<int|string>  $ids
      * @return array<int, array<string, mixed>>
      */
@@ -370,6 +513,34 @@ class AnswerBuilder
         return $media[0] ?? null;
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $media
+     * @return array<string, mixed>|null
+     */
+    private function targetedMediaItem(array $media, Message $question, string $answerText): ?array
+    {
+        $questionText = $this->normalizeSearchText($question->text);
+        $answerText = $this->normalizeSearchText($answerText);
+        $bestItem = null;
+        $bestScore = 0;
+
+        foreach ($media as $item) {
+            $score = 0;
+
+            foreach ($this->mediaSearchTerms($item) as $term) {
+                $score += $this->searchTermScore($questionText, $term, 80);
+                $score += $this->searchTermScore($answerText, $term, 30);
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestItem = $item;
+            }
+        }
+
+        return $bestScore >= 30 ? $bestItem : null;
+    }
+
     private function shouldForceShowAvailableMedia(Message $question, array $mediaContext): bool
     {
         if (($mediaContext['candidate_media'] ?? []) === []) {
@@ -385,10 +556,20 @@ class AnswerBuilder
 
     private function looksLikeExplicitMediaShowRequest(string $text): bool
     {
-        $normalized = mb_strtolower($text);
-        $hasShowIntent = preg_match('/\b(muestra|mu[eé]strame|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
+        return $this->hasMediaShowIntent($text) && ($this->looksLikeMediaRequest($text) || $this->looksLikeAnyMediaChoice($text));
+    }
 
-        return $hasShowIntent && ($this->looksLikeMediaRequest($text) || $this->looksLikeAnyMediaChoice($text));
+    private function looksLikeSpecificMediaShowRequest(Message $question): bool
+    {
+        return $this->hasMediaShowIntent($question->text)
+            && ($this->recentConversationMentionsMedia($question) || $this->looksLikeMediaRequest($question->text));
+    }
+
+    private function hasMediaShowIntent(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+
+        return preg_match('/\b(muestra|mu[eé]strame|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
     }
 
     private function looksLikeMediaRequest(string $text): bool
@@ -673,6 +854,28 @@ class AnswerBuilder
     /**
      * @param  array<string, mixed>  $mediaContext
      */
+    private function mediaAvailabilityAnswer(array $mediaContext, Profile $profile): string
+    {
+        $locale = $this->profileLocale($profile);
+        $providers = $this->humanList($mediaContext['candidate_provider_labels'] ?? [], $locale);
+        $locations = $this->mediaLocationLabels($mediaContext['candidate_media'] ?? []);
+
+        if ($locations !== []) {
+            $places = $this->humanList($locations, $locale);
+
+            return $locale === 'en'
+                ? "I have photos from {$providers} in {$places}. I can show you one."
+                : "Tengo fotos de {$providers} en {$places}. Puedo mostrarte una.";
+        }
+
+        return $locale === 'en'
+            ? "I have photos from {$providers}. I can show you one."
+            : "Tengo fotos de {$providers}. Puedo mostrarte una.";
+    }
+
+    /**
+     * @param  array<string, mixed>  $mediaContext
+     */
     private function noMatchingMediaAnswer(array $mediaContext, Profile $profile): string
     {
         $locale = $this->profileLocale($profile);
@@ -726,6 +929,18 @@ class AnswerBuilder
         return $locale === 'en'
             ? 'I do not have photos available right now.'
             : 'No tengo fotos disponibles por ahora.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $mediaContext
+     */
+    private function hasMediaConstraints(array $mediaContext): bool
+    {
+        return ($mediaContext['included_providers'] ?? []) !== []
+            || ($mediaContext['excluded_providers'] ?? []) !== []
+            || ($mediaContext['included_source_types'] ?? []) !== []
+            || ($mediaContext['excluded_source_types'] ?? []) !== []
+            || (bool) ($mediaContext['use_unseen'] ?? false);
     }
 
     /**
@@ -829,6 +1044,138 @@ class AnswerBuilder
         $text = (string) preg_replace('/\s+/u', ' ', $text);
 
         return trim($text);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $media
+     * @return array<int, string>
+     */
+    private function mediaLocationLabels(array $media): array
+    {
+        return collect($media)
+            ->map(function (array $item): ?string {
+                $observation = $this->cleanMediaText($item['observation'] ?? null);
+                $caption = $this->cleanMediaText($item['caption'] ?? null);
+
+                return $this->extractLocation($observation) ?? $this->extractLocation($caption);
+            })
+            ->filter()
+            ->unique(fn (string $location): string => $this->normalizeSearchText($location))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $media
+     * @return array<int, string>
+     */
+    private function mediaSearchTerms(array $media): array
+    {
+        $texts = array_filter([
+            $this->cleanMediaText($media['observation'] ?? null),
+            $this->cleanMediaText($media['caption'] ?? null),
+        ]);
+
+        $terms = [];
+
+        foreach ($texts as $text) {
+            $location = $this->extractLocation($text);
+
+            if ($location !== null) {
+                $terms[] = $location;
+            }
+
+            $terms = array_merge($terms, $this->searchTokens($text));
+        }
+
+        return collect($terms)
+            ->map(fn (string $term): string => $this->normalizeSearchText($term))
+            ->filter(fn (string $term): bool => $term !== '' && ! in_array($term, $this->ignoredMediaSearchTerms(), true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function searchTokens(string $text): array
+    {
+        $normalized = $this->normalizeSearchText($text);
+        preg_match_all('/[\pL\pN]{4,}/u', $normalized, $matches);
+
+        return $matches[0] ?? [];
+    }
+
+    private function normalizeSearchText(string $text): string
+    {
+        $text = mb_strtolower($text);
+        $text = strtr($text, [
+            'á' => 'a',
+            'à' => 'a',
+            'ä' => 'a',
+            'â' => 'a',
+            'ã' => 'a',
+            'é' => 'e',
+            'è' => 'e',
+            'ë' => 'e',
+            'ê' => 'e',
+            'í' => 'i',
+            'ì' => 'i',
+            'ï' => 'i',
+            'î' => 'i',
+            'ó' => 'o',
+            'ò' => 'o',
+            'ö' => 'o',
+            'ô' => 'o',
+            'õ' => 'o',
+            'ú' => 'u',
+            'ù' => 'u',
+            'ü' => 'u',
+            'û' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c',
+        ]);
+
+        return trim((string) preg_replace('/\s+/u', ' ', $text));
+    }
+
+    private function searchTermScore(string $haystack, string $term, int $weight): int
+    {
+        if ($haystack === '' || $term === '') {
+            return 0;
+        }
+
+        $position = mb_strpos($haystack, $term);
+
+        if ($position === false) {
+            return 0;
+        }
+
+        return $weight + max(0, 20 - (int) floor($position / 10));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function ignoredMediaSearchTerms(): array
+    {
+        return [
+            'caption',
+            'enlace',
+            'experiencias',
+            'foto',
+            'fotos',
+            'image',
+            'images',
+            'instagram',
+            'link',
+            'mostrar',
+            'photo',
+            'photos',
+            'preguntan',
+            'social',
+        ];
     }
 
     private function extractLocation(string $text): ?string
@@ -935,6 +1282,13 @@ class AnswerBuilder
             || str_contains($normalized, 'cannot answer')
             || str_contains($normalized, "can't answer")
             || str_contains($normalized, 'ask me something else');
+    }
+
+    private function answerDeclinesOtherMedia(string $answerText): bool
+    {
+        $normalized = mb_strtolower($answerText);
+
+        return preg_match('/\b(?:otra|otras|otro|otros|other|more)\b[^.?!]{0,60}\b(foto|fotos|imagen|im[aá]genes|photo|photos|image|images)\b/u', $normalized) === 1;
     }
 
     private function normalizeMarkdownMediaSyntax(string $answerText): string
