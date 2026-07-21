@@ -27,7 +27,7 @@ return [
     'audio_messages' => [
         'disk' => env('CHAT_AUDIO_MESSAGES_DISK', 'public'),
         'folder' => env('CHAT_AUDIO_MESSAGES_FOLDER', 'messages/audio'),
-        'visibility' => env('CHAT_AUDIO_MESSAGES_VISIBILITY', 'public'),
+        'visibility' => env('CHAT_AUDIO_MESSAGES_VISIBILITY', env('FILESYSTEM_PUBLIC_VISIBILITY', 'public')),
     ],
 
     /*
