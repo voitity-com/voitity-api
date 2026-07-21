@@ -3,6 +3,7 @@
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
+use App\Classes\UsdCopRateService\UsdCopRateService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
 use App\Models\Subscription;
@@ -65,7 +66,9 @@ Artisan::command('subscriptions:reset-usage-limits', function (SubscriptionLimit
     return Command::SUCCESS;
 })->purpose('Reset due monthly usage limits for active subscriptions');
 
-Artisan::command('subscriptions:bill-recurring', function (): int {
+Artisan::command('subscriptions:bill-recurring', function (UsdCopRateService $usdCopRateService): int {
+    $usdCopRateService->syncConfig();
+
     $summary = app()->call([new BillDueRecurringSubscriptions, 'handle']);
 
     $this->info(sprintf(
