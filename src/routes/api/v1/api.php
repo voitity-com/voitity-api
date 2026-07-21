@@ -17,6 +17,7 @@ use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
 use App\Http\Controllers\api\v1\TestController;
+use App\Http\Controllers\api\v1\UsdCopRateController;
 use App\Http\Controllers\api\v1\UserController;
 use App\Http\Controllers\api\v1\VoiceController;
 use App\Http\Controllers\api\v1\VoiceSampleController;
@@ -115,19 +116,20 @@ Route::prefix('/avatar')->group(function () {
 });
 
 Route::prefix('/subscription')->group(function () {
-    Route::get('/plans', [SubscriptionPlansController::class, 'index'])->middleware(['auth:sanctum', 'abilities:subscription-plans:read']);
+    Route::get('/plans', [SubscriptionPlansController::class, 'index'])->middleware(['auth:sanctum', 'abilities:subscription-plans:read', 'sync.usd-cop-rate']);
     Route::get('/limits', [SubscriptionLimitsController::class, 'show'])->middleware(['auth:sanctum', 'abilities:subscription-limits:read']);
-    Route::get('/payment-source-setup', [SubscriptionActionsController::class, 'paymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create']);
-    Route::post('/payment-source', [SubscriptionActionsController::class, 'startSubscriptionWithPaymentSource'])->middleware(['auth:sanctum', 'abilities:payments:create']);
-    Route::get('/trial/payment-source-setup', [SubscriptionActionsController::class, 'trialPaymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create']);
-    Route::post('/trial', [SubscriptionActionsController::class, 'startTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::get('/payment-source-setup', [SubscriptionActionsController::class, 'paymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create', 'sync.usd-cop-rate']);
+    Route::post('/payment-source', [SubscriptionActionsController::class, 'startSubscriptionWithPaymentSource'])->middleware(['auth:sanctum', 'abilities:payments:create', 'sync.usd-cop-rate']);
+    Route::get('/trial/payment-source-setup', [SubscriptionActionsController::class, 'trialPaymentSourceSetup'])->middleware(['auth:sanctum', 'abilities:payments:create', 'sync.usd-cop-rate']);
+    Route::post('/trial', [SubscriptionActionsController::class, 'startTrial'])->middleware(['auth:sanctum', 'abilities:payments:create', 'sync.usd-cop-rate']);
     Route::post('/trial/cancel', [SubscriptionActionsController::class, 'cancelTrial'])->middleware(['auth:sanctum', 'abilities:payments:create']);
     Route::post('/renewal/cancel', [SubscriptionActionsController::class, 'cancelRenewal'])->middleware(['auth:sanctum', 'abilities:payments:create']);
     Route::post('/renewal/reactivate', [SubscriptionActionsController::class, 'reactivateRenewal'])->middleware(['auth:sanctum', 'abilities:payments:create']);
 });
 
 Route::prefix('/payments')->group(function () {
-    Route::post('/wompi/checkout', [PaymentController::class, 'createWompiCheckout'])->middleware(['auth:sanctum', 'abilities:payments:create']);
+    Route::get('/usd-cop-rate', [UsdCopRateController::class, 'show'])->middleware(['auth:sanctum', 'abilities:payments:read', 'sync.usd-cop-rate']);
+    Route::post('/wompi/checkout', [PaymentController::class, 'createWompiCheckout'])->middleware(['auth:sanctum', 'abilities:payments:create', 'sync.usd-cop-rate']);
     Route::get('/{paymentOrder}', [PaymentController::class, 'show'])->middleware(['auth:sanctum', 'abilities:payments:read']);
     Route::post('/wompi/events', [WompiWebhookController::class, 'handle']);
 });

@@ -1617,12 +1617,59 @@
               ]
             },
             "description": "Negative check: the admin plan is active and assignable by admins, but it is not purchasable through checkout."
-          },
-          "response": []
         },
-        {
-          "name": "Get Payment Order",
-          "request": {
+        "response": []
+      },
+      {
+        "name": "Get USD COP Rate",
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "let json = {};",
+                "try { json = pm.response.json(); } catch (e) {}",
+                "if (json.data) {",
+                "  pm.environment.set(\"usd_cop_rate\", String(json.data.rate));",
+                "}",
+                "pm.test('returns the current USD/COP rate', function () {",
+                "  pm.expect(pm.response.code).to.eql(200);",
+                "  pm.expect(json.data.pair).to.eql('USD/COP');",
+                "  pm.expect(json.data.base_currency).to.eql('USD');",
+                "  pm.expect(json.data.quote_currency).to.eql('COP');",
+                "  pm.expect(json.data.rate).to.be.a('number');",
+                "});"
+              ]
+            }
+          }
+        ],
+        "request": {
+          "method": "GET",
+          "header": [
+            {
+              "key": "Accept",
+              "value": "application/json"
+            }
+          ],
+          "url": {
+            "raw": "{{base_url}}/api/payments/usd-cop-rate",
+            "host": [
+              "{{base_url}}"
+            ],
+            "path": [
+              "api",
+              "payments",
+              "usd-cop-rate"
+            ]
+          },
+          "description": "Gets the cached current USD/COP exchange rate used by billing. Requires token ability: payments:read."
+        },
+        "response": []
+      },
+      {
+        "name": "Get Payment Order",
+        "request": {
             "method": "GET",
             "header": [
               {
