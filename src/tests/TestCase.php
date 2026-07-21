@@ -33,6 +33,7 @@ abstract class TestCase extends BaseTestCase
 
         // Force SQLite configuration for tests - MULTIPLE LAYERS OF PROTECTION
         Config::set('database.default', 'sqlite');
+        Config::set('cache.default', 'array');
         Config::set('database.connections.sqlite', [
             'driver' => 'sqlite',
             'database' => ':memory:',
@@ -141,10 +142,12 @@ abstract class TestCase extends BaseTestCase
         $_ENV['DB_CONNECTION'] = 'sqlite';
         $_ENV['DB_DATABASE'] = ':memory:';
         $_ENV['APP_ENV'] = 'testing';
+        $_ENV['CACHE_STORE'] = 'array';
 
         putenv('DB_CONNECTION=sqlite');
         putenv('DB_DATABASE=:memory:');
         putenv('APP_ENV=testing');
+        putenv('CACHE_STORE=array');
 
         $app = require __DIR__.'/../bootstrap/app.php';
 
@@ -158,6 +161,7 @@ abstract class TestCase extends BaseTestCase
             'prefix' => '',
             'foreign_key_constraints' => true,
         ];
+        $app['config']['cache.default'] = 'array';
 
         return $app;
     }

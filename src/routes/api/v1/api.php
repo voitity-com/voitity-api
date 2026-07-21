@@ -4,6 +4,7 @@ use App\Http\Controllers\api\v1\AdminUserController;
 use App\Http\Controllers\api\v1\AppNotificationController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
+use App\Http\Controllers\api\v1\ContactSubmissionController;
 use App\Http\Controllers\api\v1\MessageController;
 use App\Http\Controllers\api\v1\NotificationPreferenceController;
 use App\Http\Controllers\api\v1\PaymentController;
@@ -27,6 +28,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('health', function () {
     return response()->json(['message' => 'ok']);
 });
+
+Route::post('/contact-submissions', [ContactSubmissionController::class, 'store'])
+    ->middleware('throttle:contact-submissions');
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
