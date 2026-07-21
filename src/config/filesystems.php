@@ -1,6 +1,12 @@
 <?php
 
-$profilesDriver = env('FILESYSTEM_PROFILES_DRIVER', env('FILESYSTEM_PUBLIC_DRIVER', 'local'));
+$publicDriver = env('FILESYSTEM_PUBLIC_DRIVER', 'local');
+$publicRoot = env(
+    'FILESYSTEM_PUBLIC_ROOT',
+    strtolower((string) $publicDriver) === 's3' ? '' : storage_path('app/public')
+);
+
+$profilesDriver = env('FILESYSTEM_PROFILES_DRIVER', $publicDriver);
 $profilesRoot = env(
     'FILESYSTEM_PROFILES_ROOT',
     strtolower((string) $profilesDriver) === 's3' ? '' : storage_path('app/public')
@@ -45,8 +51,8 @@ return [
         ],
 
         'public' => [
-            'driver' => env('FILESYSTEM_PUBLIC_DRIVER', 'local'),
-            'root' => storage_path('app/public'),
+            'driver' => $publicDriver,
+            'root' => $publicRoot,
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
             'region' => env('AWS_DEFAULT_REGION'),
