@@ -93,7 +93,9 @@ class ProfileIntegrationControllerTest extends TestAPI
             'instagram.client_secret' => 'secret',
             'instagram.enable_fb_login' => false,
             'instagram.force_reauth' => true,
+            'instagram.graph_api_version' => 'v25.0',
             'instagram.graph_base_url' => 'https://graph.instagram.com',
+            'instagram.long_lived_token_url' => 'https://graph.instagram.com/access_token',
             'instagram.redirect_uri' => 'http://localhost:8000/api/integrations/instagram/callback',
             'instagram.scopes' => ['instagram_business_basic'],
             'instagram.token_url' => 'https://api.instagram.com/oauth/access_token',
@@ -109,7 +111,7 @@ class ProfileIntegrationControllerTest extends TestAPI
                 'expires_in' => 5183944,
                 'token_type' => 'bearer',
             ]),
-            'https://graph.instagram.com/me/media*' => Http::response([
+            'https://graph.instagram.com/v25.0/me/media*' => Http::response([
                 'data' => [[
                     'caption' => 'Media caption',
                     'id' => '18000000000000000',
@@ -119,7 +121,7 @@ class ProfileIntegrationControllerTest extends TestAPI
                     'timestamp' => '2026-07-14T12:00:00+0000',
                 ]],
             ]),
-            'https://graph.instagram.com/me*' => Http::response([
+            'https://graph.instagram.com/v25.0/me*' => Http::response([
                 'account_type' => 'BUSINESS',
                 'id' => '17841400000000000',
                 'media_count' => 1,

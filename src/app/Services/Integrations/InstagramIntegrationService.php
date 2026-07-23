@@ -11,6 +11,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
@@ -246,16 +247,22 @@ class InstagramIntegrationService
      */
     private function exchangeCodeForToken(string $code): array
     {
-        return Http::asForm()
-            ->post((string) config('instagram.token_url'), [
-                'client_id' => config('instagram.client_id'),
-                'client_secret' => config('instagram.client_secret'),
-                'grant_type' => 'authorization_code',
-                'redirect_uri' => config('instagram.redirect_uri'),
-                'code' => $code,
-            ])
-            ->throw()
-            ->json();
+        $url = (string) config('instagram.token_url');
+
+        try {
+            return Http::asForm()
+                ->post($url, [
+                    'client_id' => config('instagram.client_id'),
+                    'client_secret' => config('instagram.client_secret'),
+                    'grant_type' => 'authorization_code',
+                    'redirect_uri' => config('instagram.redirect_uri'),
+                    'code' => $code,
+                ])
+                ->throw()
+                ->json();
+        } catch (RequestException $e) {
+            throw $this->instagramRequestException('token exchange', $url, $e);
+        }
     }
 
     /**
@@ -267,13 +274,17 @@ class InstagramIntegrationService
             return null;
         }
 
+        $url = (string) config('instagram.long_lived_token_url');
+
         try {
-            return Http::get($this->graphUrl('/access_token'), [
+            return Http::get($url, [
                 'grant_type' => 'ig_exchange_token',
                 'client_secret' => config('instagram.client_secret'),
                 'access_token' => $shortAccessToken,
             ])->throw()->json();
-        } catch (RequestException) {
+        } catch (RequestException $e) {
+            $this->logInstagramRequestFailure('long-lived token exchange', $url, $e);
+
             return null;
         }
     }
@@ -283,10 +294,16 @@ class InstagramIntegrationService
      */
     private function fetchAccount(string $accessToken): array
     {
-        return Http::get($this->graphUrl('/me'), [
-            'access_token' => $accessToken,
-            'fields' => 'id,username,account_type,media_count',
-        ])->throw()->json();
+        $url = $this->graphUrl('/me');
+
+        try {
+            return Http::get($url, [
+                'access_token' => $accessToken,
+                'fields' => 'id,username,account_type,media_count',
+            ])->throw()->json();
+        } catch (RequestException $e) {
+            throw $this->instagramRequestException('account lookup', $url, $e);
+        }
     }
 
     /**
@@ -294,11 +311,17 @@ class InstagramIntegrationService
      */
     private function fetchMedia(string $accessToken): array
     {
-        $response = Http::get($this->graphUrl('/me/media'), [
-            'access_token' => $accessToken,
-            'fields' => 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp',
-            'limit' => max(1, (int) config('instagram.media_limit', 100)),
-        ])->throw()->json();
+        $url = $this->graphUrl('/me/media');
+
+        try {
+            $response = Http::get($url, [
+                'access_token' => $accessToken,
+                'fields' => 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp',
+                'limit' => max(1, (int) config('instagram.media_limit', 100)),
+            ])->throw()->json();
+        } catch (RequestException $e) {
+            throw $this->instagramRequestException('media lookup', $url, $e);
+        }
 
         return array_values(array_filter(
             Arr::wrap($response['data'] ?? []),
@@ -308,7 +331,53 @@ class InstagramIntegrationService
 
     private function graphUrl(string $path): string
     {
-        return rtrim((string) config('instagram.graph_base_url'), '/').'/'.ltrim($path, '/');
+        $baseUrl = rtrim((string) config('instagram.graph_base_url'), '/');
+
+        if (! preg_match('#/v\d+\.\d+$#', $baseUrl)) {
+            $version = trim((string) config('instagram.graph_api_version', 'v25.0'), '/');
+            $baseUrl .= '/'.$version;
+        }
+
+        return $baseUrl.'/'.ltrim($path, '/');
+    }
+
+    private function instagramRequestException(string $operation, string $url, RequestException $e): RuntimeException
+    {
+        $context = $this->instagramFailureContext($operation, $url, $e);
+
+        Log::warning('Instagram API request failed.', $context);
+
+        return new RuntimeException(
+            "Instagram {$operation} failed: ".$context['meta_message'],
+            0,
+            $e
+        );
+    }
+
+    private function logInstagramRequestFailure(string $operation, string $url, RequestException $e): void
+    {
+        Log::notice('Instagram API request failed.', $this->instagramFailureContext($operation, $url, $e));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function instagramFailureContext(string $operation, string $url, RequestException $e): array
+    {
+        $response = $e->response;
+        $payload = $response?->json();
+        $message = data_get($payload, 'error.message')
+            ?: Str::limit((string) ($response?->body() ?: $e->getMessage()), 300);
+
+        return [
+            'operation' => $operation,
+            'url' => $url,
+            'status' => $response?->status(),
+            'meta_message' => $message,
+            'meta_error_type' => data_get($payload, 'error.type'),
+            'meta_error_code' => data_get($payload, 'error.code'),
+            'meta_fbtrace_id' => data_get($payload, 'error.fbtrace_id'),
+        ];
     }
 
     private function stateCacheKey(string $state): string
