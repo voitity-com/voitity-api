@@ -324,7 +324,10 @@ class AnswerBuilderTest extends TestCase
         $this->assertStringNotContainsString('![', $response['text']);
         $this->assertStringNotContainsString('https://www.instagram.com/p/newer/', $response['text']);
         $this->assertStringContainsString('Puedes ver más fotos en Instagram.', $response['text']);
+        $this->assertSame('IMAGE', $response['media'][0]['media_type']);
         $this->assertSame('https://example.com/newer.jpg', $response['media'][0]['image_url']);
+        $this->assertSame('https://example.com/newer.jpg', $response['media'][0]['media_url']);
+        $this->assertNull($response['media'][0]['thumbnail_url']);
         $this->assertSame('https://www.instagram.com/p/newer/', $response['media'][0]['permalink']);
         $this->assertSame('Newer note', $response['media'][0]['observation']);
         $this->assertSame('instagram', $response['media'][0]['provider_key']);
@@ -1588,6 +1591,385 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame([], $response['media']);
         $this->assertSame('Por ahora solo tengo fotos de Instagram.', $response['text']);
         $this->assertLessThanOrEqual(200, mb_strlen($response['text']));
+    }
+
+    public function test_get_answer_prefers_explicit_tiktok_request_over_conflicting_ai_source_exclusion(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_user_id' => 'tiktok-user',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_media_id' => 'hulk-video',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.tiktok.com/@bigmelo/video/123',
+            'thumbnail_url' => 'https://example.com/hulk.jpg',
+            'permalink' => 'https://www.tiktok.com/@bigmelo/video/123',
+            'observation' => 'Un video de Hulk',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Qué tienes de TikTok?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'No tengo contenido disponible en TikTok.',
+                'media_request' => true,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => [
+                    'include_providers' => [],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => ['social_network'],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, '¿Qué tienes de TikTok?', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('tiktok', $response['media'][0]['provider_key']);
+        $this->assertStringNotContainsString('No tengo contenido', $response['text']);
+        $this->assertStringContainsString('video', mb_strtolower($response['text']));
+        $this->assertStringNotContainsString('foto', mb_strtolower($response['text']));
+    }
+
+    public function test_get_answer_returns_age_restricted_onlyfans_media_for_matching_topic(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'creator',
+            'username' => 'creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'hulk-promo',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/onlyfans/hulk.jpg',
+            'permalink' => 'https://onlyfans.com/creator',
+            'observation' => 'Contenido promocional inspirado en Hulk con vestuario verde.',
+            'age_restricted' => true,
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Qué tienes de Hulk en OnlyFans?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Tengo contenido promocional inspirado en Hulk. Espero que te guste.',
+                'media_request' => true,
+                'media_action' => 'show',
+                'media_ids' => [$media->id],
+                'constraints' => [
+                    'include_providers' => ['onlyfans'],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, '¿Qué tienes de Hulk en OnlyFans?', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('onlyfans', $response['media'][0]['provider_key']);
+        $this->assertSame('OnlyFans', $response['media'][0]['provider_label']);
+        $this->assertTrue($response['media'][0]['age_restricted']);
+        $this->assertStringContainsString('Hulk', $response['text']);
+        $this->assertStringNotContainsString('Puedes ver', $response['text']);
+        $this->assertStringNotContainsString('Espero que te guste', $response['text']);
+    }
+
+    public function test_get_answer_uses_media_specific_no_match_instead_of_generic_profile_fallback(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'creator',
+            'username' => 'creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'unrelated-video',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://cdn.example.com/onlyfans/promo.mp4',
+            'observation' => 'Video promocional hablando frente a cámara.',
+            'age_restricted' => true,
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Qué tienes de Hulk en OnlyFans?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => '[[BIGMELO_NO_ANSWER]] No tengo información sobre eso en este momento.',
+                'media_request' => true,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => [
+                    'include_providers' => ['onlyfans'],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, '¿Qué tienes de Hulk en OnlyFans?', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+        $this->assertSame('No tengo contenido coincidente disponible en OnlyFans por ahora.', $response['text']);
+        $this->assertSame(
+            'profile_media_rules',
+            Message::query()->where('chat_id', $chat->id)->where('type', 'answer')->latest('id')->firstOrFail()->source
+        );
+    }
+
+    public function test_get_answer_does_not_attach_unrelated_onlyfans_media_after_declining_requested_topic(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'creator',
+            'username' => 'creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'unrelated-video',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://cdn.example.com/onlyfans/promo.mp4',
+            'observation' => 'Video promocional hablando frente a cámara.',
+            'age_restricted' => true,
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Qué tienes de Hulk en OnlyFans?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'No tengo contenido específico de Hulk en OnlyFans. Pero puedes ver un video promocional en mi perfil.',
+                'media_request' => true,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => [
+                    'include_providers' => [],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, '¿Qué tienes de Hulk en OnlyFans?', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+        $this->assertSame('No tengo contenido coincidente disponible en OnlyFans por ahora.', $response['text']);
+        $this->assertSame(
+            'profile_media_rules',
+            Message::query()->where('chat_id', $chat->id)->where('type', 'answer')->latest('id')->firstOrFail()->source
+        );
+    }
+
+    public function test_get_answer_does_not_attach_onlyfans_video_when_user_requests_a_photo(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'creator',
+            'username' => 'creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $video = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'lingerie-video',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://cdn.example.com/onlyfans/lingerie.mp4',
+            'observation' => 'Video promocional en ropa interior.',
+            'age_restricted' => true,
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame una foto de OnlyFans en ropa interior.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Este video fue grabado en ropa interior.',
+                'media_request' => true,
+                'media_action' => 'show',
+                'media_ids' => [$video->id],
+                'constraints' => [
+                    'include_providers' => ['onlyfans'],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Muéstrame una foto de OnlyFans en ropa interior.', $question->chat_id, $question->id)
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+        $this->assertSame('No tengo contenido coincidente disponible en OnlyFans por ahora.', $response['text']);
     }
 
     public function test_get_answer_limits_stored_and_returned_answer_to_200_characters(): void

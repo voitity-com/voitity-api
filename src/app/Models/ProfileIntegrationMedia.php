@@ -19,16 +19,20 @@ class ProfileIntegrationMedia extends Model
         'provider_media_id',
         'media_type',
         'media_url',
+        'storage_disk',
+        'storage_path',
         'thumbnail_url',
         'permalink',
         'caption',
         'observation',
+        'age_restricted',
         'selected',
         'taken_at',
         'metadata',
     ];
 
     protected $casts = [
+        'age_restricted' => 'boolean',
         'selected' => 'boolean',
         'taken_at' => 'datetime',
         'metadata' => 'array',

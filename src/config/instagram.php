@@ -11,6 +11,8 @@ return [
     'auth_url' => env('INSTAGRAM_AUTH_URL', 'https://www.instagram.com/oauth/authorize'),
     'token_url' => env('INSTAGRAM_TOKEN_URL', 'https://api.instagram.com/oauth/access_token'),
     'graph_base_url' => rtrim(env('INSTAGRAM_GRAPH_BASE_URL', 'https://graph.instagram.com'), '/'),
+    'graph_api_version' => trim(env('INSTAGRAM_GRAPH_API_VERSION', 'v25.0'), '/'),
+    'long_lived_token_url' => env('INSTAGRAM_LONG_LIVED_TOKEN_URL', 'https://graph.instagram.com/access_token'),
     'admin_redirect_url' => rtrim(env('ADMIN_APP_URL', env('MAIL_ADMIN_URL', 'http://localhost:3000')), '/'),
     'enable_fb_login' => (bool) env('INSTAGRAM_ENABLE_FB_LOGIN', false),
     'force_reauth' => (bool) env('INSTAGRAM_FORCE_REAUTH', env('INSTAGRAM_FORCE_AUTHENTICATION', true)),

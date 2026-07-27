@@ -10,6 +10,7 @@ use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileIntegration;
 use App\Models\User;
 use App\Models\Voice;
 use App\Services\Integrations\ProfileMediaPromptService;
@@ -86,6 +87,17 @@ class AnswerBuilder
         $answerText = $this->conversationMessages()->stripNoAnswerMarker(
             $structuredAnswer['answer'] ?? $rawAnswerText
         );
+        $mediaContext = $this->constrainMediaContextToRequestedSubject(
+            $mediaService,
+            $mediaContext,
+            $question->text
+        );
+        $mediaContext = $this->constrainMediaContextToRequestedType(
+            $mediaService,
+            $mediaContext,
+            $question->text
+        );
+        $hasNoAnswerMarker = str_contains($rawAnswerText, '[[BIGMELO_NO_ANSWER]]');
         $source = $chatAIAnswer->source;
         $audioPayload = null;
         $usesPreconfiguredAnswer = false;
@@ -161,6 +173,17 @@ class AnswerBuilder
             $usesMediaRuleAnswer = true;
         }
 
+        if (
+            $structuredAnswer !== null
+            && ($mediaContext['wants_media'] ?? false)
+            && $mediaPayload === []
+            && $hasNoAnswerMarker
+        ) {
+            $answerText = $this->noMatchingMediaAnswer($mediaContext, $profile);
+            $source = 'profile_media_rules';
+            $usesMediaRuleAnswer = true;
+        }
+
         if ($mediaPayload !== [] && ($mediaPayloadWasReplaced || $this->answerIndicatesNoAnswer($answerText))) {
             $answerText = $this->mediaFallbackAnswer($mediaPayload, $profile);
         } elseif (! $usesMediaRuleAnswer && $this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
@@ -176,6 +199,7 @@ class AnswerBuilder
             }
         }
 
+        $answerText = $this->normalizeAgeRestrictedMediaAnswer($answerText, $mediaPayload);
         $displayAnswerText = $this->limitAnswerText(
             $this->appendMediaHint($answerText, $mediaPayload, $profile),
             self::MAX_ANSWER_CHARACTERS
@@ -238,6 +262,11 @@ class AnswerBuilder
             ...$structuredConstraints['include_providers'],
             ...$textConstraints['include_providers'],
         ]), $excludedProviders));
+        $includedProviderSourceTypes = $this->uniqueStrings(array_map(
+            fn (string $provider): string => $mediaService->sourceTypeForProvider($provider),
+            $includedProviders
+        ));
+        $excludedSourceTypes = array_values(array_diff($excludedSourceTypes, $includedProviderSourceTypes));
         $includedSourceTypes = array_values(array_diff($this->uniqueStrings([
             ...$structuredConstraints['include_source_types'],
             ...$textConstraints['include_source_types'],
@@ -273,6 +302,166 @@ class AnswerBuilder
             'available_provider_labels' => $mediaService->providerLabels($availableMedia),
             'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $mediaContext
+     * @return array<string, mixed>
+     */
+    private function constrainMediaContextToRequestedSubject(
+        ProfileMediaPromptService $mediaService,
+        array $mediaContext,
+        string $question
+    ): array {
+        if (($mediaContext['included_providers'] ?? []) === []) {
+            return $mediaContext;
+        }
+
+        $subjectTerms = $this->mediaRequestSubjectTerms($question);
+
+        if ($subjectTerms === []) {
+            return $mediaContext;
+        }
+
+        $candidateMedia = collect($mediaContext['candidate_media'] ?? [])
+            ->filter(fn (array $media): bool => $this->mediaMatchesRequestedSubject($media, $subjectTerms))
+            ->values()
+            ->all();
+
+        return array_merge($mediaContext, [
+            'candidate_media' => $candidateMedia,
+            'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $mediaContext
+     * @return array<string, mixed>
+     */
+    private function constrainMediaContextToRequestedType(
+        ProfileMediaPromptService $mediaService,
+        array $mediaContext,
+        string $question
+    ): array {
+        $requestedType = $this->requestedMediaType($question);
+
+        if ($requestedType === null) {
+            return $mediaContext;
+        }
+
+        $candidateMedia = collect($mediaContext['candidate_media'] ?? [])
+            ->filter(function (array $media) use ($requestedType): bool {
+                $isVideo = str_contains(mb_strtoupper((string) ($media['media_type'] ?? '')), 'VIDEO');
+
+                return $requestedType === 'VIDEO' ? $isVideo : ! $isVideo;
+            })
+            ->values()
+            ->all();
+
+        return array_merge($mediaContext, [
+            'candidate_media' => $candidateMedia,
+            'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
+        ]);
+    }
+
+    private function requestedMediaType(string $question): ?string
+    {
+        $normalized = $this->normalizeSearchText($question);
+        $asksForImage = preg_match('/\b(foto|fotos|imagen|imagenes|photo|photos|picture|pictures|image|images)\b/u', $normalized) === 1;
+        $asksForVideo = preg_match('/\b(video|videos|clip|clips)\b/u', $normalized) === 1;
+
+        if ($asksForImage === $asksForVideo) {
+            return null;
+        }
+
+        return $asksForVideo ? 'VIDEO' : 'IMAGE';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function mediaRequestSubjectTerms(string $question): array
+    {
+        $ignored = [
+            'algo',
+            'anything',
+            'available',
+            'clip',
+            'clips',
+            'comparte',
+            'comparteme',
+            'contenido',
+            'contenidos',
+            'content',
+            'dame',
+            'disponible',
+            'disponibles',
+            'ensename',
+            'foto',
+            'fotos',
+            'have',
+            'image',
+            'images',
+            'imagen',
+            'imagenes',
+            'instagram',
+            'media',
+            'mostrar',
+            'muestra',
+            'muestrame',
+            'onlyfans',
+            'photo',
+            'photos',
+            'picture',
+            'pictures',
+            'post',
+            'posts',
+            'profile',
+            'perfil',
+            'puede',
+            'puedes',
+            'quiero',
+            'send',
+            'share',
+            'show',
+            'tenga',
+            'tengan',
+            'tienes',
+            'tiktok',
+            'video',
+            'videos',
+            'want',
+            'what',
+        ];
+
+        return collect($this->searchTokens($question))
+            ->filter(fn (string $term): bool => ! in_array($term, $ignored, true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $media
+     * @param  array<int, string>  $subjectTerms
+     */
+    private function mediaMatchesRequestedSubject(array $media, array $subjectTerms): bool
+    {
+        $mediaTerms = $this->mediaSearchTerms($media);
+
+        foreach ($subjectTerms as $subjectTerm) {
+            foreach ($mediaTerms as $mediaTerm) {
+                if (
+                    $subjectTerm === $mediaTerm
+                    || mb_strpos($mediaTerm, $subjectTerm) !== false
+                    || mb_strpos($subjectTerm, $mediaTerm) !== false
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -482,10 +671,14 @@ class AnswerBuilder
             'provider_key' => $item['provider_key'] ?? 'instagram',
             'provider_label' => $item['provider_label'] ?? $item['provider'] ?? 'Instagram',
             'source_type' => $item['source_type'] ?? 'integration',
+            'media_type' => $item['media_type'] ?? null,
             'image_url' => $item['image_url'] ?? null,
+            'media_url' => $item['media_url'] ?? null,
+            'thumbnail_url' => $item['thumbnail_url'] ?? null,
             'permalink' => $item['permalink'] ?? null,
             'caption' => $item['caption'] ?? null,
             'observation' => $item['observation'] ?? null,
+            'age_restricted' => (bool) ($item['age_restricted'] ?? false),
             'taken_at' => $item['taken_at'] ?? null,
         ];
     }
@@ -550,8 +743,23 @@ class AnswerBuilder
         $text = $question->text;
 
         return $this->looksLikeExplicitMediaShowRequest($text)
+            || $this->looksLikeMediaAvailabilityRequest($text, $mediaContext)
             || ($this->looksLikeAnyMediaChoice($text) && $this->recentConversationMentionsMedia($question))
             || ($this->looksLikeAnotherMediaRequest($text) && $this->recentShownMediaIds($question) !== []);
+    }
+
+    private function looksLikeMediaAvailabilityRequest(string $text, array $mediaContext): bool
+    {
+        if (($mediaContext['included_providers'] ?? []) === []) {
+            return false;
+        }
+
+        $normalized = mb_strtolower($text);
+
+        return preg_match(
+            '/\b(qu[eé]\s+(?:contenido\s+)?tienes|tienes\s+(?:algo|contenido)|algo\s+de|what\s+do\s+you\s+have|anything\s+(?:from|on))\b/u',
+            $normalized
+        ) === 1;
     }
 
     private function looksLikeExplicitMediaShowRequest(string $text): bool
@@ -576,7 +784,26 @@ class AnswerBuilder
     {
         $normalized = mb_strtolower($text);
 
-        foreach (['foto', 'fotos', 'imagen', 'imágenes', 'instagram', 'post', 'publicación', 'photo', 'picture', 'image'] as $needle) {
+        foreach ([
+            'foto',
+            'fotos',
+            'imagen',
+            'imágenes',
+            'instagram',
+            'post',
+            'publicación',
+            'video',
+            'videos',
+            'clip',
+            'clips',
+            'media',
+            'onlyfans',
+            'only fans',
+            'tiktok',
+            'photo',
+            'picture',
+            'image',
+        ] as $needle) {
             if (str_contains($normalized, $needle)) {
                 return true;
             }
@@ -839,6 +1066,27 @@ class AnswerBuilder
     /**
      * @param  array<int, array<string, mixed>>  $mediaPayload
      */
+    private function normalizeAgeRestrictedMediaAnswer(string $answerText, array $mediaPayload): string
+    {
+        $hasAgeRestrictedMedia = collect($mediaPayload)
+            ->contains(fn (array $media): bool => (bool) ($media['age_restricted'] ?? false));
+
+        if (! $hasAgeRestrictedMedia) {
+            return $answerText;
+        }
+
+        $answerText = (string) preg_replace(
+            '/\s*(?:espero\s+que\s+te\s+guste|que\s+lo\s+disfrutes|disfr[uú]talo|hope\s+you\s+like\s+it|enjoy\s+it)\s*[.!]*/iu',
+            '',
+            $answerText
+        );
+
+        return trim((string) preg_replace('/\s+/u', ' ', $answerText));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $mediaPayload
+     */
     private function mediaFallbackAnswer(array $mediaPayload, Profile $profile): string
     {
         $media = $mediaPayload[0] ?? [];
@@ -898,6 +1146,12 @@ class AnswerBuilder
                 ->all();
             $providers = $this->humanList($requestedLabels, $locale);
 
+            if (in_array(ProfileIntegration::PROVIDER_ONLYFANS, $includedProviders, true)) {
+                return $locale === 'en'
+                    ? "I do not have matching content available on {$providers} right now."
+                    : "No tengo contenido coincidente disponible en {$providers} por ahora.";
+            }
+
             return $locale === 'en'
                 ? "I do not have photos available on {$providers} right now."
                 : "No tengo fotos disponibles en {$providers} por ahora.";
@@ -951,12 +1205,19 @@ class AnswerBuilder
         $observation = $this->cleanMediaText($media['observation'] ?? null);
         $caption = $this->cleanMediaText($media['caption'] ?? null);
         $location = $this->extractLocation($observation);
+        $isVideo = $this->isVideoMedia($media);
 
         if ($location === null && $observation === '') {
             $location = $this->extractLocation($caption);
         }
 
         if ($location !== null) {
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? "This video was recorded in {$location}."
+                    : "Este video fue grabado en {$location}.";
+            }
+
             return $locale === 'en'
                 ? "This photo was taken in {$location}."
                 : "Esta foto fue tomada en {$location}.";
@@ -967,9 +1228,21 @@ class AnswerBuilder
         if ($detail !== '') {
             $detail = $this->shortenText($detail, 140);
 
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? "I am sharing this video: {$detail}."
+                    : "Te comparto este video: {$detail}.";
+            }
+
             return $locale === 'en'
                 ? "I am sharing this photo: {$detail}."
                 : "Te comparto esta foto: {$detail}.";
+        }
+
+        if ($isVideo) {
+            return $locale === 'en'
+                ? 'I am sharing one of my videos.'
+                : 'Te comparto uno de mis videos.';
         }
 
         return $locale === 'en'
@@ -982,21 +1255,48 @@ class AnswerBuilder
      */
     private function mediaLinkSentence(array $media, string $locale): string
     {
+        if (($media['provider_key'] ?? null) === ProfileIntegration::PROVIDER_ONLYFANS) {
+            return '';
+        }
+
         if (! isset($media['permalink']) || ! is_string($media['permalink']) || trim($media['permalink']) === '') {
             return '';
         }
 
         $providerLabel = $this->mediaProviderLabel($media);
+        $isVideo = $this->isVideoMedia($media);
 
         if ($providerLabel === null) {
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? 'You can watch it from the link.'
+                    : 'Puedes verlo en el enlace.';
+            }
+
             return $locale === 'en'
                 ? 'You can see more photos from the link.'
                 : 'Puedes ver más fotos en el enlace.';
         }
 
+        if ($isVideo) {
+            return $locale === 'en'
+                ? "You can watch it on {$providerLabel}."
+                : "Puedes verlo en {$providerLabel}.";
+        }
+
         return $locale === 'en'
             ? "You can see more photos on {$providerLabel}."
             : "Puedes ver más fotos en {$providerLabel}.";
+    }
+
+    /**
+     * @param  array<string, mixed>  $media
+     */
+    private function isVideoMedia(array $media): bool
+    {
+        $mediaType = strtoupper(trim((string) ($media['media_type'] ?? '')));
+
+        return str_contains($mediaType, 'VIDEO');
     }
 
     /**
@@ -1261,7 +1561,10 @@ class AnswerBuilder
     private function answerIndicatesNoAnswer(string $answerText): bool
     {
         $normalized = mb_strtolower($answerText);
-        $declinesMedia = preg_match('/\bno\s+(?:tengo|hay)\b[^.?!]{0,100}\b(foto|fotos|imagen|im[aá]genes|photo|photos|image|images)\b/u', $normalized) === 1;
+        $declinesMedia = preg_match(
+            '/\bno\s+(?:tengo|hay)\b[^.?!]{0,100}\b(foto|fotos|imagen|im[aá]genes|video|videos|contenido|media|photo|photos|image|images|content)\b/u',
+            $normalized
+        ) === 1;
 
         return str_contains($answerText, '[[BIGMELO_NO_ANSWER]]')
             || $declinesMedia

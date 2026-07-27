@@ -1617,59 +1617,59 @@
               ]
             },
             "description": "Negative check: the admin plan is active and assignable by admins, but it is not purchasable through checkout."
+          },
+          "response": []
         },
-        "response": []
-      },
-      {
-        "name": "Get USD COP Rate",
-        "event": [
-          {
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "let json = {};",
-                "try { json = pm.response.json(); } catch (e) {}",
-                "if (json.data) {",
-                "  pm.environment.set(\"usd_cop_rate\", String(json.data.rate));",
-                "}",
-                "pm.test('returns the current USD/COP rate', function () {",
-                "  pm.expect(pm.response.code).to.eql(200);",
-                "  pm.expect(json.data.pair).to.eql('USD/COP');",
-                "  pm.expect(json.data.base_currency).to.eql('USD');",
-                "  pm.expect(json.data.quote_currency).to.eql('COP');",
-                "  pm.expect(json.data.rate).to.be.a('number');",
-                "});"
-              ]
-            }
-          }
-        ],
-        "request": {
-          "method": "GET",
-          "header": [
+        {
+          "name": "Get USD COP Rate",
+          "event": [
             {
-              "key": "Accept",
-              "value": "application/json"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data) {",
+                  "  pm.environment.set(\"usd_cop_rate\", String(json.data.rate));",
+                  "}",
+                  "pm.test('returns the current USD/COP rate', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.pair).to.eql('USD/COP');",
+                  "  pm.expect(json.data.base_currency).to.eql('USD');",
+                  "  pm.expect(json.data.quote_currency).to.eql('COP');",
+                  "  pm.expect(json.data.rate).to.be.a('number');",
+                  "});"
+                ]
+              }
             }
           ],
-          "url": {
-            "raw": "{{base_url}}/api/payments/usd-cop-rate",
-            "host": [
-              "{{base_url}}"
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
             ],
-            "path": [
-              "api",
-              "payments",
-              "usd-cop-rate"
-            ]
+            "url": {
+              "raw": "{{base_url}}/api/payments/usd-cop-rate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "usd-cop-rate"
+              ]
+            },
+            "description": "Gets the cached current USD/COP exchange rate used by billing. Requires token ability: payments:read."
           },
-          "description": "Gets the cached current USD/COP exchange rate used by billing. Requires token ability: payments:read."
+          "response": []
         },
-        "response": []
-      },
-      {
-        "name": "Get Payment Order",
-        "request": {
+        {
+          "name": "Get Payment Order",
+          "request": {
             "method": "GET",
             "header": [
               {
@@ -2274,6 +2274,985 @@
             "description": "Replaces the profile networks JSON field. Supported keys come from social-networks.php. Send { \"networks\": {} } to remove all networks. Requires token ability: profile:write."
           },
           "response": []
+        },
+        {
+          "name": "Integrations",
+          "item": [
+            {
+              "name": "List Profile Integrations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Profile integrations list responds', function () {",
+                      "  pm.expect([200]).to.include(pm.response.code);",
+                      "});",
+                      "let json = {};",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "const data = json.data || json;",
+                      "pm.test(\"Integrations payload has expected shape\", function () {",
+                      "  pm.expect(data.integrations).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "integrations"
+                  ]
+                },
+                "description": "Lists connected profile integrations with media and selected media counts."
+              },
+              "response": []
+            },
+            {
+              "name": "Instagram",
+              "item": [
+                {
+                  "name": "Instagram - Create Connect URL",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram connect URL returns success or configuration error', function () {",
+                          "  pm.expect([200, 422]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Connection URL is present\", function () {",
+                          "    pm.expect(data.url).to.be.a(\"string\").and.not.empty;",
+                          "  });",
+                          "  pm.environment.set('instagram_connect_url', data.url);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/instagram/connect-url",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "instagram",
+                        "connect-url"
+                      ]
+                    },
+                    "description": "Creates a Instagram OAuth URL for the selected profile. Copy the returned URL into a browser to authorize the account."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Instagram - OAuth Callback (Manual)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram callback redirects', function () {",
+                          "  pm.expect([200, 302]).to.include(pm.response.code);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "noauth"
+                    },
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/integrations/instagram/callback?code={{instagram_oauth_code}}&state={{instagram_oauth_state}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "integrations",
+                        "instagram",
+                        "callback"
+                      ],
+                      "query": [
+                        {
+                          "key": "code",
+                          "value": "{{instagram_oauth_code}}"
+                        },
+                        {
+                          "key": "state",
+                          "value": "{{instagram_oauth_state}}"
+                        }
+                      ]
+                    },
+                    "description": "Manual Instagram OAuth callback. Normally the browser hits this after authorization; the state must come from the matching Connect URL response and server cache."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Instagram - List Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram media endpoint responds', function () {",
+                          "  pm.expect([200]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "pm.test('Instagram media payload has expected shape', function () {",
+                          "  pm.expect(data).to.have.property(\"media\");",
+                          "  pm.expect(data.media).to.be.an(\"array\");",
+                          "  pm.expect(data).to.have.property(\"selection_limit\");",
+                          "});",
+                          "if (data.media && data.media.length) {",
+                          "  pm.environment.set(\"integration_media_id\", data.media[0].id);",
+                          "  pm.environment.set(\"integration_media_observation\", data.media[0].observation || data.media[0].caption || \"Selected from Postman\");",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/instagram/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "instagram",
+                        "media"
+                      ]
+                    },
+                    "description": "Lists synced Instagram media for the selected profile. It returns an empty media array when Instagram is not connected."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Instagram - Sync Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram sync returns an expected API status', function () {",
+                          "  pm.expect([200, 404, 502]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Synced integration is present\", function () {",
+                          "    pm.expect(data.integration).to.be.an(\"object\");",
+                          "  });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/instagram/sync",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "instagram",
+                        "sync"
+                      ]
+                    },
+                    "description": "Fetches the latest Instagram media from the provider and stores it locally. Requires a connected account."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Instagram - Update Media Selection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram selection update returns an expected API status', function () {",
+                          "  pm.expect([200, 404, 422]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Updated media payload has expected shape\", function () {",
+                          "    pm.expect(data.media).to.be.an(\"array\");",
+                          "    pm.expect(data.integration).to.be.an(\"object\");",
+                          "  });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": {{integration_media_id}},\n      \"selected\": true,\n      \"observation\": \"{{integration_media_observation}}\"\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/instagram/media-selection",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "instagram",
+                        "media-selection"
+                      ]
+                    },
+                    "description": "Updates which Instagram media items are available to profile conversations. Run List Media first to populate integration_media_id."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Instagram - Disconnect",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Instagram disconnect succeeds', function () {",
+                          "  pm.expect([200]).to.include(pm.response.code);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/instagram",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "instagram"
+                      ]
+                    },
+                    "description": "Disconnects Instagram for the selected profile and removes locally synced media through cascade delete."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TikTok",
+              "item": [
+                {
+                  "name": "TikTok - Create Connect URL",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok connect URL returns success or configuration error', function () {",
+                          "  pm.expect([200, 422]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Connection URL is present\", function () {",
+                          "    pm.expect(data.url).to.be.a(\"string\").and.not.empty;",
+                          "  });",
+                          "  pm.environment.set('tiktok_connect_url', data.url);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/tiktok/connect-url",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "tiktok",
+                        "connect-url"
+                      ]
+                    },
+                    "description": "Creates a TikTok OAuth URL for the selected profile. Copy the returned URL into a browser to authorize the account."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "TikTok - OAuth Callback (Manual)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok callback redirects', function () {",
+                          "  pm.expect([200, 302]).to.include(pm.response.code);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "noauth"
+                    },
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/integrations/tiktok/callback?code={{tiktok_oauth_code}}&state={{tiktok_oauth_state}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "integrations",
+                        "tiktok",
+                        "callback"
+                      ],
+                      "query": [
+                        {
+                          "key": "code",
+                          "value": "{{tiktok_oauth_code}}"
+                        },
+                        {
+                          "key": "state",
+                          "value": "{{tiktok_oauth_state}}"
+                        }
+                      ]
+                    },
+                    "description": "Manual TikTok OAuth callback. Normally the browser hits this after authorization; the state must come from the matching Connect URL response and server cache."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "TikTok - List Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok media endpoint responds', function () {",
+                          "  pm.expect([200]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "pm.test('TikTok media payload has expected shape', function () {",
+                          "  pm.expect(data).to.have.property(\"media\");",
+                          "  pm.expect(data.media).to.be.an(\"array\");",
+                          "  pm.expect(data).to.have.property(\"selection_limit\");",
+                          "});",
+                          "if (data.media && data.media.length) {",
+                          "  pm.environment.set(\"integration_media_id\", data.media[0].id);",
+                          "  pm.environment.set(\"integration_media_observation\", data.media[0].observation || data.media[0].caption || \"Selected from Postman\");",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/tiktok/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "tiktok",
+                        "media"
+                      ]
+                    },
+                    "description": "Lists synced TikTok media for the selected profile. It returns an empty media array when TikTok is not connected."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "TikTok - Sync Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok sync returns an expected API status', function () {",
+                          "  pm.expect([200, 404, 502]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Synced integration is present\", function () {",
+                          "    pm.expect(data.integration).to.be.an(\"object\");",
+                          "  });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/tiktok/sync",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "tiktok",
+                        "sync"
+                      ]
+                    },
+                    "description": "Fetches the latest TikTok media from the provider and stores it locally. Requires a connected account."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "TikTok - Update Media Selection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok selection update returns an expected API status', function () {",
+                          "  pm.expect([200, 404, 422]).to.include(pm.response.code);",
+                          "});",
+                          "let json = {};",
+                          "try { json = pm.response.json(); } catch (e) {}",
+                          "const data = json.data || json;",
+                          "if (pm.response.code === 200) {",
+                          "  pm.test(\"Updated media payload has expected shape\", function () {",
+                          "    pm.expect(data.media).to.be.an(\"array\");",
+                          "    pm.expect(data.integration).to.be.an(\"object\");",
+                          "  });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": {{integration_media_id}},\n      \"selected\": true,\n      \"observation\": \"{{integration_media_observation}}\"\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/tiktok/media-selection",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "tiktok",
+                        "media-selection"
+                      ]
+                    },
+                    "description": "Updates which TikTok media items are available to profile conversations. Run List Media first to populate integration_media_id."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "TikTok - Disconnect",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('TikTok disconnect succeeds', function () {",
+                          "  pm.expect([200]).to.include(pm.response.code);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/tiktok",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "tiktok"
+                      ]
+                    },
+                    "description": "Disconnects TikTok for the selected profile and removes locally synced media through cascade delete."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "OnlyFans",
+              "item": [
+                {
+                  "name": "OnlyFans - Save Manual Connection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans connection is saved', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('OnlyFans integration is connected manually', function () {",
+                          "  pm.expect(data.integration.provider).to.eql('onlyfans');",
+                          "  pm.expect(data.integration.metadata.connection_type).to.eql('manual_upload');",
+                          "  pm.expect(data.integration.metadata.profile_url).to.eql(pm.environment.get('onlyfans_profile_url'));",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"username\": \"{{onlyfans_username}}\",\n  \"profile_url\": \"{{onlyfans_profile_url}}\",\n  \"rights_confirmed\": true,\n  \"adult_content_confirmed\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans"
+                      ]
+                    },
+                    "description": "Creates or updates the manual OnlyFans reference. This integration does not use OAuth or scrape OnlyFans; both consent confirmations are required."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - List Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media endpoint responds', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('OnlyFans media payload has expected shape', function () {",
+                          "  pm.expect(data.media).to.be.an('array');",
+                          "  pm.expect(data.selection_limit).to.be.a('number');",
+                          "});",
+                          "if (data.media.length) {",
+                          "  pm.environment.set('onlyfans_media_id', data.media[0].id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media"
+                      ]
+                    },
+                    "description": "Lists manually uploaded OnlyFans promotional media and returns an empty list when the integration is not configured."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Upload Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media upload succeeds', function () { pm.response.to.have.status(201); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('Uploaded media is age restricted and stored', function () {",
+                          "  pm.expect(data.media.provider).to.eql('onlyfans');",
+                          "  pm.expect(data.media.age_restricted).to.eql(true);",
+                          "  pm.expect(data.media.media_url).to.be.a('string').and.not.empty;",
+                          "});",
+                          "pm.environment.set('onlyfans_media_id', data.media.id);"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "file",
+                          "type": "file",
+                          "src": "{{onlyfans_media_file_path}}"
+                        },
+                        {
+                          "key": "caption",
+                          "value": "{{onlyfans_media_caption}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "observation",
+                          "value": "{{onlyfans_media_observation}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "selected",
+                          "value": "true",
+                          "type": "text"
+                        },
+                        {
+                          "key": "rights_confirmed",
+                          "value": "true",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media"
+                      ]
+                    },
+                    "description": "Uploads an owned or authorized promotional image/video. JPG, PNG, WEBP, GIF, MP4, MOV, and WEBM are accepted. The server stores it under integrations/onlyfans/{profile_id}/{uuid}."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Update Media Selection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans selection is updated', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('Updated OnlyFans media remains selected', function () {",
+                          "  const item = data.media.find(media => String(media.id) === String(pm.environment.get('onlyfans_media_id')));",
+                          "  pm.expect(item).to.be.an('object');",
+                          "  pm.expect(item.selected).to.eql(true);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": {{onlyfans_media_id}},\n      \"selected\": true,\n      \"observation\": \"{{onlyfans_media_observation}}\"\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media-selection",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media-selection"
+                      ]
+                    },
+                    "description": "Selects uploaded OnlyFans media for profile conversations and saves the verified observation sent to the AI context."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Delete Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media is deleted', function () { pm.response.to.have.status(200); });"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media/{{onlyfans_media_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media",
+                        "{{onlyfans_media_id}}"
+                      ]
+                    },
+                    "description": "Deletes one uploaded OnlyFans media record and its stored file."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Disconnect",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans disconnect succeeds', function () { pm.response.to.have.status(200); });"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans"
+                      ]
+                    },
+                    "description": "Removes the manual OnlyFans integration, all database media records, and all associated stored files."
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
         },
         {
           "name": "Profile Knowledge",
@@ -3518,6 +4497,46 @@
     {
       "key": "login_history_per_page",
       "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "integration_media_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "integration_media_observation",
+      "value": "Selected from Postman",
+      "type": "string"
+    },
+    {
+      "key": "instagram_connect_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "instagram_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "instagram_oauth_state",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tiktok_connect_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tiktok_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tiktok_oauth_state",
+      "value": "",
       "type": "string"
     }
   ]
