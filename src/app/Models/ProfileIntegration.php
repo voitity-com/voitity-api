@@ -13,6 +13,8 @@ class ProfileIntegration extends Model
 
     public const PROVIDER_INSTAGRAM = 'instagram';
 
+    public const PROVIDER_TIKTOK = 'tiktok';
+
     public const STATUS_CONNECTED = 'connected';
 
     public const STATUS_ERROR = 'error';
@@ -26,9 +28,11 @@ class ProfileIntegration extends Model
         'provider_user_id',
         'username',
         'access_token',
+        'refresh_token',
         'token_type',
         'scopes',
         'expires_at',
+        'refresh_expires_at',
         'last_synced_at',
         'status',
         'metadata',
@@ -36,8 +40,10 @@ class ProfileIntegration extends Model
 
     protected $casts = [
         'access_token' => 'encrypted',
+        'refresh_token' => 'encrypted',
         'scopes' => 'array',
         'expires_at' => 'datetime',
+        'refresh_expires_at' => 'datetime',
         'last_synced_at' => 'datetime',
         'metadata' => 'array',
     ];

@@ -9,6 +9,8 @@ use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
 use App\Services\Integrations\InstagramIntegrationService;
+use App\Services\Integrations\ProfileMediaPromptService;
+use App\Services\Integrations\TikTokIntegrationService;
 use Illuminate\Support\Facades\Http;
 
 class ProfileIntegrationControllerTest extends TestAPI
@@ -159,6 +161,335 @@ class ProfileIntegrationControllerTest extends TestAPI
         ]);
     }
 
+    public function test_tiktok_connect_url_uses_tiktok_login_parameters(): void
+    {
+        config([
+            'tiktok.auth_url' => 'https://www.tiktok.com/v2/auth/authorize/',
+            'tiktok.client_key' => 'client-key',
+            'tiktok.client_secret' => 'client-secret',
+            'tiktok.redirect_uri' => 'http://localhost:8000/api/integrations/tiktok/callback',
+            'tiktok.scopes' => ['user.info.basic', 'video.list'],
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $url = app(TikTokIntegrationService::class)->connectUrl($profile, $user);
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        $this->assertStringStartsWith('https://www.tiktok.com/v2/auth/authorize/?', $url);
+        $this->assertSame('client-key', $query['client_key']);
+        $this->assertSame('code', $query['response_type']);
+        $this->assertSame('user.info.basic,video.list', $query['scope']);
+        $this->assertSame('http://localhost:8000/api/integrations/tiktok/callback', $query['redirect_uri']);
+        $this->assertNotEmpty($query['state']);
+        $this->assertSame('S256', $query['code_challenge_method']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $query['code_challenge']);
+    }
+
+    public function test_tiktok_connect_url_does_not_force_pkce_for_web_redirects(): void
+    {
+        config([
+            'tiktok.auth_url' => 'https://www.tiktok.com/v2/auth/authorize/',
+            'tiktok.client_key' => 'client-key',
+            'tiktok.client_secret' => 'client-secret',
+            'tiktok.pkce_enabled' => null,
+            'tiktok.redirect_uri' => 'https://api.bigmelo.com/api/integrations/tiktok/callback',
+            'tiktok.scopes' => ['user.info.basic', 'video.list'],
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $url = app(TikTokIntegrationService::class)->connectUrl($profile, $user);
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        $this->assertArrayNotHasKey('code_challenge', $query);
+        $this->assertArrayNotHasKey('code_challenge_method', $query);
+    }
+
+    public function test_tiktok_callback_exchanges_token_syncs_videos_and_redirects_to_admin(): void
+    {
+        $this->useEncryptionKey();
+
+        config([
+            'tiktok.admin_redirect_url' => 'http://localhost:3000',
+            'tiktok.api_base_url' => 'https://open.tiktokapis.com',
+            'tiktok.auth_url' => 'https://www.tiktok.com/v2/auth/authorize/',
+            'tiktok.client_key' => 'client-key',
+            'tiktok.client_secret' => 'client-secret',
+            'tiktok.redirect_uri' => 'http://localhost:8000/api/integrations/tiktok/callback',
+            'tiktok.scopes' => ['user.info.basic', 'video.list'],
+            'tiktok.token_url' => 'https://open.tiktokapis.com/v2/oauth/token/',
+        ]);
+
+        Http::fake([
+            'https://open.tiktokapis.com/v2/oauth/token/' => Http::response([
+                'access_token' => 'tt-access-token',
+                'expires_in' => 86400,
+                'open_id' => 'open-123',
+                'refresh_expires_in' => 31536000,
+                'refresh_token' => 'tt-refresh-token',
+                'scope' => 'user.info.basic,video.list',
+                'token_type' => 'Bearer',
+            ]),
+            'https://open.tiktokapis.com/v2/user/info/*' => Http::response([
+                'data' => [
+                    'user' => [
+                        'avatar_url' => 'https://example.com/avatar.jpg',
+                        'display_name' => 'Bigmelo TikTok',
+                        'open_id' => 'open-123',
+                        'union_id' => 'union-123',
+                    ],
+                ],
+                'error' => ['code' => 'ok', 'message' => ''],
+            ]),
+            'https://open.tiktokapis.com/v2/video/list/*' => Http::response([
+                'data' => [
+                    'cursor' => 0,
+                    'has_more' => false,
+                    'videos' => [[
+                        'cover_image_url' => 'https://example.com/tiktok-cover.jpg',
+                        'create_time' => 1784212800,
+                        'duration' => 15,
+                        'height' => 1920,
+                        'id' => 'video-123',
+                        'share_url' => 'https://www.tiktok.com/@bigmelo/video/123',
+                        'title' => 'Video title',
+                        'video_description' => 'Video description',
+                        'width' => 1080,
+                    ], [
+                        'cover_image_url' => 'https://example.com/tiktok-photomode-cover.jpg',
+                        'create_time' => 1784212700,
+                        'duration' => 0,
+                        'height' => 0,
+                        'id' => 'photo-456',
+                        'share_url' => 'https://www.tiktok.com/@bigmelo/photo/456',
+                        'title' => 'Photo title',
+                        'video_description' => 'Photo description',
+                        'width' => 0,
+                    ]],
+                ],
+                'error' => ['code' => 'ok', 'message' => ''],
+            ]),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $connectUrl = app(TikTokIntegrationService::class)->connectUrl($profile, $user);
+        $query = [];
+        parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
+
+        $response = $this->getJson('/api/integrations/tiktok/callback?'.http_build_query([
+            'code' => 'tt-code',
+            'state' => $query['state'],
+        ]));
+
+        $response->assertRedirect(
+            "http://localhost:3000/dashboard/profiles/{$profile->id}/integrations?provider=tiktok&connected=1&synced=1"
+        );
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://open.tiktokapis.com/v2/oauth/token/'
+            && $request['code'] === 'tt-code'
+            && is_string($request['code_verifier'])
+            && strlen($request['code_verifier']) === 64
+            && hash('sha256', $request['code_verifier']) === $query['code_challenge']);
+        $this->assertDatabaseHas('profile_integrations', [
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_user_id' => 'open-123',
+            'username' => 'Bigmelo TikTok',
+        ]);
+        $this->assertDatabaseHas('profile_integration_media', [
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_media_id' => 'video-123',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.tiktok.com/@bigmelo/video/123',
+            'thumbnail_url' => 'https://example.com/tiktok-cover.jpg',
+            'observation' => 'Video title',
+            'permalink' => 'https://www.tiktok.com/@bigmelo/video/123',
+        ]);
+        $this->assertDatabaseHas('profile_integration_media', [
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_media_id' => 'photo-456',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://www.tiktok.com/@bigmelo/photo/456',
+            'thumbnail_url' => 'https://example.com/tiktok-photomode-cover.jpg',
+            'observation' => 'Photo title',
+            'permalink' => 'https://www.tiktok.com/@bigmelo/photo/456',
+        ]);
+    }
+
+    public function test_tiktok_media_endpoint_returns_connected_videos(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createTikTokIntegration($profile, $user);
+        $media = $this->createTikTokMedia($integration, [
+            'observation' => 'Video desde Medellin',
+            'selected' => true,
+        ]);
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson("/api/profile/{$profile->id}/integrations/tiktok/media");
+
+        $response->assertOk()
+            ->assertJsonPath('data.integration.username', 'Bigmelo TikTok')
+            ->assertJsonPath('data.media.0.id', $media->id)
+            ->assertJsonPath('data.media.0.provider', ProfileIntegration::PROVIDER_TIKTOK)
+            ->assertJsonPath('data.media.0.media_type', 'VIDEO')
+            ->assertJsonPath('data.media.0.observation', 'Video desde Medellin')
+            ->assertJsonPath('data.media.0.selected', true)
+            ->assertJsonPath('data.selection_limit', 10);
+    }
+
+    public function test_tiktok_selection_limit_is_enforced(): void
+    {
+        config(['tiktok.selection_limit' => 1]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createTikTokIntegration($profile, $user);
+        $firstMedia = $this->createTikTokMedia($integration, ['provider_media_id' => 'video-one']);
+        $secondMedia = $this->createTikTokMedia($integration, ['provider_media_id' => 'video-two']);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->putJson("/api/profile/{$profile->id}/integrations/tiktok/media-selection", [
+                'media' => [
+                    ['id' => $firstMedia->id, 'selected' => true],
+                    ['id' => $secondMedia->id, 'selected' => true],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'You can select up to 1 TikTok items.');
+    }
+
+    public function test_selected_tiktok_media_payload_is_available_for_chat_prompts(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createTikTokIntegration($profile, $user);
+
+        $this->createTikTokMedia($integration, [
+            'caption' => 'Video selected',
+            'observation' => 'Use this TikTok note',
+            'selected' => true,
+        ]);
+        $this->createTikTokMedia($integration, [
+            'provider_media_id' => 'unselected-video',
+            'selected' => false,
+        ]);
+
+        $payload = app(ProfileMediaPromptService::class)->selectedMediaForPrompt($profile);
+
+        $this->assertCount(1, $payload);
+        $this->assertSame('TikTok', $payload[0]['provider']);
+        $this->assertSame(ProfileIntegration::PROVIDER_TIKTOK, $payload[0]['provider_key']);
+        $this->assertSame('social_network', $payload[0]['source_type']);
+        $this->assertSame('Use this TikTok note', $payload[0]['observation']);
+        $this->assertSame('Video selected', $payload[0]['caption']);
+        $this->assertSame('https://example.com/tiktok-cover.jpg', $payload[0]['image_url']);
+        $this->assertSame('https://www.tiktok.com/@bigmelo/video/media', $payload[0]['media_url']);
+        $this->assertSame('https://example.com/tiktok-cover.jpg', $payload[0]['thumbnail_url']);
+        $this->assertSame('https://www.tiktok.com/@bigmelo/video/media', $payload[0]['permalink']);
+    }
+
+    public function test_tiktok_sync_refreshes_expired_access_token_before_fetching_videos(): void
+    {
+        $this->useEncryptionKey();
+
+        config([
+            'tiktok.api_base_url' => 'https://open.tiktokapis.com',
+            'tiktok.client_key' => 'client-key',
+            'tiktok.client_secret' => 'client-secret',
+            'tiktok.selection_limit' => 10,
+            'tiktok.token_url' => 'https://open.tiktokapis.com/v2/oauth/token/',
+        ]);
+
+        Http::fake([
+            'https://open.tiktokapis.com/v2/oauth/token/' => Http::response([
+                'access_token' => 'fresh-access-token',
+                'expires_in' => 86400,
+                'open_id' => 'open-123',
+                'refresh_expires_in' => 31536000,
+                'refresh_token' => 'fresh-refresh-token',
+                'scope' => 'user.info.basic,video.list',
+                'token_type' => 'Bearer',
+            ]),
+            'https://open.tiktokapis.com/v2/user/info/*' => Http::response([
+                'data' => [
+                    'user' => [
+                        'display_name' => 'Bigmelo TikTok',
+                        'open_id' => 'open-123',
+                    ],
+                ],
+                'error' => ['code' => 'ok', 'message' => ''],
+            ]),
+            'https://open.tiktokapis.com/v2/video/list/*' => Http::response([
+                'data' => [
+                    'cursor' => 0,
+                    'has_more' => false,
+                    'videos' => [],
+                ],
+                'error' => ['code' => 'ok', 'message' => ''],
+            ]),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createTikTokIntegration($profile, $user, [
+            'access_token' => 'expired-access-token',
+            'expires_at' => now()->subMinute(),
+            'refresh_token' => 'old-refresh-token',
+        ]);
+
+        app(TikTokIntegrationService::class)->sync($integration);
+
+        $integration->refresh();
+        $this->assertSame('fresh-access-token', $integration->access_token);
+        $this->assertSame('fresh-refresh-token', $integration->refresh_token);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://open.tiktokapis.com/v2/oauth/token/'
+            && $request['grant_type'] === 'refresh_token'
+            && $request['refresh_token'] === 'old-refresh-token');
+    }
+
+    public function test_tiktok_disconnect_revokes_token_and_deletes_integration(): void
+    {
+        $this->useEncryptionKey();
+
+        config([
+            'tiktok.client_key' => 'client-key',
+            'tiktok.client_secret' => 'client-secret',
+            'tiktok.revoke_url' => 'https://open.tiktokapis.com/v2/oauth/revoke/',
+        ]);
+
+        Http::fake([
+            'https://open.tiktokapis.com/v2/oauth/revoke/' => Http::response([]),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createTikTokIntegration($profile, $user, [
+            'access_token' => 'tt-access-token',
+        ]);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->deleteJson("/api/profile/{$profile->id}/integrations/tiktok");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'TikTok disconnected successfully.');
+        $this->assertDatabaseMissing('profile_integrations', [
+            'id' => $integration->id,
+        ]);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://open.tiktokapis.com/v2/oauth/revoke/'
+            && $request['token'] === 'tt-access-token');
+    }
+
     public function test_instagram_selection_limit_is_enforced(): void
     {
         config(['instagram.selection_limit' => 1]);
@@ -242,6 +573,22 @@ class ProfileIntegrationControllerTest extends TestAPI
     /**
      * @param  array<string, mixed>  $attributes
      */
+    private function createTikTokIntegration(Profile $profile, User $user, array $attributes = []): ProfileIntegration
+    {
+        return ProfileIntegration::query()->create(array_merge([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_user_id' => 'open-123',
+            'username' => 'Bigmelo TikTok',
+            'access_token' => null,
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ], $attributes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
     private function createInstagramMedia(
         ProfileIntegration $integration,
         array $attributes = []
@@ -255,6 +602,28 @@ class ProfileIntegrationControllerTest extends TestAPI
             'media_url' => 'https://example.com/media.jpg',
             'permalink' => 'https://www.instagram.com/p/media/',
             'caption' => 'Caption',
+            'selected' => false,
+            'taken_at' => now(),
+        ], $attributes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createTikTokMedia(
+        ProfileIntegration $integration,
+        array $attributes = []
+    ): ProfileIntegrationMedia {
+        return ProfileIntegrationMedia::query()->create(array_merge([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $integration->profile_id,
+            'provider' => ProfileIntegration::PROVIDER_TIKTOK,
+            'provider_media_id' => 'tiktok-media-id',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.tiktok.com/@bigmelo/video/media',
+            'thumbnail_url' => 'https://example.com/tiktok-cover.jpg',
+            'permalink' => 'https://www.tiktok.com/@bigmelo/video/media',
+            'caption' => 'TikTok caption',
             'selected' => false,
             'taken_at' => now(),
         ], $attributes));

@@ -8,6 +8,7 @@ use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
 use App\Services\Integrations\InstagramIntegrationService;
+use App\Services\Integrations\TikTokIntegrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -102,6 +103,72 @@ class ProfileIntegrationController extends Controller
         }
     }
 
+    public function tiktokConnectUrl(
+        Request $request,
+        Profile $profile,
+        TikTokIntegrationService $tiktok
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        try {
+            return response()->json([
+                'message' => 'TikTok connection URL created successfully.',
+                'data' => [
+                    'url' => $tiktok->connectUrl($profile, $request->user()),
+                    'oauth' => $this->tiktokOAuthDiagnostics(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to create TikTok connection URL.', [
+                'profile_id' => $profile->id,
+                'user_id' => $request->user()?->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function tiktokCallback(Request $request, TikTokIntegrationService $tiktok): RedirectResponse
+    {
+        $state = (string) $request->query('state', '');
+        $code = (string) $request->query('code', '');
+        $error = (string) $request->query('error', '');
+        $adminBaseUrl = (string) config('tiktok.admin_redirect_url', 'http://localhost:3000');
+
+        if ($error !== '') {
+            return redirect()->away($adminBaseUrl.'/dashboard/profiles?tiktok=denied');
+        }
+
+        try {
+            $integration = $tiktok->handleCallback($code, $state);
+            $synced = false;
+
+            try {
+                $tiktok->sync($integration);
+                $synced = true;
+            } catch (\Throwable $e) {
+                Log::warning('TikTok connected but initial sync failed.', [
+                    'integration_id' => $integration->id,
+                    'profile_id' => $integration->profile_id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            return redirect()->away(
+                $adminBaseUrl.'/dashboard/profiles/'.$integration->profile_id.'/integrations?provider=tiktok&connected=1&synced='.($synced ? '1' : '0')
+            );
+        } catch (\Throwable $e) {
+            Log::warning('TikTok OAuth callback failed.', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()->away($adminBaseUrl.'/dashboard/profiles?tiktok=error');
+        }
+    }
+
     public function instagramSync(
         Request $request,
         Profile $profile,
@@ -141,6 +208,45 @@ class ProfileIntegrationController extends Controller
         }
     }
 
+    public function tiktokSync(
+        Request $request,
+        Profile $profile,
+        TikTokIntegrationService $tiktok
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->tiktokIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'TikTok is not connected.'], 404);
+        }
+
+        try {
+            $result = $tiktok->sync($integration);
+
+            return response()->json([
+                'message' => 'TikTok media synced successfully.',
+                'data' => [
+                    'integration' => $this->integrationToArray($result['integration']),
+                    'synced_count' => $result['synced_count'],
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            $integration->forceFill([
+                'status' => ProfileIntegration::STATUS_ERROR,
+                'metadata' => [
+                    ...($integration->metadata ?? []),
+                    'last_error' => $e->getMessage(),
+                    'last_error_at' => now()->toIso8601String(),
+                ],
+            ])->save();
+
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+    }
+
     public function instagramMedia(Request $request, Profile $profile): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
@@ -156,7 +262,7 @@ class ProfileIntegrationController extends Controller
                     'integration' => null,
                     'media' => [],
                     'oauth' => $this->instagramOAuthDiagnostics(),
-                    'selection_limit' => $this->selectionLimit(),
+                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
                 ],
             ]);
         }
@@ -175,7 +281,46 @@ class ProfileIntegrationController extends Controller
                 ])),
                 'media' => $media->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))->all(),
                 'oauth' => $this->instagramOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
+            ],
+        ]);
+    }
+
+    public function tiktokMedia(Request $request, Profile $profile): JsonResponse
+    {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->tiktokIntegration($profile);
+
+        if (! $integration) {
+            return response()->json([
+                'message' => 'TikTok is not connected.',
+                'data' => [
+                    'integration' => null,
+                    'media' => [],
+                    'oauth' => $this->tiktokOAuthDiagnostics(),
+                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
+                ],
+            ]);
+        }
+
+        $media = $integration->media()
+            ->orderByDesc('taken_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json([
+            'message' => 'TikTok media retrieved successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $media->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))->all(),
+                'oauth' => $this->tiktokOAuthDiagnostics(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
             ],
         ]);
     }
@@ -225,7 +370,57 @@ class ProfileIntegrationController extends Controller
                     ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
                     ->all(),
                 'oauth' => $this->instagramOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
+            ],
+        ]);
+    }
+
+    public function tiktokUpdateMediaSelection(
+        Request $request,
+        Profile $profile,
+        TikTokIntegrationService $tiktok
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->tiktokIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'TikTok is not connected.'], 404);
+        }
+
+        $validated = $request->validate([
+            'media' => ['required', 'array'],
+            'media.*.id' => ['required', 'integer'],
+            'media.*.selected' => ['nullable', 'boolean'],
+            'media.*.observation' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $integration = $tiktok->updateSelection($integration->load('media'), $validated['media']);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['media' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'TikTok media selection updated successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $integration->media()
+                    ->orderByDesc('taken_at')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
+                    ->all(),
+                'oauth' => $this->tiktokOAuthDiagnostics(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
             ],
         ]);
     }
@@ -240,6 +435,27 @@ class ProfileIntegrationController extends Controller
 
         return response()->json([
             'message' => 'Instagram disconnected successfully.',
+        ]);
+    }
+
+    public function tiktokDisconnect(
+        Request $request,
+        Profile $profile,
+        TikTokIntegrationService $tiktok
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->tiktokIntegration($profile);
+
+        if ($integration) {
+            $tiktok->revoke($integration);
+            $integration->delete();
+        }
+
+        return response()->json([
+            'message' => 'TikTok disconnected successfully.',
         ]);
     }
 
@@ -265,6 +481,13 @@ class ProfileIntegrationController extends Controller
             ->first();
     }
 
+    private function tiktokIntegration(Profile $profile): ?ProfileIntegration
+    {
+        return $profile->integrations()
+            ->where('provider', ProfileIntegration::PROVIDER_TIKTOK)
+            ->first();
+    }
+
     private function integrationToArray(ProfileIntegration $integration): array
     {
         return [
@@ -274,6 +497,7 @@ class ProfileIntegrationController extends Controller
             'username' => $integration->username,
             'status' => $integration->status,
             'expires_at' => $integration->expires_at?->toIso8601String(),
+            'refresh_expires_at' => $integration->refresh_expires_at?->toIso8601String(),
             'last_synced_at' => $integration->last_synced_at?->toIso8601String(),
             'media_count' => $integration->media_count ?? $integration->media()->count(),
             'selected_media_count' => $integration->selected_media_count
@@ -286,6 +510,7 @@ class ProfileIntegrationController extends Controller
     {
         return [
             'id' => $media->id,
+            'provider' => $media->provider,
             'provider_media_id' => $media->provider_media_id,
             'media_type' => $media->media_type,
             'media_url' => $media->media_url,
@@ -298,9 +523,11 @@ class ProfileIntegrationController extends Controller
         ];
     }
 
-    private function selectionLimit(): int
+    private function selectionLimit(string $provider): int
     {
-        return max(1, (int) config('instagram.selection_limit', 10));
+        $key = $provider === ProfileIntegration::PROVIDER_TIKTOK ? 'tiktok' : 'instagram';
+
+        return max(1, (int) config("{$key}.selection_limit", 10));
     }
 
     /**
@@ -309,6 +536,21 @@ class ProfileIntegrationController extends Controller
     private function instagramOAuthDiagnostics(): array
     {
         $redirectUri = (string) config('instagram.redirect_uri');
+        $host = strtolower((string) parse_url($redirectUri, PHP_URL_HOST));
+
+        return [
+            'redirect_uri' => $redirectUri,
+            'redirect_host' => $host,
+            'uses_local_redirect' => in_array($host, ['localhost', '127.0.0.1', '::1'], true),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function tiktokOAuthDiagnostics(): array
+    {
+        $redirectUri = (string) config('tiktok.redirect_uri');
         $host = strtolower((string) parse_url($redirectUri, PHP_URL_HOST));
 
         return [

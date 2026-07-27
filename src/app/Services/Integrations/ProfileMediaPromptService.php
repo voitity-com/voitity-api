@@ -114,7 +114,10 @@ class ProfileMediaPromptService
             ->where('selected', true)
             ->orderByDesc('taken_at')
             ->orderByDesc('id')
-            ->limit(max(1, (int) config('instagram.selection_limit', 10)))
+            ->limit(max(
+                1,
+                (int) config('instagram.selection_limit', 10) + (int) config('tiktok.selection_limit', 10)
+            ))
             ->get()
             ->map(fn (ProfileIntegrationMedia $media): array => [
                 'id' => $media->id,
@@ -124,6 +127,8 @@ class ProfileMediaPromptService
                 'source_type' => $this->sourceTypeForProvider($media->provider),
                 'media_type' => $media->media_type,
                 'image_url' => $media->thumbnail_url ?: $media->media_url,
+                'media_url' => $media->media_url,
+                'thumbnail_url' => $media->thumbnail_url,
                 'permalink' => $media->permalink,
                 'caption' => $media->caption,
                 'observation' => filled($media->observation) ? $media->observation : $media->caption,
@@ -275,7 +280,24 @@ class ProfileMediaPromptService
     {
         $normalized = mb_strtolower($text);
 
-        foreach (['foto', 'fotos', 'imagen', 'imágenes', 'post', 'publicación', 'photo', 'picture', 'image', 'visual'] as $needle) {
+        foreach ([
+            'foto',
+            'fotos',
+            'imagen',
+            'imágenes',
+            'post',
+            'publicación',
+            'video',
+            'videos',
+            'clip',
+            'clips',
+            'media',
+            'tiktok',
+            'photo',
+            'picture',
+            'image',
+            'visual',
+        ] as $needle) {
             if (str_contains($normalized, $needle)) {
                 return true;
             }

@@ -238,6 +238,11 @@ class AnswerBuilder
             ...$structuredConstraints['include_providers'],
             ...$textConstraints['include_providers'],
         ]), $excludedProviders));
+        $includedProviderSourceTypes = $this->uniqueStrings(array_map(
+            fn (string $provider): string => $mediaService->sourceTypeForProvider($provider),
+            $includedProviders
+        ));
+        $excludedSourceTypes = array_values(array_diff($excludedSourceTypes, $includedProviderSourceTypes));
         $includedSourceTypes = array_values(array_diff($this->uniqueStrings([
             ...$structuredConstraints['include_source_types'],
             ...$textConstraints['include_source_types'],
@@ -482,7 +487,10 @@ class AnswerBuilder
             'provider_key' => $item['provider_key'] ?? 'instagram',
             'provider_label' => $item['provider_label'] ?? $item['provider'] ?? 'Instagram',
             'source_type' => $item['source_type'] ?? 'integration',
+            'media_type' => $item['media_type'] ?? null,
             'image_url' => $item['image_url'] ?? null,
+            'media_url' => $item['media_url'] ?? null,
+            'thumbnail_url' => $item['thumbnail_url'] ?? null,
             'permalink' => $item['permalink'] ?? null,
             'caption' => $item['caption'] ?? null,
             'observation' => $item['observation'] ?? null,
@@ -550,8 +558,23 @@ class AnswerBuilder
         $text = $question->text;
 
         return $this->looksLikeExplicitMediaShowRequest($text)
+            || $this->looksLikeMediaAvailabilityRequest($text, $mediaContext)
             || ($this->looksLikeAnyMediaChoice($text) && $this->recentConversationMentionsMedia($question))
             || ($this->looksLikeAnotherMediaRequest($text) && $this->recentShownMediaIds($question) !== []);
+    }
+
+    private function looksLikeMediaAvailabilityRequest(string $text, array $mediaContext): bool
+    {
+        if (($mediaContext['included_providers'] ?? []) === []) {
+            return false;
+        }
+
+        $normalized = mb_strtolower($text);
+
+        return preg_match(
+            '/\b(qu[eé]\s+(?:contenido\s+)?tienes|tienes\s+(?:algo|contenido)|algo\s+de|what\s+do\s+you\s+have|anything\s+(?:from|on))\b/u',
+            $normalized
+        ) === 1;
     }
 
     private function looksLikeExplicitMediaShowRequest(string $text): bool
@@ -576,7 +599,24 @@ class AnswerBuilder
     {
         $normalized = mb_strtolower($text);
 
-        foreach (['foto', 'fotos', 'imagen', 'imágenes', 'instagram', 'post', 'publicación', 'photo', 'picture', 'image'] as $needle) {
+        foreach ([
+            'foto',
+            'fotos',
+            'imagen',
+            'imágenes',
+            'instagram',
+            'post',
+            'publicación',
+            'video',
+            'videos',
+            'clip',
+            'clips',
+            'media',
+            'tiktok',
+            'photo',
+            'picture',
+            'image',
+        ] as $needle) {
             if (str_contains($normalized, $needle)) {
                 return true;
             }
@@ -951,12 +991,19 @@ class AnswerBuilder
         $observation = $this->cleanMediaText($media['observation'] ?? null);
         $caption = $this->cleanMediaText($media['caption'] ?? null);
         $location = $this->extractLocation($observation);
+        $isVideo = $this->isVideoMedia($media);
 
         if ($location === null && $observation === '') {
             $location = $this->extractLocation($caption);
         }
 
         if ($location !== null) {
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? "This video was recorded in {$location}."
+                    : "Este video fue grabado en {$location}.";
+            }
+
             return $locale === 'en'
                 ? "This photo was taken in {$location}."
                 : "Esta foto fue tomada en {$location}.";
@@ -967,9 +1014,21 @@ class AnswerBuilder
         if ($detail !== '') {
             $detail = $this->shortenText($detail, 140);
 
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? "I am sharing this video: {$detail}."
+                    : "Te comparto este video: {$detail}.";
+            }
+
             return $locale === 'en'
                 ? "I am sharing this photo: {$detail}."
                 : "Te comparto esta foto: {$detail}.";
+        }
+
+        if ($isVideo) {
+            return $locale === 'en'
+                ? 'I am sharing one of my videos.'
+                : 'Te comparto uno de mis videos.';
         }
 
         return $locale === 'en'
@@ -987,16 +1046,39 @@ class AnswerBuilder
         }
 
         $providerLabel = $this->mediaProviderLabel($media);
+        $isVideo = $this->isVideoMedia($media);
 
         if ($providerLabel === null) {
+            if ($isVideo) {
+                return $locale === 'en'
+                    ? 'You can watch it from the link.'
+                    : 'Puedes verlo en el enlace.';
+            }
+
             return $locale === 'en'
                 ? 'You can see more photos from the link.'
                 : 'Puedes ver más fotos en el enlace.';
         }
 
+        if ($isVideo) {
+            return $locale === 'en'
+                ? "You can watch it on {$providerLabel}."
+                : "Puedes verlo en {$providerLabel}.";
+        }
+
         return $locale === 'en'
             ? "You can see more photos on {$providerLabel}."
             : "Puedes ver más fotos en {$providerLabel}.";
+    }
+
+    /**
+     * @param  array<string, mixed>  $media
+     */
+    private function isVideoMedia(array $media): bool
+    {
+        $mediaType = strtoupper(trim((string) ($media['media_type'] ?? '')));
+
+        return str_contains($mediaType, 'VIDEO');
     }
 
     /**
@@ -1261,7 +1343,10 @@ class AnswerBuilder
     private function answerIndicatesNoAnswer(string $answerText): bool
     {
         $normalized = mb_strtolower($answerText);
-        $declinesMedia = preg_match('/\bno\s+(?:tengo|hay)\b[^.?!]{0,100}\b(foto|fotos|imagen|im[aá]genes|photo|photos|image|images)\b/u', $normalized) === 1;
+        $declinesMedia = preg_match(
+            '/\bno\s+(?:tengo|hay)\b[^.?!]{0,100}\b(foto|fotos|imagen|im[aá]genes|video|videos|contenido|media|photo|photos|image|images|content)\b/u',
+            $normalized
+        ) === 1;
 
         return str_contains($answerText, '[[BIGMELO_NO_ANSWER]]')
             || $declinesMedia

@@ -232,6 +232,8 @@ class InstagramIntegrationService
                 'provider_label' => 'Instagram',
                 'media_type' => $media->media_type,
                 'image_url' => $media->thumbnail_url ?: $media->media_url,
+                'media_url' => $media->media_url,
+                'thumbnail_url' => $media->thumbnail_url,
                 'permalink' => $media->permalink,
                 'caption' => $media->caption,
                 'observation' => filled($media->observation) ? $media->observation : $media->caption,
