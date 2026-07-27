@@ -116,7 +116,9 @@ class ProfileMediaPromptService
             ->orderByDesc('id')
             ->limit(max(
                 1,
-                (int) config('instagram.selection_limit', 10) + (int) config('tiktok.selection_limit', 10)
+                (int) config('instagram.selection_limit', 10)
+                    + (int) config('tiktok.selection_limit', 10)
+                    + (int) config('onlyfans.selection_limit', 10)
             ))
             ->get()
             ->map(fn (ProfileIntegrationMedia $media): array => [
@@ -126,15 +128,17 @@ class ProfileMediaPromptService
                 'provider_label' => $this->providerLabel($media->provider),
                 'source_type' => $this->sourceTypeForProvider($media->provider),
                 'media_type' => $media->media_type,
-                'image_url' => $media->thumbnail_url ?: $media->media_url,
+                'image_url' => $media->thumbnail_url
+                    ?: (str_contains(strtoupper((string) $media->media_type), 'VIDEO') ? null : $media->media_url),
                 'media_url' => $media->media_url,
                 'thumbnail_url' => $media->thumbnail_url,
                 'permalink' => $media->permalink,
                 'caption' => $media->caption,
                 'observation' => filled($media->observation) ? $media->observation : $media->caption,
+                'age_restricted' => $media->age_restricted,
                 'taken_at' => $media->taken_at?->toDateString(),
             ])
-            ->filter(fn (array $media): bool => filled($media['image_url'] ?? null) || filled($media['permalink'] ?? null))
+            ->filter(fn (array $media): bool => filled($media['media_url'] ?? null) || filled($media['permalink'] ?? null))
             ->values()
             ->all();
     }
@@ -233,6 +237,7 @@ class ProfileMediaPromptService
             'facebook' => 'Facebook',
             'instagram' => 'Instagram',
             'linkedin' => 'LinkedIn',
+            'onlyfans' => 'OnlyFans',
             'tiktok' => 'TikTok',
             'x' => 'X',
             'youtube' => 'YouTube',
@@ -243,7 +248,7 @@ class ProfileMediaPromptService
     public function sourceTypeForProvider(string $provider): string
     {
         return match ($this->normalizeProviderKey($provider)) {
-            'facebook', 'instagram', 'linkedin', 'tiktok', 'x', 'youtube' => 'social_network',
+            'facebook', 'instagram', 'linkedin', 'onlyfans', 'tiktok', 'x', 'youtube' => 'social_network',
             default => 'integration',
         };
     }
@@ -292,6 +297,8 @@ class ProfileMediaPromptService
             'clip',
             'clips',
             'media',
+            'onlyfans',
+            'only fans',
             'tiktok',
             'photo',
             'picture',
@@ -387,6 +394,7 @@ class ProfileMediaPromptService
             'facebook' => ['facebook', 'fb'],
             'instagram' => ['instagram', 'insta', 'ig'],
             'linkedin' => ['linkedin', 'linked in'],
+            'onlyfans' => ['onlyfans', 'only fans'],
             'tiktok' => ['tiktok', 'tik tok', 'tiktojk', 'ticktok'],
             'x' => ['x', 'twitter'],
             'youtube' => ['youtube', 'you tube'],

@@ -376,6 +376,8 @@ class OpenAIClientTest extends TestCase
                 && str_contains($systemPrompt, '"provider_label":"Instagram"')
                 && str_contains($systemPrompt, 'fill constraints from the meaning of the request')
                 && str_contains($systemPrompt, 'Apply constraints before choosing media_ids')
+                && str_contains($systemPrompt, 'never invent, intensify, or add sexual details')
+                && str_contains($systemPrompt, 'Keep the tone neutral')
                 && str_contains($systemPrompt, '"constraints" as an object')
                 && str_contains($systemPrompt, 'The answer string must be 200 characters or fewer');
         });

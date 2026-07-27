@@ -2936,6 +2936,321 @@
                   "response": []
                 }
               ]
+            },
+            {
+              "name": "OnlyFans",
+              "item": [
+                {
+                  "name": "OnlyFans - Save Manual Connection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans connection is saved', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('OnlyFans integration is connected manually', function () {",
+                          "  pm.expect(data.integration.provider).to.eql('onlyfans');",
+                          "  pm.expect(data.integration.metadata.connection_type).to.eql('manual_upload');",
+                          "  pm.expect(data.integration.metadata.profile_url).to.eql(pm.environment.get('onlyfans_profile_url'));",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"username\": \"{{onlyfans_username}}\",\n  \"profile_url\": \"{{onlyfans_profile_url}}\",\n  \"rights_confirmed\": true,\n  \"adult_content_confirmed\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans"
+                      ]
+                    },
+                    "description": "Creates or updates the manual OnlyFans reference. This integration does not use OAuth or scrape OnlyFans; both consent confirmations are required."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - List Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media endpoint responds', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('OnlyFans media payload has expected shape', function () {",
+                          "  pm.expect(data.media).to.be.an('array');",
+                          "  pm.expect(data.selection_limit).to.be.a('number');",
+                          "});",
+                          "if (data.media.length) {",
+                          "  pm.environment.set('onlyfans_media_id', data.media[0].id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media"
+                      ]
+                    },
+                    "description": "Lists manually uploaded OnlyFans promotional media and returns an empty list when the integration is not configured."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Upload Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media upload succeeds', function () { pm.response.to.have.status(201); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('Uploaded media is age restricted and stored', function () {",
+                          "  pm.expect(data.media.provider).to.eql('onlyfans');",
+                          "  pm.expect(data.media.age_restricted).to.eql(true);",
+                          "  pm.expect(data.media.media_url).to.be.a('string').and.not.empty;",
+                          "});",
+                          "pm.environment.set('onlyfans_media_id', data.media.id);"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "file",
+                          "type": "file",
+                          "src": "{{onlyfans_media_file_path}}"
+                        },
+                        {
+                          "key": "caption",
+                          "value": "{{onlyfans_media_caption}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "observation",
+                          "value": "{{onlyfans_media_observation}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "selected",
+                          "value": "true",
+                          "type": "text"
+                        },
+                        {
+                          "key": "rights_confirmed",
+                          "value": "true",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media"
+                      ]
+                    },
+                    "description": "Uploads an owned or authorized promotional image/video. JPG, PNG, WEBP, GIF, MP4, MOV, and WEBM are accepted. The server stores it under integrations/onlyfans/{profile_id}/{uuid}."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Update Media Selection",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans selection is updated', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "const data = json.data || json;",
+                          "pm.test('Updated OnlyFans media remains selected', function () {",
+                          "  const item = data.media.find(media => String(media.id) === String(pm.environment.get('onlyfans_media_id')));",
+                          "  pm.expect(item).to.be.an('object');",
+                          "  pm.expect(item.selected).to.eql(true);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": {{onlyfans_media_id}},\n      \"selected\": true,\n      \"observation\": \"{{onlyfans_media_observation}}\"\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media-selection",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media-selection"
+                      ]
+                    },
+                    "description": "Selects uploaded OnlyFans media for profile conversations and saves the verified observation sent to the AI context."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Delete Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans media is deleted', function () { pm.response.to.have.status(200); });"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans/media/{{onlyfans_media_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans",
+                        "media",
+                        "{{onlyfans_media_id}}"
+                      ]
+                    },
+                    "description": "Deletes one uploaded OnlyFans media record and its stored file."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "OnlyFans - Disconnect",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('OnlyFans disconnect succeeds', function () { pm.response.to.have.status(200); });"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/onlyfans",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "profile",
+                        "{{profile_id}}",
+                        "integrations",
+                        "onlyfans"
+                      ]
+                    },
+                    "description": "Removes the manual OnlyFans integration, all database media records, and all associated stored files."
+                  },
+                  "response": []
+                }
+              ]
             }
           ]
         },

@@ -15,6 +15,8 @@ class ProfileIntegration extends Model
 
     public const PROVIDER_TIKTOK = 'tiktok';
 
+    public const PROVIDER_ONLYFANS = 'onlyfans';
+
     public const STATUS_CONNECTED = 'connected';
 
     public const STATUS_ERROR = 'error';

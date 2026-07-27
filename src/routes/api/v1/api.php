@@ -96,6 +96,12 @@ Route::prefix('/profile')->group(function () {
     Route::get('/{profile}/integrations/tiktok/media', [ProfileIntegrationController::class, 'tiktokMedia'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::put('/{profile}/integrations/tiktok/media-selection', [ProfileIntegrationController::class, 'tiktokUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::delete('/{profile}/integrations/tiktok', [ProfileIntegrationController::class, 'tiktokDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/integrations/onlyfans', [ProfileIntegrationController::class, 'onlyFansConnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/integrations/onlyfans/media', [ProfileIntegrationController::class, 'onlyFansMedia'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/integrations/onlyfans/media', [ProfileIntegrationController::class, 'onlyFansUploadMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::put('/{profile}/integrations/onlyfans/media-selection', [ProfileIntegrationController::class, 'onlyFansUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/onlyfans/media/{media}', [ProfileIntegrationController::class, 'onlyFansDeleteMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/onlyfans', [ProfileIntegrationController::class, 'onlyFansDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);

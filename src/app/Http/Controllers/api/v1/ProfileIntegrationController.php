@@ -8,6 +8,7 @@ use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
 use App\Services\Integrations\InstagramIntegrationService;
+use App\Services\Integrations\OnlyFansIntegrationService;
 use App\Services\Integrations\TikTokIntegrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -325,6 +326,201 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
+    public function onlyFansConnect(
+        Request $request,
+        Profile $profile,
+        OnlyFansIntegrationService $onlyFans
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'username' => ['required', 'string', 'max:150', 'regex:/^@?[A-Za-z0-9._-]+$/'],
+            'profile_url' => ['required', 'url:http,https', 'max:2048'],
+            'rights_confirmed' => ['required', 'accepted'],
+            'adult_content_confirmed' => ['required', 'accepted'],
+        ]);
+
+        try {
+            $integration = $onlyFans->connect($profile, $request->user(), $validated);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['profile_url' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans integration saved successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+            ],
+        ]);
+    }
+
+    public function onlyFansMedia(Request $request, Profile $profile): JsonResponse
+    {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->onlyFansIntegration($profile);
+
+        if (! $integration) {
+            return response()->json([
+                'message' => 'OnlyFans is not connected.',
+                'data' => [
+                    'integration' => null,
+                    'media' => [],
+                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans media retrieved successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $integration->media()
+                    ->orderByDesc('taken_at')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
+                    ->all(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+            ],
+        ]);
+    }
+
+    public function onlyFansUploadMedia(
+        Request $request,
+        Profile $profile,
+        OnlyFansIntegrationService $onlyFans
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->onlyFansIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'OnlyFans is not connected.'], 404);
+        }
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm', 'max:102400'],
+            'caption' => ['nullable', 'string', 'max:2000'],
+            'observation' => ['nullable', 'string', 'max:1000'],
+            'selected' => ['nullable', 'boolean'],
+            'rights_confirmed' => ['required', 'accepted'],
+        ]);
+
+        try {
+            $media = $onlyFans->upload(
+                $integration,
+                $validated['file'],
+                $validated['caption'] ?? null,
+                $validated['observation'] ?? null,
+                (bool) ($validated['selected'] ?? false)
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['file' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans media uploaded successfully.',
+            'data' => [
+                'media' => $this->mediaToArray($media),
+            ],
+        ], 201);
+    }
+
+    public function onlyFansUpdateMediaSelection(
+        Request $request,
+        Profile $profile,
+        OnlyFansIntegrationService $onlyFans
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->onlyFansIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'OnlyFans is not connected.'], 404);
+        }
+
+        $validated = $request->validate([
+            'media' => ['required', 'array'],
+            'media.*.id' => ['required', 'integer'],
+            'media.*.selected' => ['nullable', 'boolean'],
+            'media.*.observation' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $integration = $onlyFans->updateSelection($integration, $validated['media']);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['media' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans media selection updated successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $integration->media()
+                    ->orderByDesc('taken_at')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
+                    ->all(),
+                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+            ],
+        ]);
+    }
+
+    public function onlyFansDeleteMedia(
+        Request $request,
+        Profile $profile,
+        ProfileIntegrationMedia $media,
+        OnlyFansIntegrationService $onlyFans
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->onlyFansIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'OnlyFans is not connected.'], 404);
+        }
+
+        try {
+            $onlyFans->deleteMedia($integration, $media);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans media deleted successfully.',
+        ]);
+    }
+
     public function instagramUpdateMediaSelection(
         Request $request,
         Profile $profile,
@@ -459,6 +655,26 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
+    public function onlyFansDisconnect(
+        Request $request,
+        Profile $profile,
+        OnlyFansIntegrationService $onlyFans
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        $integration = $this->onlyFansIntegration($profile);
+
+        if ($integration) {
+            $onlyFans->disconnect($integration);
+        }
+
+        return response()->json([
+            'message' => 'OnlyFans disconnected successfully.',
+        ]);
+    }
+
     private function authorizeProfile(Request $request, Profile $profile): ?JsonResponse
     {
         $user = $request->user();
@@ -485,6 +701,13 @@ class ProfileIntegrationController extends Controller
     {
         return $profile->integrations()
             ->where('provider', ProfileIntegration::PROVIDER_TIKTOK)
+            ->first();
+    }
+
+    private function onlyFansIntegration(Profile $profile): ?ProfileIntegration
+    {
+        return $profile->integrations()
+            ->where('provider', ProfileIntegration::PROVIDER_ONLYFANS)
             ->first();
     }
 
@@ -518,6 +741,7 @@ class ProfileIntegrationController extends Controller
             'permalink' => $media->permalink,
             'caption' => $media->caption,
             'observation' => filled($media->observation) ? $media->observation : $media->caption,
+            'age_restricted' => $media->age_restricted,
             'selected' => $media->selected,
             'taken_at' => $media->taken_at?->toIso8601String(),
         ];
@@ -525,7 +749,11 @@ class ProfileIntegrationController extends Controller
 
     private function selectionLimit(string $provider): int
     {
-        $key = $provider === ProfileIntegration::PROVIDER_TIKTOK ? 'tiktok' : 'instagram';
+        $key = match ($provider) {
+            ProfileIntegration::PROVIDER_TIKTOK => 'tiktok',
+            ProfileIntegration::PROVIDER_ONLYFANS => 'onlyfans',
+            default => 'instagram',
+        };
 
         return max(1, (int) config("{$key}.selection_limit", 10));
     }

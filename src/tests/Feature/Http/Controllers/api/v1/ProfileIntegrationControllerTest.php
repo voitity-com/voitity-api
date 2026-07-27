@@ -11,7 +11,9 @@ use App\Models\User;
 use App\Services\Integrations\InstagramIntegrationService;
 use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Integrations\TikTokIntegrationService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class ProfileIntegrationControllerTest extends TestAPI
 {
@@ -557,6 +559,175 @@ class ProfileIntegrationControllerTest extends TestAPI
         $this->assertSame('Caption for chat context', $payload[0]['observation']);
     }
 
+    public function test_onlyfans_manual_connection_requires_consent_and_matching_profile_url(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $missingConsent = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/profile/{$profile->id}/integrations/onlyfans", [
+                'username' => 'abel_creator',
+                'profile_url' => 'https://onlyfans.com/abel_creator',
+            ]);
+
+        $missingConsent->assertStatus(422)
+            ->assertJsonValidationErrors(['rights_confirmed', 'adult_content_confirmed']);
+
+        $mismatchedUrl = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/profile/{$profile->id}/integrations/onlyfans", [
+                'username' => 'abel_creator',
+                'profile_url' => 'https://onlyfans.com/another_creator',
+                'rights_confirmed' => true,
+                'adult_content_confirmed' => true,
+            ]);
+
+        $mismatchedUrl->assertStatus(422)
+            ->assertJsonPath('message', 'The OnlyFans username must match the profile URL.');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/profile/{$profile->id}/integrations/onlyfans", [
+                'username' => '@abel_creator',
+                'profile_url' => 'https://www.onlyfans.com/abel_creator/',
+                'rights_confirmed' => true,
+                'adult_content_confirmed' => true,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.integration.provider', ProfileIntegration::PROVIDER_ONLYFANS)
+            ->assertJsonPath('data.integration.username', 'abel_creator')
+            ->assertJsonPath('data.integration.metadata.profile_url', 'https://onlyfans.com/abel_creator')
+            ->assertJsonPath('data.integration.metadata.connection_type', 'manual_upload');
+    }
+
+    public function test_onlyfans_media_upload_is_stored_in_profile_folder_and_available_to_chat(): void
+    {
+        Storage::fake('profiles');
+        config([
+            'onlyfans.disk' => 'profiles',
+            'onlyfans.folder' => 'integrations/onlyfans',
+            'onlyfans.selection_limit' => 10,
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createOnlyFansIntegration($profile, $user);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post("/api/profile/{$profile->id}/integrations/onlyfans/media", [
+                'file' => UploadedFile::fake()->image('hulk-promo.jpg', 800, 800),
+                'caption' => 'Hulk promotional set',
+                'observation' => 'Contenido promocional inspirado en Hulk con vestuario verde.',
+                'selected' => true,
+                'rights_confirmed' => true,
+            ], ['Accept' => 'application/json']);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.media.provider', ProfileIntegration::PROVIDER_ONLYFANS)
+            ->assertJsonPath('data.media.media_type', 'IMAGE')
+            ->assertJsonPath('data.media.age_restricted', true)
+            ->assertJsonPath('data.media.selected', true);
+
+        $media = ProfileIntegrationMedia::query()->where('profile_integration_id', $integration->id)->firstOrFail();
+        $this->assertStringStartsWith("integrations/onlyfans/{$profile->id}/", $media->storage_path);
+        Storage::disk('profiles')->assertExists($media->storage_path);
+
+        $payload = app(ProfileMediaPromptService::class)->selectedMediaForPrompt($profile);
+
+        $this->assertCount(1, $payload);
+        $this->assertSame('OnlyFans', $payload[0]['provider_label']);
+        $this->assertSame('onlyfans', $payload[0]['provider_key']);
+        $this->assertSame('Contenido promocional inspirado en Hulk con vestuario verde.', $payload[0]['observation']);
+        $this->assertTrue($payload[0]['age_restricted']);
+    }
+
+    public function test_onlyfans_video_upload_requires_rights_confirmation(): void
+    {
+        Storage::fake('profiles');
+        config(['onlyfans.disk' => 'profiles']);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $this->createOnlyFansIntegration($profile, $user);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post("/api/profile/{$profile->id}/integrations/onlyfans/media", [
+                'file' => UploadedFile::fake()->create('promo.mp4', 120, 'video/mp4'),
+                'selected' => false,
+            ], ['Accept' => 'application/json']);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['rights_confirmed']);
+        $this->assertDatabaseCount('profile_integration_media', 0);
+    }
+
+    public function test_onlyfans_selection_limit_is_enforced(): void
+    {
+        config(['onlyfans.selection_limit' => 1]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createOnlyFansIntegration($profile, $user);
+        $first = $this->createOnlyFansMedia($integration, [
+            'provider_media_id' => 'onlyfans-one',
+            'selected' => true,
+        ]);
+        $second = $this->createOnlyFansMedia($integration, ['provider_media_id' => 'onlyfans-two']);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->putJson("/api/profile/{$profile->id}/integrations/onlyfans/media-selection", [
+                'media' => [
+                    ['id' => $second->id, 'selected' => true],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'You can select up to 1 OnlyFans items.');
+        $this->assertTrue($first->fresh()->selected);
+        $this->assertFalse($second->fresh()->selected);
+    }
+
+    public function test_onlyfans_media_delete_and_disconnect_remove_stored_files(): void
+    {
+        Storage::fake('profiles');
+        config(['onlyfans.disk' => 'profiles']);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createOnlyFansIntegration($profile, $user);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $firstPath = "integrations/onlyfans/{$profile->id}/first/media.jpg";
+        $secondPath = "integrations/onlyfans/{$profile->id}/second/media.jpg";
+        Storage::disk('profiles')->put($firstPath, 'first');
+        Storage::disk('profiles')->put($secondPath, 'second');
+        $first = $this->createOnlyFansMedia($integration, [
+            'provider_media_id' => 'first',
+            'storage_disk' => 'profiles',
+            'storage_path' => $firstPath,
+        ]);
+        $this->createOnlyFansMedia($integration, [
+            'provider_media_id' => 'second',
+            'storage_disk' => 'profiles',
+            'storage_path' => $secondPath,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->deleteJson("/api/profile/{$profile->id}/integrations/onlyfans/media/{$first->id}")
+            ->assertOk();
+        Storage::disk('profiles')->assertMissing($firstPath);
+        Storage::disk('profiles')->assertExists($secondPath);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->deleteJson("/api/profile/{$profile->id}/integrations/onlyfans")
+            ->assertOk();
+        Storage::disk('profiles')->assertMissing($secondPath);
+        $this->assertDatabaseMissing('profile_integrations', ['id' => $integration->id]);
+    }
+
     private function createInstagramIntegration(Profile $profile, User $user): ProfileIntegration
     {
         return ProfileIntegration::query()->create([
@@ -584,6 +755,24 @@ class ProfileIntegrationControllerTest extends TestAPI
             'access_token' => null,
             'status' => ProfileIntegration::STATUS_CONNECTED,
         ], $attributes));
+    }
+
+    private function createOnlyFansIntegration(Profile $profile, User $user): ProfileIntegration
+    {
+        return ProfileIntegration::query()->create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'abel_creator',
+            'username' => 'abel_creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+            'metadata' => [
+                'adult_content_confirmed_at' => now()->toIso8601String(),
+                'connection_type' => 'manual_upload',
+                'profile_url' => 'https://onlyfans.com/abel_creator',
+                'rights_confirmed_at' => now()->toIso8601String(),
+            ],
+        ]);
     }
 
     /**
@@ -624,6 +813,28 @@ class ProfileIntegrationControllerTest extends TestAPI
             'thumbnail_url' => 'https://example.com/tiktok-cover.jpg',
             'permalink' => 'https://www.tiktok.com/@bigmelo/video/media',
             'caption' => 'TikTok caption',
+            'selected' => false,
+            'taken_at' => now(),
+        ], $attributes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createOnlyFansMedia(
+        ProfileIntegration $integration,
+        array $attributes = []
+    ): ProfileIntegrationMedia {
+        return ProfileIntegrationMedia::query()->create(array_merge([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $integration->profile_id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'onlyfans-media-id',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/onlyfans-media.jpg',
+            'permalink' => 'https://onlyfans.com/abel_creator',
+            'caption' => 'OnlyFans promotional content',
+            'age_restricted' => true,
             'selected' => false,
             'taken_at' => now(),
         ], $attributes));
