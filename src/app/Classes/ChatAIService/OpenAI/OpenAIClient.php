@@ -7,6 +7,7 @@ use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Models\Profile;
 use App\Services\Integrations\ProfileMediaPromptService;
+use App\Services\Products\ProfileProductPromptService;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -330,10 +331,20 @@ class OpenAIClient implements ChatAIClient
         $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
         $mediaService = app(ProfileMediaPromptService::class);
         $selectedMedia = $this->buildSelectedMediaPrompt($mediaService->selectedMediaForPrompt($profile));
+        $productService = app(ProfileProductPromptService::class);
+        $availableProducts = $productService->productsForPrompt($profile);
+        $productsPrompt = $availableProducts !== []
+            ? json_encode($availableProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : null;
 
         if ($selectedMedia !== null) {
             $prompt .= ". Selected media available for visitor conversations before constraints: {$selectedMedia}";
             $prompt .= '. Infer from the current message and recent chat whether the visitor is asking for media. When media is requested, set media_request to true and fill constraints from the meaning of the request, not from a fixed phrase list. Constraint keys are include_providers, exclude_providers, include_source_types, exclude_source_types, and require_unseen. Provider values must use provider_key values from the selected media list. Source type values must use source_type values from the selected media list. The social_network source_type means media from social platforms; if the visitor asks for media outside or inside a kind of source, express that through source type constraints. When the visitor names a provider_key or provider_label from the selected media list, use provider constraints for that named provider, not source type constraints. Do not convert a provider exclusion into a source type exclusion; excluding one provider still allows other providers with the same source_type. Apply constraints before choosing media_ids. If at least one selected media item matches the inferred constraints and the visitor wants to see media, choose one matching id and set media_action to "show"; do not answer that no media is available. When media_action is "show", phrase the answer as sharing or attaching the media in the current chat; do not tell the visitor that they need to visit the provider profile or a link to see it. If no selected media matches the inferred constraints, set media_action to "none", media_ids to [], and answer briefly that no matching media is available. For follow-up references to a previously shown media item, answer using the most recently shown media item and keep media_action as "none" unless the visitor asks to show another media item. Use provider_label, observation, caption, and date as factual context. Mention where the media was captured only when observation or caption reasonably indicates a place. For media marked age_restricted, describe it factually as adult promotional content and never invent, intensify, or add sexual details beyond its caption and observation. Keep the tone neutral and do not add invitations such as "enjoy it" or "I hope you like it". Keep media answers short. Do not include raw URLs, Markdown links, Markdown formatting, or Markdown image syntax because the app attaches media and external links separately. Do not invent media, places, providers, source types, or links outside the selected media list';
+        }
+
+        if (is_string($productsPrompt)) {
+            $prompt .= ". Published products available for this conversation: {$productsPrompt}";
+            $prompt .= '. Recommend products organically only when the visitor asks about products, purchasing, recommendations, or when a product is directly relevant to the requested professional guidance. Do not force a sale into unrelated conversation. Use only the exact product names and descriptions provided. Do not invent ingredients, prices, discounts, availability, dimensions, quantities, health outcomes, medical claims, or implied benefits such as improving performance, recovery, strength, sleep, or appearance unless that exact information is present in the product name or description. When the visitor asks to compare products, infer the comparison from explicit values and specifications already present in their names or descriptions, including prices, measurements, units, formats, and quantities. You may normalize compatible units to compare them. State which is cheaper, more expensive, larger, smaller, or otherwise preferable only when the supplied data supports that conclusion; otherwise say that the available descriptions do not establish it. For comparisons of three or more products, use one compact semicolon-separated sentence that includes every compared product and finishes completely within the 400-character product answer limit. Never return a comparison that ends mid-sentence or needs truncation. Phrase a product as an available option that may complement the visitor\'s plan, never as a guaranteed result or personalized medical recommendation. When one or more products are genuinely relevant, set product_request to true, product_action to "show", and product_ids to the relevant published product ids. Prefer the smallest useful set, normally one or two products, but attach every directly compared product when answering a comparison. The app attaches product cards, so do not include raw product URLs or Markdown links in the answer';
         }
 
         if ($recentMessages !== []) {
@@ -352,10 +363,11 @@ class OpenAIClient implements ChatAIClient
 
         $prompt .= '. Only answer using the information in this prompt. For non-media requests, if the requested information is not available here, start the answer exactly with [[BIGMELO_NO_ANSWER]] and then say you do not have that information at this moment';
         $prompt .= '. A media request with no selected media matching the inferred constraints is answerable from the selected media inventory. For that case, do not use [[BIGMELO_NO_ANSWER]]; set media_request to true, media_action to "none", media_ids to [], keep the inferred constraints, and answer that no matching media is available';
+        $prompt .= '. A product request with matching published products is answerable from the product inventory. In that case do not use [[BIGMELO_NO_ANSWER]]. If products are disabled or no published product matches, use product_action "none" and never invent a product';
         $prompt .= '. Make the conversation feel natural and progressive. Evaluate each question and decide whether a short or detailed answer is appropriate. For greetings or questions like who you are, answer briefly with your name and what you do. For broad experience questions, summarize the relevant experience. For questions about a specific experience, expand only that experience. Do not reveal all profile information at once unless the user explicitly asks for a full overview';
         $prompt .= '. Always respond in character and maintain consistency with your defined role and personality.';
-        $prompt .= '. The answer string must be 200 characters or fewer.';
-        $prompt .= '. Return a JSON object only, without surrounding text. The JSON object must have exactly these keys: "answer" as the natural-language answer string, "media_request" as a boolean, "media_action" as "none" or "show", "media_ids" as an array of selected media ids to attach, and "constraints" as an object with include_providers, exclude_providers, include_source_types, exclude_source_types arrays and require_unseen boolean. Use "media_action":"none" and an empty media_ids array when no media should be attached.';
+        $prompt .= '. The answer string must be 200 characters or fewer, except when product_action is "show"; product answers may use up to 400 characters.';
+        $prompt .= '. Return a JSON object only, without surrounding text. The JSON object must have exactly these keys: "answer" as the natural-language answer string, "media_request" as a boolean, "media_action" as "none" or "show", "media_ids" as an array of selected media ids to attach, "product_request" as a boolean, "product_action" as "none" or "show", "product_ids" as an array of published product ids to attach, and "constraints" as an object with include_providers, exclude_providers, include_source_types, exclude_source_types arrays and require_unseen boolean. Use "media_action":"none" and an empty media_ids array when no media should be attached. Use "product_action":"none" and an empty product_ids array when no product should be attached.';
 
         return $prompt;
     }
@@ -524,6 +536,11 @@ class OpenAIClient implements ChatAIClient
                 if ($mediaIds !== []) {
                     $payload['media_ids'] = $mediaIds;
                 }
+                $productIds = $this->messageProductIds($message->data ?? null);
+
+                if ($productIds !== []) {
+                    $payload['product_ids'] = $productIds;
+                }
 
                 return $payload;
             })
@@ -540,6 +557,23 @@ class OpenAIClient implements ChatAIClient
         }
 
         return collect($data['media'])
+            ->map(fn ($item): int => is_array($item) ? (int) ($item['id'] ?? 0) : 0)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function messageProductIds(mixed $data): array
+    {
+        if (! is_array($data) || ! isset($data['products']) || ! is_array($data['products'])) {
+            return [];
+        }
+
+        return collect($data['products'])
             ->map(fn ($item): int => is_array($item) ? (int) ($item['id'] ?? 0) : 0)
             ->filter(fn (int $id): bool => $id > 0)
             ->unique()

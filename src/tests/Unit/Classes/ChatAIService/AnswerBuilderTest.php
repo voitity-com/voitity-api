@@ -22,6 +22,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Products\ProfileProductService;
 use Illuminate\Support\Facades\Event;
 use Mockery;
 use Mockery\MockInterface;
@@ -135,6 +136,125 @@ class AnswerBuilderTest extends TestCase
                 && $event->sourceId === (string) $voice->id
                 && $event->amounts === ['tts_characters' => strlen('Doing great!')];
         });
+    }
+
+    public function test_get_answer_attaches_only_requested_available_products(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'products_enabled' => true,
+            'locale' => 'es',
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Proteína Whey',
+            'description' => 'Proteína para complementar la recuperación deportiva.',
+            'image_url' => 'https://images.example.com/protein.jpg',
+            'destination_type' => 'whatsapp',
+            'country_code' => '57',
+            'phone_number' => '3001234567',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Qué podría complementar mi recuperación?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiAnswer = new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'La Proteína Whey puede complementar tu recuperación junto con una alimentación adecuada.',
+                'media_request' => false,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'product_request' => true,
+                'product_action' => 'show',
+                'product_ids' => [$product->id, 999999],
+                'constraints' => [
+                    'include_providers' => [],
+                    'exclude_providers' => [],
+                    'include_source_types' => [],
+                    'exclude_source_types' => [],
+                    'require_unseen' => false,
+                ],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success'
+        );
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn($chatAiAnswer);
+        $voiceManager = Mockery::mock(VoiceManager::class);
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertCount(1, $response['products']);
+        $this->assertSame($product->id, $response['products'][0]['id']);
+        $this->assertSame('Proteína Whey', $response['products'][0]['name']);
+        $this->assertStringStartsWith('https://wa.me/573001234567?text=', $response['products'][0]['action_url']);
+        $this->assertSame($response['products'], $response['data']['products']);
+        $this->assertDatabaseHas('messages', [
+            'chat_id' => $chat->id,
+            'type' => 'answer',
+            'text' => 'La Proteína Whey puede complementar tu recuperación junto con una alimentación adecuada.',
+        ]);
+    }
+
+    public function test_product_answer_can_use_up_to_four_hundred_characters(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'products_enabled' => true,
+            'locale' => 'es',
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Cuaderno Universitario',
+            'description' => 'Formato 21 x 29.7 cm, 100 hojas, precio $28.000.',
+            'image_url' => 'https://images.example.com/notebook.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/notebook',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Compara los cuadernos.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $answer = str_repeat('Comparación completa de productos. ', 9);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => $answer,
+                    'media_request' => false,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'product_request' => true,
+                    'product_action' => 'show',
+                    'product_ids' => [$product->id],
+                    'constraints' => [],
+                ], JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+
+        $response = (new AnswerBuilder($chatAiClient, Mockery::mock(VoiceManager::class)))
+            ->getAnswer($profile, $question)
+            ->toArray();
+
+        $this->assertGreaterThan(200, mb_strlen($response['text']));
+        $this->assertLessThanOrEqual(400, mb_strlen($response['text']));
+        $this->assertSame(trim($answer), $response['text']);
     }
 
     public function test_get_answer_throws_without_creating_answer_or_audio_when_chat_ai_fails(): void

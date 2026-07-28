@@ -10,9 +10,9 @@ class AnswerResponse
         private readonly Message $answerMessage,
         private readonly ChatAIAnswer $chatAIAnswer,
         private readonly ?array $audioPayload = null,
-        private readonly array $mediaPayload = []
-    ) {
-    }
+        private readonly array $mediaPayload = [],
+        private readonly array $productPayload = []
+    ) {}
 
     public function toArray(): array
     {
@@ -26,6 +26,7 @@ class AnswerResponse
             'audio_url' => $this->answerMessage->audio ?? ($this->audioPayload['audio_url'] ?? null),
             'source' => $this->answerMessage->source,
             'media' => $this->mediaPayload,
+            'products' => $this->productPayload,
             'data' => $payload,
         ];
     }

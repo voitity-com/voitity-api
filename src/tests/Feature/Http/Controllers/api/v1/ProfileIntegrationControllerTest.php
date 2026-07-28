@@ -616,7 +616,7 @@ class ProfileIntegrationControllerTest extends TestAPI
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/profile/{$profile->id}/integrations/onlyfans/media", [
-                'file' => UploadedFile::fake()->image('hulk-promo.jpg', 800, 800),
+                'file' => UploadedFile::fake()->create('hulk-promo.jpg', 10, 'image/jpeg'),
                 'caption' => 'Hulk promotional set',
                 'observation' => 'Contenido promocional inspirado en Hulk con vestuario verde.',
                 'selected' => true,

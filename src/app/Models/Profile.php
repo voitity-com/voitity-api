@@ -26,6 +26,7 @@ class Profile extends Model
         'status',
         'data',
         'networks',
+        'products_enabled',
     ];
 
     protected $attributes = [
@@ -35,11 +36,13 @@ class Profile extends Model
         'profession_key' => 'custom',
         'profession_template_version' => '2026-07',
         'networks' => '{}',
+        'products_enabled' => false,
     ];
 
     protected $casts = [
         'data' => 'array',
         'networks' => 'array',
+        'products_enabled' => 'boolean',
         'status' => ProfileStatus::class,
     ];
 
@@ -101,6 +104,16 @@ class Profile extends Model
     public function facts(): HasMany
     {
         return $this->hasMany(ProfileFact::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(ProfileProduct::class);
+    }
+
+    public function productImports(): HasMany
+    {
+        return $this->hasMany(ProfileProductImport::class);
     }
 
     public function subscriptionUses(): HasMany
