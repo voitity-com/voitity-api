@@ -69,10 +69,9 @@ class ProfileProductControllerTest extends TestAPI
             rawurlencode('Hola, estoy interesado en "Proteína Whey".'),
             $response->json('data.action_url')
         );
-        $this->assertSame(
-            'https://bigmelo.com/p/'.$profile->alias.'/productos/proteina-whey',
-            $response->json('data.public_url')
-        );
+        $expectedPublicUrl = 'https://bigmelo.com/p/'.$profile->alias
+            .'/productos/proteina-whey?v='.$product->updated_at->getTimestamp();
+        $this->assertSame($expectedPublicUrl, $response->json('data.public_url'));
         parse_str((string) parse_url($response->json('data.action_url'), PHP_URL_QUERY), $whatsAppQuery);
         $this->assertSame(
             "Hola, estoy interesado en \"Proteína Whey\".\n\n"
@@ -130,6 +129,12 @@ class ProfileProductControllerTest extends TestAPI
             ->assertOk()
             ->assertSee('<meta property="og:title" content="Omega 3">', false)
             ->assertSee('<meta property="og:image" content="https://images.example.com/omega.jpg">', false)
+            ->assertSee(
+                '<meta property="og:url" content="'
+                .app(\App\Services\Products\ProfileProductLinkService::class)->publicUrl($product)
+                .'">',
+                false
+            )
             ->assertSee('href="https://shop.example.com/products/omega-3"', false);
 
         $product->forceFill(['status' => ProfileProductStatus::Draft])->save();
@@ -170,6 +175,7 @@ class ProfileProductControllerTest extends TestAPI
         $payload = (new \App\Http\Responses\Products\ProfileProductResponse($product->fresh('profile')))->toArray();
 
         $this->assertSame($expectedImageUrl, $payload['image_url']);
+        $this->assertStringContainsString('?v='.$product->updated_at->getTimestamp(), $payload['public_url']);
         $this->assertSame(
             $expectedImageUrl,
             app(ProfileProductPromptService::class)->productsForPrompt($profile->fresh())[0]['image_url']

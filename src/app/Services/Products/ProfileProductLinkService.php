@@ -10,9 +10,12 @@ class ProfileProductLinkService
 {
     public function publicUrl(ProfileProduct $product): string
     {
-        return rtrim((string) config('products.public_base_url'), '/')
+        $url = rtrim((string) config('products.public_base_url'), '/')
             .'/'.rawurlencode((string) $product->profile->alias)
             .'/productos/'.rawurlencode($product->slug);
+        $version = $product->updated_at?->getTimestamp();
+
+        return $version ? "{$url}?v={$version}" : $url;
     }
 
     public function actionUrl(ProfileProduct $product): string
