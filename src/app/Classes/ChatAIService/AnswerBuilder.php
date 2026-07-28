@@ -15,12 +15,15 @@ use App\Models\User;
 use App\Models\Voice;
 use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Products\ProfileProductPromptService;
 use App\Services\ProfileConversationMessageService;
 use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
 {
     private const MAX_ANSWER_CHARACTERS = 200;
+
+    private const MAX_PRODUCT_ANSWER_CHARACTERS = 400;
 
     public function __construct(
         private readonly ChatAIClient $chatAIClient,
@@ -59,6 +62,8 @@ class AnswerBuilder
 
         $rawAnswerText = $chatAIAnswer->answer;
         $structuredAnswer = $this->parseStructuredAnswer($rawAnswerText);
+        $productService = app(ProfileProductPromptService::class);
+        $availableProducts = $productService->productsForPrompt($profile);
         $mediaService = app(ProfileMediaPromptService::class);
         if ($structuredAnswer !== null) {
             $mediaContext = $this->mergeStructuredMediaContextWithText(
@@ -107,6 +112,10 @@ class AnswerBuilder
         $mediaPayload = $structuredAnswer !== null
             ? $this->mediaPayloadForIds($structuredMediaIds, $mediaContext['candidate_media'])
             : $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
+        $structuredProductIds = $structuredAnswer !== null && $structuredAnswer['product_action'] === 'show'
+            ? $structuredAnswer['product_ids']
+            : [];
+        $productPayload = $productService->payloadForIds($structuredProductIds, $availableProducts);
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
 
@@ -187,7 +196,7 @@ class AnswerBuilder
         if ($mediaPayload !== [] && ($mediaPayloadWasReplaced || $this->answerIndicatesNoAnswer($answerText))) {
             $answerText = $this->mediaFallbackAnswer($mediaPayload, $profile);
         } elseif (! $usesMediaRuleAnswer && $this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
-            if ($mediaPayload === []) {
+            if ($mediaPayload === [] && $productPayload === []) {
                 $fallback = $this->conversationMessages()->resolvedMessage(
                     $profile,
                     \App\Models\ProfileConversationMessage::TYPE_FALLBACK_NO_ANSWER
@@ -202,7 +211,7 @@ class AnswerBuilder
         $answerText = $this->normalizeAgeRestrictedMediaAnswer($answerText, $mediaPayload);
         $displayAnswerText = $this->limitAnswerText(
             $this->appendMediaHint($answerText, $mediaPayload, $profile),
-            self::MAX_ANSWER_CHARACTERS
+            $productPayload === [] ? self::MAX_ANSWER_CHARACTERS : self::MAX_PRODUCT_ANSWER_CHARACTERS
         );
         $audioText = $this->spokenTextForAnswer($displayAnswerText);
 
@@ -232,10 +241,11 @@ class AnswerBuilder
                 'chat_ai' => $chatAIAnswer->toArray(),
                 'audio' => $audioPayload,
                 'media' => $mediaPayload,
+                'products' => $productPayload,
             ],
         ]);
 
-        return new AnswerResponse($answerMessage, $chatAIAnswer, $audioPayload, $mediaPayload);
+        return new AnswerResponse($answerMessage, $chatAIAnswer, $audioPayload, $mediaPayload, $productPayload);
     }
 
     /**
@@ -949,6 +959,9 @@ class AnswerBuilder
      *     media_request: bool,
      *     media_action: string|null,
      *     media_ids: array<int>,
+     *     product_request: bool,
+     *     product_action: string|null,
+     *     product_ids: array<int>,
      *     constraints: array<string, mixed>
      * }|null
      */
@@ -992,12 +1005,35 @@ class AnswerBuilder
         }
 
         $mediaRequest = filter_var($payload['media_request'] ?? null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        $productIds = [];
+
+        if (isset($payload['product_ids']) && is_array($payload['product_ids'])) {
+            $productIds = collect($payload['product_ids'])
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $productAction = is_scalar($payload['product_action'] ?? null)
+            ? mb_strtolower((string) $payload['product_action'])
+            : null;
+
+        if (! in_array($productAction, ['show', 'none'], true)) {
+            $productAction = $productIds !== [] ? 'show' : 'none';
+        }
+
+        $productRequest = filter_var($payload['product_request'] ?? null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
 
         return [
             'answer' => is_scalar($payload['answer']) ? (string) $payload['answer'] : '',
             'media_request' => $mediaRequest ?? ($mediaAction === 'show' || $mediaIds !== []),
             'media_action' => $mediaAction,
             'media_ids' => $mediaIds,
+            'product_request' => $productRequest ?? ($productAction === 'show' || $productIds !== []),
+            'product_action' => $productAction,
+            'product_ids' => $productIds,
             'constraints' => is_array($payload['constraints'] ?? null) ? $payload['constraints'] : [],
         ];
     }

@@ -3255,6 +3255,992 @@
           ]
         },
         {
+          "name": "Products",
+          "description": "Profile product catalog, conversation visibility, bulk actions, public Open Graph pages, and CSV conflict-resolution workflow. Maximum 15 products per profile.",
+          "item": [
+            {
+              "name": "List Profile Products",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Products list succeeds', function () { pm.response.to.have.status(200); });",
+                      "const json = pm.response.json();",
+                      "const data = json.data || json;",
+                      "pm.test('Products list exposes limits and settings', function () {",
+                      "  pm.expect(data.products).to.be.an('array');",
+                      "  pm.expect(data.max_products).to.eql(15);",
+                      "  pm.expect(data.available_slots).to.be.a('number');",
+                      "  pm.expect(data.products_enabled).to.be.a('boolean');",
+                      "});",
+                      "if (data.products.length) {",
+                      "  pm.environment.set('product_id', data.products[0].id);",
+                      "  pm.environment.set('product_slug', data.products[0].slug);",
+                      "  pm.environment.set('product_public_url', data.products[0].public_url);",
+                      "  pm.environment.set('product_action_url', data.products[0].action_url);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products"
+                  ]
+                },
+                "description": "Lists all products for a profile, including status, generated action/public URLs, conversation toggle, and remaining capacity."
+              },
+              "response": []
+            },
+            {
+              "name": "Create External Link Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('External product is created', function () { pm.response.to.have.status(201); });",
+                      "const json = pm.response.json();",
+                      "const data = json.data || json;",
+                      "pm.test('Product payload has expected shape', function () {",
+                      "  pm.expect(data.id).to.exist;",
+                      "  pm.expect(data.name).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.image_url).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.public_url).to.include('/productos/');",
+                      "  pm.expect(data.action_url).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.environment.set('product_id', data.id);",
+                      "pm.environment.set('product_slug', data.slug);",
+                      "pm.environment.set('product_public_url', data.public_url);",
+                      "pm.environment.set('product_action_url', data.action_url);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "{{product_name}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "{{product_description}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": "{{product_image_file_path}}"
+                    },
+                    {
+                      "key": "destination_type",
+                      "value": "external_url",
+                      "type": "text"
+                    },
+                    {
+                      "key": "destination_url",
+                      "value": "{{product_external_url}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{product_status}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products"
+                  ]
+                },
+                "description": "Creates a product with an uploaded image and an external store URL. Stores product_id, product_slug, product_public_url, and product_action_url."
+              },
+              "response": []
+            },
+            {
+              "name": "Create WhatsApp Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('WhatsApp product is created', function () { pm.response.to.have.status(201); });",
+                      "const json = pm.response.json();",
+                      "const data = json.data || json;",
+                      "pm.test('Product payload has expected shape', function () {",
+                      "  pm.expect(data.id).to.exist;",
+                      "  pm.expect(data.name).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.image_url).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.public_url).to.include('/productos/');",
+                      "  pm.expect(data.action_url).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.environment.set('product_id', data.id);",
+                      "pm.environment.set('product_slug', data.slug);",
+                      "pm.environment.set('product_public_url', data.public_url);",
+                      "pm.environment.set('product_action_url', data.action_url);",
+                      "pm.test('WhatsApp action URL includes encoded interest message', function () {",
+                      "  pm.expect(data.destination_type).to.eql('whatsapp');",
+                      "  pm.expect(data.action_url).to.match(/^https://wa.me/d+?text=/);",
+                      "  pm.expect(decodeURIComponent(data.action_url)).to.include(data.public_url);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "{{product_name}} WhatsApp {{$timestamp}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "{{product_description}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": "{{product_image_file_path}}"
+                    },
+                    {
+                      "key": "destination_type",
+                      "value": "whatsapp",
+                      "type": "text"
+                    },
+                    {
+                      "key": "country_code",
+                      "value": "{{product_country_code}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone_number",
+                      "value": "{{product_phone_number}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{product_status}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products"
+                  ]
+                },
+                "description": "Creates a WhatsApp product. The generated message is localized from the profile locale and includes the public product page for link previews."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Telegram Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Telegram product is created', function () { pm.response.to.have.status(201); });",
+                      "const json = pm.response.json();",
+                      "const data = json.data || json;",
+                      "pm.test('Product payload has expected shape', function () {",
+                      "  pm.expect(data.id).to.exist;",
+                      "  pm.expect(data.name).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.image_url).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.public_url).to.include('/productos/');",
+                      "  pm.expect(data.action_url).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.environment.set('product_id', data.id);",
+                      "pm.environment.set('product_slug', data.slug);",
+                      "pm.environment.set('product_public_url', data.public_url);",
+                      "pm.environment.set('product_action_url', data.action_url);",
+                      "pm.test('Telegram action URL includes encoded interest message', function () {",
+                      "  pm.expect(data.destination_type).to.eql('telegram');",
+                      "  pm.expect(data.action_url).to.match(/^https://t.me/+d+?text=/);",
+                      "  pm.expect(decodeURIComponent(data.action_url)).to.include(data.public_url);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "{{product_name}} Telegram {{$timestamp}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "{{product_description}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": "{{product_image_file_path}}"
+                    },
+                    {
+                      "key": "destination_type",
+                      "value": "telegram",
+                      "type": "text"
+                    },
+                    {
+                      "key": "country_code",
+                      "value": "{{product_country_code}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone_number",
+                      "value": "{{product_phone_number}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{product_status}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products"
+                  ]
+                },
+                "description": "Creates a Telegram product with a localized message and public product URL."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Product update succeeds', function () { pm.response.to.have.status(200); });",
+                      "const json = pm.response.json();",
+                      "const data = json.data || json;",
+                      "pm.test('Product payload has expected shape', function () {",
+                      "  pm.expect(data.id).to.exist;",
+                      "  pm.expect(data.name).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.image_url).to.be.a('string').and.not.empty;",
+                      "  pm.expect(data.public_url).to.include('/productos/');",
+                      "  pm.expect(data.action_url).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.environment.set('product_id', data.id);",
+                      "pm.environment.set('product_slug', data.slug);",
+                      "pm.environment.set('product_public_url', data.public_url);",
+                      "pm.environment.set('product_action_url', data.action_url);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "{{product_name}} Updated",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "{{product_description}} Updated from Postman.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "destination_type",
+                      "value": "external_url",
+                      "type": "text"
+                    },
+                    {
+                      "key": "destination_url",
+                      "value": "{{product_external_url}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{product_status}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/{{product_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "{{product_id}}"
+                  ]
+                },
+                "description": "Updates product metadata and destination. Image is optional and remains unchanged when omitted."
+              },
+              "response": []
+            },
+            {
+              "name": "Enable Products In Conversations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Product recommendations are enabled', function () { pm.response.to.have.status(200); });",
+                      "const data = pm.response.json().data;",
+                      "pm.expect(data.products_enabled).to.eql(true);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/settings",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "settings"
+                  ]
+                },
+                "description": "Allows published products to be supplied to ServiceAI and attached organically to relevant profile conversations."
+              },
+              "response": []
+            },
+            {
+              "name": "Disable Products In Conversations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Product recommendations are disabled', function () { pm.response.to.have.status(200); });",
+                      "const data = pm.response.json().data;",
+                      "pm.expect(data.products_enabled).to.eql(false);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": false\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/settings",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "settings"
+                  ]
+                },
+                "description": "Keeps products stored but removes them from ServiceAI context and conversation cards."
+              },
+              "response": []
+            },
+            {
+              "name": "Bulk Publish Products",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Bulk publish succeeds', function () { pm.response.to.have.status(200); });",
+                      "pm.expect(pm.response.json().data.updated).to.be.at.least(1);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_ids\": [\n    \"{{product_id}}\"\n  ],\n  \"status\": \"published\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/bulk/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "bulk",
+                    "status"
+                  ]
+                },
+                "description": "Publishes selected product IDs so they are eligible for public pages and enabled conversations."
+              },
+              "response": []
+            },
+            {
+              "name": "Bulk Move Products To Draft",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Bulk draft update succeeds', function () { pm.response.to.have.status(200); });",
+                      "pm.expect(pm.response.json().data.updated).to.be.at.least(1);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_ids\": [\n    \"{{product_id}}\"\n  ],\n  \"status\": \"draft\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/bulk/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "bulk",
+                    "status"
+                  ]
+                },
+                "description": "Moves selected products to draft. Draft products are not public and are excluded from conversations."
+              },
+              "response": []
+            },
+            {
+              "name": "Bulk Set WhatsApp Destination",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Bulk WhatsApp destination succeeds', function () { pm.response.to.have.status(200); });",
+                      "pm.expect(pm.response.json().data.updated).to.be.at.least(1);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_ids\": [\n    \"{{product_id}}\"\n  ],\n  \"destination_type\": \"whatsapp\",\n  \"country_code\": \"{{product_country_code}}\",\n  \"phone_number\": \"{{product_phone_number}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/bulk/destination",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "bulk",
+                    "destination"
+                  ]
+                },
+                "description": "Assigns one WhatsApp number to all selected products."
+              },
+              "response": []
+            },
+            {
+              "name": "Bulk Set Telegram Destination",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Bulk Telegram destination succeeds', function () { pm.response.to.have.status(200); });",
+                      "pm.expect(pm.response.json().data.updated).to.be.at.least(1);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_ids\": [\n    \"{{product_id}}\"\n  ],\n  \"destination_type\": \"telegram\",\n  \"country_code\": \"{{product_country_code}}\",\n  \"phone_number\": \"{{product_phone_number}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/bulk/destination",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "bulk",
+                    "destination"
+                  ]
+                },
+                "description": "Assigns one Telegram number to all selected products."
+              },
+              "response": []
+            },
+            {
+              "name": "Open Public Product Page",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Published public product page is available', function () { pm.response.to.have.status(200); });",
+                      "pm.test('Public page contains Open Graph product metadata', function () {",
+                      "  pm.expect(pm.response.text()).to.include('property=\"og:title\"');",
+                      "  pm.expect(pm.response.text()).to.include('property=\"og:image\"');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/p/{{profile_alias}}/productos/{{product_slug}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "p",
+                    "{{profile_alias}}",
+                    "productos",
+                    "{{product_slug}}"
+                  ]
+                },
+                "description": "Public server-rendered product page used by WhatsApp and Telegram to generate image/name previews."
+              },
+              "response": []
+            },
+            {
+              "name": "Download Product CSV Template",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('CSV template downloads', function () { pm.response.to.have.status(200); });",
+                      "pm.test('Template has required product columns', function () {",
+                      "  const body = pm.response.text();",
+                      "  pm.expect(body.split(/\\r?\\n/)[0]).to.eql('name,description,image,link');",
+                      "  pm.expect(body).to.include('https://example.com/images/cuaderno.jpg');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/imports/template",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "imports",
+                    "template"
+                  ]
+                },
+                "description": "Downloads the minimal CSV template. Only name, description, image, and link are required; imported products default to draft and an external link destination."
+              },
+              "response": []
+            },
+            {
+              "name": "Preview Product CSV Import",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('CSV preview is created', function () { pm.response.to.have.status(201); });",
+                      "const data = pm.response.json().data;",
+                      "pm.test('CSV preview reports valid, invalid, and duplicate rows', function () {",
+                      "  pm.expect(data.rows).to.be.an('array');",
+                      "  pm.expect(data.total_rows).to.eql(data.rows.length);",
+                      "  pm.expect(data.summary.max_products).to.eql(15);",
+                      "});",
+                      "pm.environment.set('product_import_id', data.id);",
+                      "let available = Number(data.summary.available_slots || 0);",
+                      "const duplicateAction = pm.environment.get('product_import_duplicate_action') || 'skip';",
+                      "const decisions = data.rows.map(function (row) {",
+                      "  if (row.status === 'duplicate_existing') return { id: row.id, action: duplicateAction === 'replace' ? 'replace' : 'skip' };",
+                      "  if (row.status === 'valid' && available > 0) { available -= 1; return { id: row.id, action: 'import' }; }",
+                      "  return { id: row.id, action: 'skip' };",
+                      "});",
+                      "pm.environment.set('product_import_decisions', JSON.stringify(decisions));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": "{{product_import_csv_file_path}}"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/imports/preview",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "imports",
+                    "preview"
+                  ]
+                },
+                "description": "Parses a CSV without changing products. Required logical columns are name/nombre, description/descripcion, image/image_url/imagen, and link/url/destination_url. external_id is optional. Exact content or matching non-empty external IDs are reported as duplicates; products sharing only a name remain valid."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product CSV Import Preview",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('CSV preview can be retrieved', function () { pm.response.to.have.status(200); });",
+                      "pm.expect(pm.response.json().data.rows).to.be.an('array');"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/imports/{{product_import_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "imports",
+                    "{{product_import_id}}"
+                  ]
+                },
+                "description": "Retrieves a previously generated CSV preview and its duplicate relationships."
+              },
+              "response": []
+            },
+            {
+              "name": "Apply Product CSV Import Decisions",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('CSV decisions are applied', function () { pm.response.to.have.status(200); });",
+                      "const data = pm.response.json().data;",
+                      "pm.test('Import result reports every action', function () {",
+                      "  pm.expect(data.created).to.be.a('number');",
+                      "  pm.expect(data.replaced).to.be.a('number');",
+                      "  pm.expect(data.skipped).to.be.a('number');",
+                      "  pm.expect(data.product_count).to.be.at.most(15);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rows\": {{product_import_decisions}}\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/imports/{{product_import_id}}/apply",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "imports",
+                    "{{product_import_id}}",
+                    "apply"
+                  ]
+                },
+                "description": "Applies explicit import/replace/skip decisions. Capacity and duplicate uniqueness are revalidated transactionally."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Product deletion succeeds', function () { pm.response.to.have.status(200); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/products/{{product_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "products",
+                    "{{product_id}}"
+                  ]
+                },
+                "description": "Deletes a product and removes its uploaded image from local storage or S3."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Profile Knowledge",
           "item": [
             {
@@ -4537,6 +5523,81 @@
     {
       "key": "tiktok_oauth_state",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_slug",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_public_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_action_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_image_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_name",
+      "value": "Creatina Monohidratada",
+      "type": "string"
+    },
+    {
+      "key": "product_description",
+      "value": "Suplemento para complementar un plan de entrenamiento.",
+      "type": "string"
+    },
+    {
+      "key": "product_external_url",
+      "value": "https://shop.example.com/products/creatina",
+      "type": "string"
+    },
+    {
+      "key": "product_country_code",
+      "value": "57",
+      "type": "string"
+    },
+    {
+      "key": "product_phone_number",
+      "value": "3001234567",
+      "type": "string"
+    },
+    {
+      "key": "product_status",
+      "value": "draft",
+      "type": "string"
+    },
+    {
+      "key": "product_import_csv_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_import_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_import_decisions",
+      "value": "[]",
+      "type": "string"
+    },
+    {
+      "key": "product_import_duplicate_action",
+      "value": "skip",
       "type": "string"
     }
   ]

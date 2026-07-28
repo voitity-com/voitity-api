@@ -37,6 +37,7 @@ class ProfileResponse
             'conversation_messages' => app(ProfileConversationMessageService::class)->resolvedMessages($this->profile),
             'data' => $this->profile->data,
             'networks' => (object) ($this->profile->networks ?? []),
+            'products_enabled' => (bool) $this->profile->products_enabled,
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];

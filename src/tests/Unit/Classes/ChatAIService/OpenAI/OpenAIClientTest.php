@@ -13,6 +13,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\Products\ProfileProductService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
@@ -183,6 +184,74 @@ class OpenAIClientTest extends TestCase
                 && ! str_contains($systemPrompt, 'prior-message-1')
                 && ! str_contains($systemPrompt, 'current-question')
                 && ! str_contains($systemPrompt, 'other-chat-message');
+        });
+    }
+
+    #[Test]
+    public function it_includes_only_enabled_published_products_and_product_response_rules(): void
+    {
+        Http::fake([
+            'https://fake-openai.test/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => ['content' => '{"answer":"La creatina puede complementar tu plan.","media_request":false,"media_action":"none","media_ids":[],"product_request":true,"product_action":"show","product_ids":[1],"constraints":{"include_providers":[],"exclude_providers":[],"include_source_types":[],"exclude_source_types":[],"require_unseen":false}}'],
+                        'finish_reason' => 'stop',
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'locale' => 'es',
+            'products_enabled' => true,
+        ]);
+        $service = app(ProfileProductService::class);
+        $published = $service->create($profile, $user, [
+            'name' => 'Creatina Monohidratada',
+            'description' => 'Suplemento de creatina para complementar el entrenamiento.',
+            'image_url' => 'https://images.example.com/creatine.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/creatine',
+            'status' => 'published',
+        ]);
+        $service->create($profile, $user, [
+            'name' => 'Producto interno',
+            'description' => 'Este borrador no puede recomendarse.',
+            'image_url' => 'https://images.example.com/draft.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/draft',
+            'status' => 'draft',
+        ]);
+        $notebook = $service->create($profile, $user, [
+            'name' => 'Cuaderno universitario',
+            'description' => 'Formato 21 x 29.7 cm, 100 hojas, precio $28.000.',
+            'image_url' => 'https://images.example.com/notebook.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/notebook',
+            'status' => 'published',
+        ]);
+
+        $this->makeClient()->getAnswer($profile, '¿Cuál producto es más grande o más barato?');
+
+        Http::assertSent(function ($request) use ($notebook, $published): bool {
+            $prompt = $request->data()['messages'][0]['content'];
+
+            return str_contains($prompt, 'Published products available for this conversation')
+                && str_contains($prompt, '"id":'.$published->id)
+                && str_contains($prompt, '"name":"Creatina Monohidratada"')
+                && str_contains($prompt, '"id":'.$notebook->id)
+                && str_contains($prompt, 'Formato 21 x 29.7 cm, 100 hojas, precio $28.000.')
+                && ! str_contains($prompt, 'Producto interno')
+                && str_contains($prompt, 'Do not force a sale into unrelated conversation')
+                && str_contains($prompt, '"product_action" as "none" or "show"')
+                && str_contains($prompt, 'infer the comparison from explicit values and specifications')
+                && str_contains($prompt, 'one compact semicolon-separated sentence')
+                && str_contains($prompt, 'Never return a comparison that ends mid-sentence')
+                && str_contains($prompt, 'product answers may use up to 400 characters')
+                && str_contains($prompt, 'attach every directly compared product')
+                && str_contains($prompt, 'Do not invent ingredients, prices, discounts')
+                && str_contains($prompt, 'implied benefits such as improving performance, recovery');
         });
     }
 

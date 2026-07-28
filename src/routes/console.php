@@ -6,9 +6,11 @@ use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Classes\UsdCopRateService\UsdCopRateService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
+use App\Models\ProfileProduct;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Products\ProfileProductImageService;
 use Database\Seeders\LocalTestUserSeeder;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -49,6 +51,31 @@ Artisan::command('mail:test {email} {--queue}', function (string $email): int {
 
     return Command::SUCCESS;
 })->purpose('Send a branded test email through the configured mailer');
+
+Artisan::command('products:refresh-social-images {--force}', function (ProfileProductImageService $images): int {
+    $generated = 0;
+    $skipped = 0;
+
+    ProfileProduct::query()
+        ->whereNotNull('storage_disk')
+        ->whereNotNull('storage_path')
+        ->when(! $this->option('force'), fn ($query) => $query->whereNull('social_storage_path'))
+        ->orderBy('id')
+        ->chunkById(100, function ($products) use (&$generated, &$skipped, $images): void {
+            foreach ($products as $product) {
+                try {
+                    $images->refreshSocialPreview($product) ? $generated++ : $skipped++;
+                } catch (Throwable $exception) {
+                    $skipped++;
+                    $this->warn("Product {$product->id}: {$exception->getMessage()}");
+                }
+            }
+        });
+
+    $this->info("Product social images generated: {$generated}. Skipped: {$skipped}.");
+
+    return Command::SUCCESS;
+})->purpose('Generate JPEG social previews for uploaded product images');
 
 Artisan::command('subscriptions:renew-free', function (SubscriptionRenewalService $renewalService): int {
     $renewed = $renewalService->renewDueFreeSubscriptions();

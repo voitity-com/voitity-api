@@ -8,8 +8,12 @@ RUN apt-get update && apt-get install -y \
     supervisor \
     unzip \
     libzip-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
     zip \
-    && docker-php-ext-install pcntl pdo pdo_pgsql zip
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install gd pcntl pdo pdo_pgsql zip
 
 # Install Composer
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
