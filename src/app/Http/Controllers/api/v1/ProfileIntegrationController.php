@@ -7,6 +7,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\Features\FeatureService;
 use App\Services\Integrations\InstagramIntegrationService;
 use App\Services\Integrations\OnlyFansIntegrationService;
 use App\Services\Integrations\TikTokIntegrationService;
@@ -17,13 +18,15 @@ use Illuminate\Support\Facades\Log;
 
 class ProfileIntegrationController extends Controller
 {
-    public function index(Request $request, Profile $profile): JsonResponse
+    public function index(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
         }
 
+        $enabledProviders = $features->enabledIntegrationProviders($profile);
         $integrations = $profile->integrations()
+            ->whereIn('provider', $enabledProviders)
             ->withCount(['media', 'media as selected_media_count' => fn ($query) => $query->where('selected', true)])
             ->get();
 
@@ -41,9 +44,14 @@ class ProfileIntegrationController extends Controller
     public function instagramConnectUrl(
         Request $request,
         Profile $profile,
-        InstagramIntegrationService $instagram
+        InstagramIntegrationService $instagram,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_INSTAGRAM, $features)) {
             return $response;
         }
 
@@ -107,9 +115,14 @@ class ProfileIntegrationController extends Controller
     public function tiktokConnectUrl(
         Request $request,
         Profile $profile,
-        TikTokIntegrationService $tiktok
+        TikTokIntegrationService $tiktok,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
             return $response;
         }
 
@@ -173,9 +186,14 @@ class ProfileIntegrationController extends Controller
     public function instagramSync(
         Request $request,
         Profile $profile,
-        InstagramIntegrationService $instagram
+        InstagramIntegrationService $instagram,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_INSTAGRAM, $features)) {
             return $response;
         }
 
@@ -212,9 +230,14 @@ class ProfileIntegrationController extends Controller
     public function tiktokSync(
         Request $request,
         Profile $profile,
-        TikTokIntegrationService $tiktok
+        TikTokIntegrationService $tiktok,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
             return $response;
         }
 
@@ -248,9 +271,13 @@ class ProfileIntegrationController extends Controller
         }
     }
 
-    public function instagramMedia(Request $request, Profile $profile): JsonResponse
+    public function instagramMedia(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_INSTAGRAM, $features)) {
             return $response;
         }
 
@@ -287,9 +314,13 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
-    public function tiktokMedia(Request $request, Profile $profile): JsonResponse
+    public function tiktokMedia(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
             return $response;
         }
 
@@ -329,9 +360,14 @@ class ProfileIntegrationController extends Controller
     public function onlyFansConnect(
         Request $request,
         Profile $profile,
-        OnlyFansIntegrationService $onlyFans
+        OnlyFansIntegrationService $onlyFans,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -362,9 +398,13 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
-    public function onlyFansMedia(Request $request, Profile $profile): JsonResponse
+    public function onlyFansMedia(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -402,9 +442,14 @@ class ProfileIntegrationController extends Controller
     public function onlyFansUploadMedia(
         Request $request,
         Profile $profile,
-        OnlyFansIntegrationService $onlyFans
+        OnlyFansIntegrationService $onlyFans,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -448,9 +493,14 @@ class ProfileIntegrationController extends Controller
     public function onlyFansUpdateMediaSelection(
         Request $request,
         Profile $profile,
-        OnlyFansIntegrationService $onlyFans
+        OnlyFansIntegrationService $onlyFans,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -498,9 +548,14 @@ class ProfileIntegrationController extends Controller
         Request $request,
         Profile $profile,
         ProfileIntegrationMedia $media,
-        OnlyFansIntegrationService $onlyFans
+        OnlyFansIntegrationService $onlyFans,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -524,9 +579,14 @@ class ProfileIntegrationController extends Controller
     public function instagramUpdateMediaSelection(
         Request $request,
         Profile $profile,
-        InstagramIntegrationService $instagram
+        InstagramIntegrationService $instagram,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_INSTAGRAM, $features)) {
             return $response;
         }
 
@@ -574,9 +634,14 @@ class ProfileIntegrationController extends Controller
     public function tiktokUpdateMediaSelection(
         Request $request,
         Profile $profile,
-        TikTokIntegrationService $tiktok
+        TikTokIntegrationService $tiktok,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
             return $response;
         }
 
@@ -621,9 +686,13 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
-    public function instagramDisconnect(Request $request, Profile $profile): JsonResponse
+    public function instagramDisconnect(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_INSTAGRAM, $features)) {
             return $response;
         }
 
@@ -637,9 +706,14 @@ class ProfileIntegrationController extends Controller
     public function tiktokDisconnect(
         Request $request,
         Profile $profile,
-        TikTokIntegrationService $tiktok
+        TikTokIntegrationService $tiktok,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
             return $response;
         }
 
@@ -658,9 +732,14 @@ class ProfileIntegrationController extends Controller
     public function onlyFansDisconnect(
         Request $request,
         Profile $profile,
-        OnlyFansIntegrationService $onlyFans
+        OnlyFansIntegrationService $onlyFans,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
             return $response;
         }
 
@@ -688,6 +767,17 @@ class ProfileIntegrationController extends Controller
         }
 
         return null;
+    }
+
+    private function ensureIntegrationEnabled(Profile $profile, string $provider, FeatureService $features): ?JsonResponse
+    {
+        if ($features->isProfileIntegrationEnabled($profile, $provider)) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => ucfirst($provider).' is not enabled for this profile.',
+        ], 403);
     }
 
     private function instagramIntegration(Profile $profile): ?ProfileIntegration

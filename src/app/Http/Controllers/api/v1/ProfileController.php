@@ -17,6 +17,7 @@ use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Features\FeatureService;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -156,7 +157,8 @@ class ProfileController extends Controller
     public function store(
         StoreProfileRequest $request,
         SubscriptionEntitlementService $entitlements,
-        SubscriptionUsageRecorder $usageRecorder
+        SubscriptionUsageRecorder $usageRecorder,
+        FeatureService $features
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -167,11 +169,12 @@ class ProfileController extends Controller
 
             $entitlements->assertCanUse($user, ['profiles' => 1]);
 
-            [$profile] = DB::transaction(function () use ($request, $usageRecorder, $user): array {
+            [$profile] = DB::transaction(function () use ($features, $request, $usageRecorder, $user): array {
                 $profile = $user->profiles()->create(array_merge($request->validated(), [
                     'active' => false,
                     'status' => ProfileStatus::Draft,
                 ]));
+                $features->initializeProfileFeatures($profile, false);
                 $voice = $this->createBaseVoiceForProfile($profile);
 
                 $usageRecorder->record(

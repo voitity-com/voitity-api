@@ -5,9 +5,12 @@ namespace App\Services\Integrations;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\ProfileIntegrationMedia;
+use App\Services\Features\FeatureService;
 
 class ProfileMediaPromptService
 {
+    public function __construct(private readonly FeatureService $features) {}
+
     /**
      * @return array{
      *     wants_media: bool,
@@ -110,7 +113,10 @@ class ProfileMediaPromptService
      */
     public function selectedMediaForPrompt(Profile $profile): array
     {
+        $disabledProviders = $this->features->disabledCatalogIntegrationProviders($profile);
+
         return $profile->integrationMedia()
+            ->when($disabledProviders !== [], fn ($query) => $query->whereNotIn('provider', $disabledProviders))
             ->where('selected', true)
             ->orderByDesc('taken_at')
             ->orderByDesc('id')

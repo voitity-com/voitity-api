@@ -5,10 +5,12 @@ namespace App\Services\Products;
 use App\Enums\ProfileProductStatus;
 use App\Models\Profile;
 use App\Models\ProfileProduct;
+use App\Services\Features\FeatureService;
 
 class ProfileProductPromptService
 {
     public function __construct(
+        private readonly FeatureService $features,
         private readonly ProfileProductImageService $images,
         private readonly ProfileProductLinkService $links
     ) {}
@@ -18,6 +20,10 @@ class ProfileProductPromptService
      */
     public function productsForPrompt(Profile $profile): array
     {
+        if (! $this->features->isProfileFeatureEnabled($profile, FeatureService::PRODUCTS)) {
+            return [];
+        }
+
         if (! $profile->products_enabled) {
             return [];
         }
