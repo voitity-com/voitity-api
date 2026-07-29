@@ -668,6 +668,7 @@ class ProfileControllerTest extends TestAPI
     public function test_user_can_activate_profile_when_required_publication_data_exists()
     {
         $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $this->createActiveSubscriptionFor($user);
         $profile = $this->createPublishableProfile($user);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
@@ -683,6 +684,61 @@ class ProfileControllerTest extends TestAPI
         $profile->refresh();
         $this->assertTrue((bool) $profile->active);
         $this->assertSame(ProfileStatus::Published, $profile->status);
+    }
+
+    public function test_user_can_not_activate_publishable_profile_without_active_subscription(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = $this->createPublishableProfile($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/activate');
+
+        $response->assertStatus(402);
+        $response->assertJsonPath('message', 'Active subscription not found.');
+        $response->assertJsonPath('errors.subscription.0', 'Active subscription not found.');
+        $this->assertFalse((bool) $profile->fresh()->active);
+        $this->assertSame(ProfileStatus::Draft, $profile->fresh()->status);
+    }
+
+    public function test_starter_user_must_deactivate_current_profile_before_activating_another(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $this->createActiveSubscriptionFor($user);
+        $currentProfile = $this->createPublishableProfile($user);
+        $nextProfile = $this->createPublishableProfile($user);
+        $currentProfile->update([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+        $token = $this->getToken($user->email, 'test123');
+
+        $blockedResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$nextProfile->id.'/activate');
+
+        $blockedResponse->assertStatus(409);
+        $blockedResponse->assertJsonPath('message', 'Active profile limit reached.');
+        $blockedResponse->assertJsonPath(
+            'errors.profiles.0',
+            'Deactivate the currently published profile before activating another one.'
+        );
+        $this->assertTrue((bool) $currentProfile->fresh()->active);
+        $this->assertFalse((bool) $nextProfile->fresh()->active);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$currentProfile->id.'/deactivate')
+            ->assertStatus(200);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$nextProfile->id.'/activate')
+            ->assertStatus(200)
+            ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.status', ProfileStatus::Published->value);
+
+        $this->assertFalse((bool) $currentProfile->fresh()->active);
+        $this->assertSame(ProfileStatus::Hidden, $currentProfile->fresh()->status);
+        $this->assertTrue((bool) $nextProfile->fresh()->active);
+        $this->assertSame(ProfileStatus::Published, $nextProfile->fresh()->status);
     }
 
     public function test_user_can_not_activate_profile_with_uploaded_source_that_is_not_approved_and_synced()

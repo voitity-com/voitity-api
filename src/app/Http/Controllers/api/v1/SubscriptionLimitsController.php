@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
+use App\Classes\Subscriptions\SubscriptionProfileAccessService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
+use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Subscription\SubscriptionLimitsResponse;
 use App\Models\Subscription;
@@ -40,7 +42,7 @@ class SubscriptionLimitsController extends Controller
      *                     @OA\Property(property="user_id", type="integer", example=4),
      *                     @OA\Property(property="plan", type="string", example="starter"),
      *                     @OA\Property(property="plan_name", type="string", example="Starter"),
-     *                     @OA\Property(property="price_usd", type="number", format="float", example=8),
+     *                     @OA\Property(property="price_usd", type="number", format="float", example=9.99),
      *                     @OA\Property(property="currency", type="string", example="USD"),
      *                     @OA\Property(property="interval", type="string", example="monthly"),
      *                     @OA\Property(property="status", type="string", example="first"),
@@ -63,7 +65,8 @@ class SubscriptionLimitsController extends Controller
     public function show(
         Request $request,
         SubscriptionRenewalService $renewalService,
-        SubscriptionLimitPeriodService $limitPeriods
+        SubscriptionLimitPeriodService $limitPeriods,
+        SubscriptionProfileAccessService $profileAccess,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -85,8 +88,22 @@ class SubscriptionLimitsController extends Controller
             $subscription = $renewalService->renewIfFree($subscription)->load('limit');
 
             if ($subscription->renews_at->isPast()) {
+                $subscription->status = $subscription->cancel_at_period_end
+                    ? SubscriptionStatus::Cancelled
+                    : SubscriptionStatus::Expired;
                 $subscription->active = false;
                 $subscription->save();
+                $deactivatedProfiles = $profileAccess->deactivateProfilesIfAccessEnded(
+                    $user,
+                    'subscription_expired_during_limits_request',
+                    $subscription->id
+                );
+
+                Log::warning('Expired subscription rejected while retrieving limits.', [
+                    'deactivated_profile_count' => $deactivatedProfiles,
+                    'subscription_id' => $subscription->id,
+                    'user_id' => $user->id,
+                ]);
 
                 return response()->json(['message' => 'Active subscription not found.'], 404);
             }

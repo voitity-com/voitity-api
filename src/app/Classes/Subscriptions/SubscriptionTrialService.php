@@ -2,9 +2,9 @@
 
 namespace App\Classes\Subscriptions;
 
+use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\PaymentSourceCreateResult;
-use App\Classes\PaymentService\PaymentService;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -25,6 +26,7 @@ class SubscriptionTrialService
     public function __construct(
         private readonly SubscriptionPlanCatalog $planCatalog,
         private readonly SubscriptionLimitPeriodService $limitPeriods,
+        private readonly ?SubscriptionProfileAccessService $profileAccess = null,
     ) {}
 
     /**
@@ -35,8 +37,8 @@ class SubscriptionTrialService
         SubscriptionPlan $plan,
         PaymentService $paymentService,
         PaymentSourceCreateRequest $paymentSourceRequest,
-    ): array
-    {
+        CustomerTermsAcceptance $termsAcceptance,
+    ): array {
         $this->ensureTrialCanStart($user, $plan);
 
         $providerSource = $paymentService->createPaymentSource($paymentSourceRequest);
@@ -45,12 +47,18 @@ class SubscriptionTrialService
             throw new RuntimeException('Wompi did not confirm an active reusable payment source.');
         }
 
-        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource): array {
+        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource, $termsAcceptance): array {
             /** @var User $lockedUser */
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->ensureTrialCanStart($lockedUser, $plan);
             $paymentSource = $this->localPaymentSourceFor($lockedUser, $providerSource, $paymentSourceRequest->metadata);
-            $paymentOrder = $this->createTrialSetupOrder($lockedUser, $plan, $paymentSource, $providerSource);
+            $paymentOrder = $this->createTrialSetupOrder(
+                $lockedUser,
+                $plan,
+                $paymentSource,
+                $providerSource,
+                $termsAcceptance,
+            );
 
             return [$paymentSource, $paymentOrder];
         });
@@ -179,6 +187,13 @@ class SubscriptionTrialService
                 $subscription->save();
 
                 $this->dispatchSubscriptionNotification($user, 'subscription_renewal_cancelled', $subscription);
+
+                Log::info('Subscription renewal cancellation scheduled.', [
+                    'plan' => $subscription->plan->value,
+                    'renews_at' => $subscription->renews_at?->toJSON(),
+                    'subscription_id' => $subscription->id,
+                    'user_id' => $user->id,
+                ]);
             }
 
             return $subscription->fresh();
@@ -212,6 +227,13 @@ class SubscriptionTrialService
             $subscription->save();
 
             $this->dispatchSubscriptionNotification($user, 'subscription_renewal_reactivated', $subscription);
+
+            Log::info('Subscription renewal reactivated before service end.', [
+                'plan' => $subscription->plan->value,
+                'renews_at' => $subscription->renews_at?->toJSON(),
+                'subscription_id' => $subscription->id,
+                'user_id' => $user->id,
+            ]);
 
             return $subscription->fresh();
         });
@@ -250,11 +272,25 @@ class SubscriptionTrialService
                         $lockedSubscription->save();
 
                         if ($lockedSubscription->user instanceof User) {
+                            $deactivatedProfiles = $this->profileAccess()
+                                ->deactivateProfilesIfAccessEnded(
+                                    $lockedSubscription->user,
+                                    'cancelled_subscription_period_ended',
+                                    $lockedSubscription->id
+                                );
+
                             $this->dispatchSubscriptionNotification(
                                 $lockedSubscription->user,
                                 'subscription_expired',
                                 $lockedSubscription,
                             );
+
+                            Log::warning('Cancelled subscription reached its service end.', [
+                                'deactivated_profile_count' => $deactivatedProfiles,
+                                'plan' => $lockedSubscription->plan->value,
+                                'subscription_id' => $lockedSubscription->id,
+                                'user_id' => $lockedSubscription->user_id,
+                            ]);
                         }
 
                         $expired++;
@@ -263,6 +299,11 @@ class SubscriptionTrialService
             });
 
         return $expired;
+    }
+
+    private function profileAccess(): SubscriptionProfileAccessService
+    {
+        return $this->profileAccess ?? app(SubscriptionProfileAccessService::class);
     }
 
     public function userCanStartTrial(User $user): bool
@@ -358,6 +399,7 @@ class SubscriptionTrialService
         SubscriptionPlan $plan,
         PaymentSource $paymentSource,
         PaymentSourceCreateResult $providerSource,
+        CustomerTermsAcceptance $termsAcceptance,
     ): PaymentOrder {
         $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
 
@@ -374,6 +416,7 @@ class SubscriptionTrialService
             'plan' => $plan,
             'recurring' => true,
             'billing_reason' => 'trial_setup',
+            ...$termsAcceptance->paymentOrderAttributes($plan, $this->planCatalog),
             'display_amount_usd' => 0,
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $exchangeRate,

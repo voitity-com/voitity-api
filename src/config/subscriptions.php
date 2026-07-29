@@ -2,6 +2,7 @@
 
 return [
     'default_plan' => env('SUBSCRIPTION_DEFAULT_PLAN', 'starter'),
+    'customer_terms_version' => env('SUBSCRIPTION_CUSTOMER_TERMS_VERSION', '2026-07-29'),
 
     'trial' => [
         'enabled' => env('SUBSCRIPTION_FREE_TRIAL_ENABLED', true),
@@ -17,7 +18,7 @@ return [
             'visible' => true,
             'assignable' => true,
             'purchasable' => true,
-            'price_usd' => 8.00,
+            'price_usd' => 9.99,
             'currency' => 'USD',
             'interval' => 'monthly',
             'usage_interval' => 'monthly',
@@ -106,7 +107,7 @@ return [
             'visible' => true,
             'assignable' => true,
             'purchasable' => true,
-            'price_usd' => 80.00,
+            'price_usd' => 99.00,
             'currency' => 'USD',
             'interval' => 'annual',
             'usage_interval' => 'monthly',

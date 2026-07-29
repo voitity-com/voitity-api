@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SubscriptionUsageRecorder
 {
@@ -46,7 +47,10 @@ class SubscriptionUsageRecorder
         ],
     ];
 
-    public function __construct(private readonly ?SubscriptionLimitPeriodService $limitPeriods = null) {}
+    public function __construct(
+        private readonly ?SubscriptionLimitPeriodService $limitPeriods = null,
+        private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+    ) {}
 
     /**
      * @param  array<string, int>  $amounts
@@ -201,11 +205,6 @@ class SubscriptionUsageRecorder
                 return $subscription;
             }
 
-            $subscription->status = SubscriptionStatus::Expired;
-            $subscription->active = false;
-            $subscription->save();
-            $this->notifySubscriptionDeactivated($subscription);
-
             throw new SubscriptionEntitlementException(
                 'Active subscription has expired.',
                 ['subscription' => ['Active subscription has expired.']]
@@ -220,20 +219,54 @@ class SubscriptionUsageRecorder
 
     private function expireDueSubscriptionsFor(int $userId): void
     {
-        Subscription::query()
+        $subscriptions = Subscription::query()
             ->where('user_id', $userId)
             ->where('active', true)
             ->where('renews_at', '<=', now())
+            ->get();
+
+        if ($subscriptions->isEmpty()) {
+            return;
+        }
+
+        Subscription::query()
+            ->whereKey($subscriptions->modelKeys())
             ->update([
                 'status' => SubscriptionStatus::Expired->value,
                 'active' => false,
                 'updated_at' => now(),
             ]);
+
+        $deactivatedProfiles = $this->profileAccess()
+            ->deactivateProfilesIfAccessEnded(
+                $userId,
+                'subscription_expired_during_usage_recording',
+                $subscriptions->first()?->id
+            );
+
+        foreach ($subscriptions as $subscription) {
+            if ($subscription instanceof Subscription) {
+                $subscription->active = false;
+                $subscription->status = SubscriptionStatus::Expired;
+                $this->notifySubscriptionDeactivated($subscription);
+            }
+        }
+
+        Log::warning('Expired subscriptions persisted after usage was rejected.', [
+            'deactivated_profile_count' => $deactivatedProfiles,
+            'subscription_ids' => $subscriptions->modelKeys(),
+            'user_id' => $userId,
+        ]);
     }
 
     private function currentLimitFor(Subscription $subscription): SubscriptionLimit
     {
         return $this->limitPeriods()->syncCurrentPeriod($subscription);
+    }
+
+    private function profileAccess(): SubscriptionProfileAccessService
+    {
+        return $this->profileAccess ?? app(SubscriptionProfileAccessService::class);
     }
 
     /**

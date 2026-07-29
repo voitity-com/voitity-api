@@ -26,6 +26,11 @@ class PaymentOrderResponse
             'plan' => $order->plan->value,
             'recurring' => (bool) $order->recurring,
             'billing_reason' => $order->billing_reason,
+            'customer_terms' => [
+                'version' => $order->customer_terms_version,
+                'accepted_at' => $order->customer_terms_accepted_at?->toJSON(),
+                'accepted_plan_price_usd' => $order->accepted_plan_price_usd,
+            ],
             'amounts' => [
                 'display_amount_usd' => $order->display_amount_usd,
                 'display_currency' => $order->display_currency->value,

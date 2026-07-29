@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\Subscriptions\SubscriptionPlanActivator;
+use App\Classes\Subscriptions\SubscriptionProfileAccessService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -34,6 +35,7 @@ class WompiWebhookController extends Controller
         PaymentService $paymentService,
         SubscriptionPlanActivator $subscriptionPlanActivator,
         SubscriptionTrialService $trialService,
+        SubscriptionProfileAccessService $profileAccess,
     ): JsonResponse {
         $webhook = $paymentService->parseWebhook(
             ['x-event-checksum' => $request->header('X-Event-Checksum')],
@@ -140,7 +142,7 @@ class WompiWebhookController extends Controller
                 $order->billing_reason === 'trial_conversion'
                 && ! in_array($order->status, [PaymentOrderStatus::Pending, PaymentOrderStatus::Approved], true)
             ) {
-                $this->markTrialConversionFailed($order);
+                $this->markTrialConversionFailed($order, $profileAccess);
             }
 
             $paymentEvent->payment_order_id = $order->id;
@@ -216,8 +218,10 @@ class WompiWebhookController extends Controller
         $dispatcher->send($user, 'failed_payment', $data);
     }
 
-    private function markTrialConversionFailed(PaymentOrder $paymentOrder): void
-    {
+    private function markTrialConversionFailed(
+        PaymentOrder $paymentOrder,
+        SubscriptionProfileAccessService $profileAccess
+    ): void {
         /** @var Subscription|null $subscription */
         $subscription = Subscription::query()
             ->where('user_id', $paymentOrder->user_id)
@@ -234,6 +238,11 @@ class WompiWebhookController extends Controller
         $subscription->active = false;
         $subscription->status = SubscriptionStatus::PastDue;
         $subscription->save();
+        $profileAccess->deactivateProfilesIfAccessEnded(
+            $subscription->user_id,
+            'trial_conversion_webhook_failed',
+            $subscription->id
+        );
     }
 
     /**

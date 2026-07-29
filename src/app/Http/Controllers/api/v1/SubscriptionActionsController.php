@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers\api\v1;
 
-use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\Subscriptions\CustomerTermsAcceptance;
 use App\Classes\Subscriptions\SubscriptionPaymentSourceService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Enums\SubscriptionPlan;
@@ -53,6 +54,7 @@ class SubscriptionActionsController extends Controller
                 $plan,
                 $paymentService,
                 $this->paymentSourceCreateRequest($user, $sourceData),
+                new CustomerTermsAcceptance(now()),
             );
 
             return response()->json([
@@ -102,6 +104,7 @@ class SubscriptionActionsController extends Controller
                 $plan,
                 $paymentService,
                 $this->paymentSourceCreateRequest($user, $sourceData),
+                new CustomerTermsAcceptance(now()),
             );
 
             return response()->json([
@@ -191,7 +194,6 @@ class SubscriptionActionsController extends Controller
     }
 
     /**
-     * @param  mixed  $value
      * @return array<string, mixed>
      */
     private function arrayValue(mixed $value): array

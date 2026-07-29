@@ -6,10 +6,10 @@ use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
-use App\Classes\PaymentService\PaymentSourceCreateRequest;
-use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceSetup;
 use App\Classes\PaymentService\PaymentWebhook;
 use App\Classes\Subscriptions\SubscriptionBillingService;
@@ -65,14 +65,14 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertSame('subscriber@example.com', $paymentClient->charges[0]->customerEmail);
         $this->assertSame('3891', $paymentClient->charges[0]->paymentSourceProviderId);
         $this->assertTrue($paymentClient->charges[0]->recurrent);
-        $this->assertSame(3200000, $paymentClient->charges[0]->amountInCents);
+        $this->assertSame(3996000, $paymentClient->charges[0]->amountInCents);
         $this->assertSame('COP', $paymentClient->charges[0]->currency);
 
         $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->status);
         $this->assertSame('subscription_renewal', $paymentOrder->billing_reason);
         $this->assertTrue($paymentOrder->recurring);
         $this->assertSame($paymentSource->id, $paymentOrder->payment_source_id);
-        $this->assertSame(3200000, $paymentOrder->amount_in_cents);
+        $this->assertSame(3996000, $paymentOrder->amount_in_cents);
         $this->assertSame('trx_'.$paymentOrder->reference, $paymentOrder->provider_transaction_id);
         $this->assertNotNull($paymentOrder->subscription_id);
         $this->assertNotNull($paymentOrder->paid_at);
@@ -301,8 +301,8 @@ class SubscriptionBillingServiceTest extends TestCase
             ->where('active', true)
             ->firstOrFail();
 
-        $this->assertSame(32000000, $paymentClient->charges[0]->amountInCents);
-        $this->assertSame(32000000, $paymentOrder->amount_in_cents);
+        $this->assertSame(39600000, $paymentClient->charges[0]->amountInCents);
+        $this->assertSame(39600000, $paymentOrder->amount_in_cents);
         $this->assertSame(SubscriptionPlan::StarterAnnual, $activeSubscription->plan);
         $this->assertTrue($activeSubscription->renews_at->isSameDay(now()->copy()->addYear()));
     }
@@ -417,11 +417,11 @@ class SubscriptionBillingServiceTest extends TestCase
             'plan' => $subscription->plan,
             'recurring' => true,
             'billing_reason' => 'subscription_renewal',
-            'display_amount_usd' => 8,
+            'display_amount_usd' => 9.99,
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => 4000,
-            'amount_cop' => 32000,
-            'amount_in_cents' => 3200000,
+            'amount_cop' => 39960,
+            'amount_in_cents' => 3996000,
             'currency' => PaymentCurrency::Cop,
             'status' => PaymentOrderStatus::Pending,
             'created_at' => now(),

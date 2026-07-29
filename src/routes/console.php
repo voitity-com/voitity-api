@@ -238,7 +238,7 @@ Artisan::command('notifications:service-notice {message}', function (
 })->purpose('Send a service maintenance or degradation notice to users');
 
 Schedule::command('subscriptions:bill-recurring')->hourly();
-Schedule::command('subscriptions:expire-ended')->hourlyAt(5);
+Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10);
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05');
 Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10');
 Schedule::command('notifications:subscription-renewal-reminders')->dailyAt('08:00');

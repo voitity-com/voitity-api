@@ -22,7 +22,8 @@ class SubscriptionBillingService
     public function __construct(
         private readonly PaymentService $paymentService,
         private readonly SubscriptionPlanCatalog $planCatalog,
-        private readonly SubscriptionPlanActivator $subscriptionPlanActivator
+        private readonly SubscriptionPlanActivator $subscriptionPlanActivator,
+        private readonly ?SubscriptionProfileAccessService $profileAccess = null,
     ) {}
 
     /**
@@ -328,7 +329,17 @@ class SubscriptionBillingService
             $subscription->active = false;
             $subscription->status = SubscriptionStatus::PastDue;
             $subscription->save();
+            $this->profileAccess()->deactivateProfilesIfAccessEnded(
+                $subscription->user_id,
+                'trial_conversion_payment_failed',
+                $subscription->id
+            );
         });
+    }
+
+    private function profileAccess(): SubscriptionProfileAccessService
+    {
+        return $this->profileAccess ?? app(SubscriptionProfileAccessService::class);
     }
 
     /**
