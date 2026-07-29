@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\ProfilePublication\ProfileActivationService;
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
@@ -534,7 +535,8 @@ class ProfileController extends Controller
     public function activate(
         Request $request,
         Profile $profile,
-        ProfilePublicationReadinessService $readiness
+        ProfilePublicationReadinessService $readiness,
+        ProfileActivationService $activation,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -564,10 +566,7 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            $profile->forceFill([
-                'active' => true,
-                'status' => ProfileStatus::Published,
-            ])->save();
+            $profile = $activation->activate($user, $profile);
 
             $this->loadProfileResponseRelations($profile);
 
@@ -581,6 +580,11 @@ class ProfileController extends Controller
                 'message' => 'Profile activated successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
             ], 200);
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             Log::error('Error activating profile.', [
                 'profile_id' => $profile->id ?? null,

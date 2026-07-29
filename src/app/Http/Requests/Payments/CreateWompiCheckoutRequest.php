@@ -20,6 +20,7 @@ class CreateWompiCheckoutRequest extends FormRequest
     {
         return [
             'plan' => ['required', Rule::enum(SubscriptionPlan::class)],
+            'terms_accepted' => ['required', 'accepted'],
         ];
     }
 }

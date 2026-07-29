@@ -35,6 +35,7 @@ class SubscriptionPaymentSourceService
         SubscriptionPlan $plan,
         PaymentService $paymentService,
         PaymentSourceCreateRequest $paymentSourceRequest,
+        CustomerTermsAcceptance $termsAcceptance,
     ): array {
         $this->ensureSubscriptionCanStart($user, $plan);
 
@@ -44,12 +45,12 @@ class SubscriptionPaymentSourceService
             throw new RuntimeException('Wompi did not confirm an active reusable payment source.');
         }
 
-        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource): array {
+        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource, $termsAcceptance): array {
             /** @var User $lockedUser */
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->ensureSubscriptionCanStart($lockedUser, $plan);
             $paymentSource = $this->localPaymentSourceFor($lockedUser, $providerSource, $paymentSourceRequest->metadata);
-            $paymentOrder = $this->createInitialOrder($lockedUser, $plan, $paymentSource);
+            $paymentOrder = $this->createInitialOrder($lockedUser, $plan, $paymentSource, $termsAcceptance);
 
             return [$paymentSource, $paymentOrder];
         });
@@ -151,8 +152,12 @@ class SubscriptionPaymentSourceService
         return $paymentSource;
     }
 
-    private function createInitialOrder(User $user, SubscriptionPlan $plan, PaymentSource $paymentSource): PaymentOrder
-    {
+    private function createInitialOrder(
+        User $user,
+        SubscriptionPlan $plan,
+        PaymentSource $paymentSource,
+        CustomerTermsAcceptance $termsAcceptance,
+    ): PaymentOrder {
         $amounts = $this->amountsForPlan($plan);
 
         /** @var PaymentOrder $paymentOrder */
@@ -164,6 +169,7 @@ class SubscriptionPaymentSourceService
             'plan' => $plan,
             'recurring' => true,
             'billing_reason' => 'subscription_initial',
+            ...$termsAcceptance->paymentOrderAttributes($plan, $this->planCatalog),
             'display_amount_usd' => $amounts['display_amount_usd'],
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $amounts['exchange_rate'],

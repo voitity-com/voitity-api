@@ -15,7 +15,9 @@ This README covers the local Docker workflow for running the API, database, migr
 `docker-compose.yml` defines:
 
 - `app`: Laravel API container, exposed on `http://localhost:8000`
-- `db`: PostgreSQL with pgVector, exposed on `localhost:5432`
+- `queue`: persistent Laravel database queue worker
+- `scheduler`: persistent Laravel scheduler that runs due commands
+- `db`: PostgreSQL with pgVector, exposed on `localhost:5433`
 - `pgdata`: named volume for PostgreSQL data
 - `vendor`: named volume mounted at `/var/www/html/vendor` so Composer dependencies are not hidden by the `./src` bind mount
 
@@ -38,6 +40,8 @@ docker compose ps
 Expected services:
 
 - `voitity-laravel-app`
+- `voitity-laravel-queue`
+- `voitity-laravel-scheduler`
 - `voitity-pgvector-db`
 
 ## Environment
@@ -150,6 +154,31 @@ Run any Artisan command:
 ```sh
 docker compose exec app php artisan <command>
 ```
+
+Inspect background process logs:
+
+```sh
+docker compose logs -f queue scheduler
+```
+
+Production must run exactly one scheduler process and at least one queue worker. The scheduler executes subscription expiration every minute, while the queue worker processes AI, voice, usage-tracking, contact, and recurring-billing jobs.
+
+Use the same immutable application image for these three production process types:
+
+```sh
+# Web
+php artisan serve --host=0.0.0.0 --port=8000 --no-reload
+
+# Worker
+php artisan queue:work --sleep=3 --tries=3 --timeout=300 --max-time=3600
+
+# Scheduler, exactly one replica
+php artisan schedule:work
+```
+
+All three processes must receive the same application release and environment, including `APP_KEY`, database credentials, `QUEUE_CONNECTION=database`, and `CACHE_STORE=database`. Run `php artisan migrate --force` once per release before serving traffic. Recreate the worker and scheduler containers on each release so long-lived processes load the new code; the worker also exits after one hour as a fallback and relies on the process manager restart policy.
+
+Do not reuse the local Compose database credentials or source bind mounts in production. Production orchestration must keep the worker stop grace period above the 300-second job timeout and must not enable `RUN_QUEUE_WORKER` on the web process when a dedicated worker is running.
 
 Install Composer packages:
 

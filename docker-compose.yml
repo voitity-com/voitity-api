@@ -23,6 +23,63 @@ services:
       - DB_PASSWORD=voitity
       - RUN_QUEUE_WORKER=${RUN_QUEUE_WORKER:-false}
 
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: voitity-laravel-app
+    container_name: voitity-laravel-queue
+    restart: unless-stopped
+    stop_grace_period: 6m
+    working_dir: /var/www/html
+    command:
+      - php
+      - artisan
+      - queue:work
+      - --sleep=3
+      - --tries=3
+      - --timeout=300
+      - --max-time=3600
+    volumes:
+      - ./src:/var/www/html
+      - vendor:/var/www/html/vendor
+    depends_on:
+      - db
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=voitity
+      - DB_USERNAME=voitity
+      - DB_PASSWORD=voitity
+      - RUN_QUEUE_WORKER=false
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: voitity-laravel-app
+    container_name: voitity-laravel-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command:
+      - php
+      - artisan
+      - schedule:work
+    volumes:
+      - ./src:/var/www/html
+      - vendor:/var/www/html/vendor
+    depends_on:
+      - db
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=voitity
+      - DB_USERNAME=voitity
+      - DB_PASSWORD=voitity
+      - RUN_QUEUE_WORKER=false
+
   db:
     image: ankane/pgvector
     container_name: voitity-pgvector-db

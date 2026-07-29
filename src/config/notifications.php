@@ -398,13 +398,13 @@ return [
                 'en' => [
                     'subject' => 'Your Bigmelo subscription ended',
                     'title' => 'Subscription ended',
-                    'body' => 'Your :plan subscription ended. You can start a new checkout from billing.',
+                    'body' => 'Your :plan subscription ended and your published profiles were deactivated. You can start a new checkout from billing.',
                     'action' => 'Open billing',
                 ],
                 'es' => [
                     'subject' => 'Tu suscripción de Bigmelo terminó',
                     'title' => 'Suscripción finalizada',
-                    'body' => 'Tu suscripción :plan terminó. Puedes iniciar un nuevo checkout desde facturación.',
+                    'body' => 'Tu suscripción :plan terminó y tus perfiles publicados fueron desactivados. Puedes iniciar un nuevo checkout desde facturación.',
                     'action' => 'Abrir facturación',
                 ],
             ],

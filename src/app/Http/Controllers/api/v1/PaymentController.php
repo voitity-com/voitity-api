@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\Subscriptions\CustomerTermsAcceptance;
 use App\Classes\Subscriptions\SubscriptionPlanCatalog;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
@@ -63,6 +64,7 @@ class PaymentController extends Controller
         $amountCop = round($amountInCents / 100, 2);
         $reference = $this->uniqueReference($user->id);
         $expiresAt = now()->addMinutes(max(1, (int) config('payment.checkout_expires_in_minutes', 60)));
+        $termsAcceptance = new CustomerTermsAcceptance(now());
 
         $paymentOrder = PaymentOrder::create([
             'user_id' => $user->id,
@@ -71,6 +73,7 @@ class PaymentController extends Controller
             'plan' => $plan,
             'recurring' => true,
             'billing_reason' => 'subscription_initial',
+            ...$termsAcceptance->paymentOrderAttributes($plan, $planCatalog),
             'display_amount_usd' => $displayAmountUsd,
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $exchangeRate,

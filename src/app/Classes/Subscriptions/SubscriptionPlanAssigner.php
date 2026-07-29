@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class SubscriptionPlanAssigner
 {
-    public function __construct(private readonly ?SubscriptionLimitPeriodService $limitPeriods = null) {}
+    public function __construct(
+        private readonly ?SubscriptionLimitPeriodService $limitPeriods = null,
+        private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -50,6 +53,7 @@ class SubscriptionPlanAssigner
             ], $attributes));
 
             $this->limitPeriods()->createInitialLimit($subscription);
+            $this->profileAccess()->enforceActiveProfileLimit($subscription);
 
             return $subscription;
         });
@@ -68,5 +72,10 @@ class SubscriptionPlanAssigner
     private function limitPeriods(): SubscriptionLimitPeriodService
     {
         return $this->limitPeriods ?? app(SubscriptionLimitPeriodService::class);
+    }
+
+    private function profileAccess(): SubscriptionProfileAccessService
+    {
+        return $this->profileAccess ?? app(SubscriptionProfileAccessService::class);
     }
 }

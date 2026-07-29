@@ -125,13 +125,16 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Successful email sign up",
+                        "description": "Successful email sign up. User must verify email before signing in.",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "access_token": {
+                                        "message": {
                                             "type": "string"
+                                        },
+                                        "email_verification_required": {
+                                            "type": "boolean"
                                         },
                                         "user": {
                                             "properties": {
@@ -1276,6 +1279,7 @@
                             "schema": {
                                 "required": [
                                     "name",
+                                    "alias",
                                     "description",
                                     "genre",
                                     "personality"
@@ -1289,8 +1293,7 @@
                                     "alias": {
                                         "type": "string",
                                         "maxLength": 100,
-                                        "example": "JD",
-                                        "nullable": true
+                                        "example": "JD"
                                     },
                                     "description": {
                                         "type": "string",
@@ -1685,8 +1688,7 @@
                                     "alias": {
                                         "type": "string",
                                         "maxLength": 100,
-                                        "example": "JD",
-                                        "nullable": true
+                                        "example": "JD"
                                     },
                                     "description": {
                                         "type": "string",
@@ -1969,7 +1971,7 @@
                                                         "price_usd": {
                                                             "type": "number",
                                                             "format": "float",
-                                                            "example": 8
+                                                            "example": 9.99
                                                         },
                                                         "currency": {
                                                             "type": "string",
@@ -2051,6 +2053,27 @@
                     {
                         "sanctum": [
                             "subscription-plans:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/payments/usd-cop-rate": {
+            "get": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get the current USD to COP exchange rate",
+                "operationId": "ec05bec7b7e71872cb4fe111887a3767",
+                "responses": {
+                    "200": {
+                        "description": "USD to COP exchange rate retrieved successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
                         ]
                     }
                 ]

@@ -1361,7 +1361,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"{{payment_plan}}\"\n}"
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"terms_accepted\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/subscription/trial",
@@ -1458,7 +1458,7 @@
                 "cancel"
               ]
             },
-            "description": "Cancels automatic renewal for an active paid recurring subscription. Access stays active until renews_at. Requires token ability: payments:create."
+            "description": "Cancels automatic renewal for an active paid recurring subscription. Access and published profiles stay active until renews_at; when the paid period ends, published profiles are deactivated. Requires token ability: payments:create."
           },
           "response": []
         },
@@ -1555,7 +1555,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"{{payment_plan}}\"\n}"
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"terms_accepted\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/payments/wompi/checkout",
@@ -1602,7 +1602,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"admin\"\n}"
+              "raw": "{\n  \"plan\": \"admin\",\n  \"terms_accepted\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/payments/wompi/checkout",
@@ -2137,7 +2137,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"profession_key\": \"{{profile_profession_key}}\",\n  \"active\": true,\n  \"status\": \"{{profile_status}}\"\n}"
+              "raw": "{\n  \"name\": \"{{profile_name}} Updated\",\n  \"alias\": \"{{profile_alias}} Updated\",\n  \"description\": \"Updated local API testing profile.\",\n  \"genre\": \"{{profile_genre}}\",\n  \"personality\": \"helpful\",\n  \"profession_key\": \"{{profile_profession_key}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/profile/{{profile_id}}",
@@ -2150,7 +2150,7 @@
                 "{{profile_id}}"
               ]
             },
-            "description": "Updates the profile identified by profile_id. Valid status values: draft, ready, published, hidden."
+            "description": "Updates editable profile fields. Publication fields active and status are prohibited; use the activate and deactivate endpoints instead."
           },
           "response": []
         },
@@ -2176,7 +2176,7 @@
                 "activate"
               ]
             },
-            "description": "Activates and publishes a profile when publication requirements are met: required general fields, avatar, cloned voice, and at least one approved and synced source. Requires token ability: profile:write."
+            "description": "Activates and publishes a profile when publication requirements are met and the owner has a current subscription with an available active-profile slot. Returns 402 when there is no active subscription and 409 when the plan active-profile limit is reached. Requires token ability: profile:write."
           },
           "response": []
         },

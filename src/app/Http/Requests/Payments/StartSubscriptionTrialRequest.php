@@ -20,6 +20,7 @@ class StartSubscriptionTrialRequest extends FormRequest
     {
         return [
             'plan' => ['required', Rule::enum(SubscriptionPlan::class)],
+            'terms_accepted' => ['required', 'accepted'],
             'payment_source' => ['required', 'array'],
             'payment_source.type' => ['required', 'string', Rule::in(['CARD', 'NEQUI'])],
             'payment_source.token' => ['required', 'string', 'max:255'],

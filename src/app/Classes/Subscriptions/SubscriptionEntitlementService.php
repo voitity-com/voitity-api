@@ -8,6 +8,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
+use Illuminate\Support\Facades\Log;
 
 class SubscriptionEntitlementService
 {
@@ -26,7 +27,8 @@ class SubscriptionEntitlementService
     public function __construct(
         private readonly SubscriptionPlanCatalog $planCatalog,
         private readonly SubscriptionRenewalService $renewalService,
-        private readonly SubscriptionLimitPeriodService $limitPeriods
+        private readonly SubscriptionLimitPeriodService $limitPeriods,
+        private readonly SubscriptionProfileAccessService $profileAccess,
     ) {}
 
     /**
@@ -34,20 +36,7 @@ class SubscriptionEntitlementService
      */
     public function assertCanUse(User|int $user, array $amounts): Subscription
     {
-        $userId = $user instanceof User ? $user->id : $user;
-        $subscription = $this->activeSubscriptionFor((int) $userId);
-        $subscription = $this->renewalService->renewIfFree($subscription);
-
-        if ($subscription->renews_at->isPast()) {
-            $subscription->active = false;
-            $subscription->save();
-            $this->notifySubscriptionDeactivated($subscription);
-
-            throw new SubscriptionEntitlementException(
-                'Active subscription has expired.',
-                ['subscription' => ['Active subscription has expired.']]
-            );
-        }
+        $subscription = $this->assertHasActiveSubscription($user);
 
         if ($this->planCatalog->isUnlimited($subscription->plan)) {
             return $subscription;
@@ -69,6 +58,51 @@ class SubscriptionEntitlementService
             $this->notifyLimitReached($subscription, $errors);
 
             throw new SubscriptionEntitlementException('Subscription limit exceeded.', $errors);
+        }
+
+        return $subscription;
+    }
+
+    public function assertHasActiveSubscription(User|int $user): Subscription
+    {
+        $userId = $user instanceof User ? $user->id : $user;
+
+        try {
+            $subscription = $this->activeSubscriptionFor((int) $userId);
+        } catch (SubscriptionEntitlementException $exception) {
+            $this->profileAccess->deactivateProfilesIfAccessEnded(
+                (int) $userId,
+                'active_subscription_not_found'
+            );
+
+            throw $exception;
+        }
+
+        $subscription = $this->renewalService->renewIfFree($subscription);
+
+        if ($subscription->renews_at->isPast()) {
+            $subscription->status = $subscription->cancel_at_period_end
+                ? \App\Enums\SubscriptionStatus::Cancelled
+                : \App\Enums\SubscriptionStatus::Expired;
+            $subscription->active = false;
+            $subscription->save();
+            $this->profileAccess->deactivateProfilesIfAccessEnded(
+                (int) $userId,
+                'subscription_expired_during_entitlement_check',
+                $subscription->id
+            );
+            $this->notifySubscriptionDeactivated($subscription);
+
+            Log::warning('Expired subscription rejected during entitlement check.', [
+                'plan' => $subscription->plan->value,
+                'subscription_id' => $subscription->id,
+                'user_id' => $userId,
+            ]);
+
+            throw new SubscriptionEntitlementException(
+                'Active subscription has expired.',
+                ['subscription' => ['Active subscription has expired.']]
+            );
         }
 
         return $subscription;
