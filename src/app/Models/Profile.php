@@ -106,6 +106,11 @@ class Profile extends Model
         return $this->hasMany(ProfileFact::class);
     }
 
+    public function featureSettings(): HasMany
+    {
+        return $this->hasMany(ProfileFeatureSetting::class);
+    }
+
     public function products(): HasMany
     {
         return $this->hasMany(ProfileProduct::class);

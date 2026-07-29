@@ -16,12 +16,14 @@ use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileFeatureSetting;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Features\FeatureService;
 use App\Services\Products\ProfileProductService;
 use Illuminate\Support\Facades\Event;
 use Mockery;
@@ -202,6 +204,65 @@ class AnswerBuilderTest extends TestCase
             'type' => 'answer',
             'text' => 'La Proteína Whey puede complementar tu recuperación junto con una alimentación adecuada.',
         ]);
+    }
+
+    public function test_get_answer_does_not_attach_products_when_profile_feature_is_disabled(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'products_enabled' => true,
+            'locale' => 'es',
+        ]);
+        ProfileFeatureSetting::query()->create([
+            'profile_id' => $profile->id,
+            'feature_key' => FeatureService::PRODUCTS,
+            'enabled' => false,
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Proteína Whey',
+            'description' => 'Proteína para complementar la recuperación deportiva.',
+            'image_url' => 'https://images.example.com/protein.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/protein',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame el producto recomendado.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $answer = 'Puedo darte una recomendación general sin adjuntar productos.';
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => $answer,
+                    'media_request' => false,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'product_request' => true,
+                    'product_action' => 'show',
+                    'product_ids' => [$product->id],
+                    'constraints' => [],
+                ], JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+
+        $response = (new AnswerBuilder($chatAiClient, Mockery::mock(VoiceManager::class)))
+            ->getAnswer($profile->fresh(), $question)
+            ->toArray();
+
+        $this->assertSame([], $response['products']);
+        $this->assertSame([], $response['data']['products']);
+        $this->assertSame($answer, $response['text']);
     }
 
     public function test_product_answer_can_use_up_to_four_hundred_characters(): void
@@ -452,6 +513,81 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame('Newer note', $response['media'][0]['observation']);
         $this->assertSame('instagram', $response['media'][0]['provider_key']);
         $this->assertSame('Instagram', $response['media'][0]['provider_label']);
+    }
+
+    public function test_get_answer_does_not_attach_instagram_media_when_profile_feature_is_disabled(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        ProfileFeatureSetting::query()->create([
+            'profile_id' => $profile->id,
+            'feature_key' => FeatureService::INTEGRATIONS_INSTAGRAM,
+            'enabled' => false,
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame una foto de Instagram',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'newer',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/newer.jpg',
+            'permalink' => 'https://www.instagram.com/p/newer/',
+            'caption' => 'Newer',
+            'observation' => 'Newer note',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'Te comparto esta foto.',
+                    'media_request' => true,
+                    'media_action' => 'show',
+                    'media_ids' => [$media->id],
+                    'constraints' => [
+                        'include_providers' => [ProfileIntegration::PROVIDER_INSTAGRAM],
+                    ],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile->fresh(), $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+        $this->assertSame([], $response['data']['media']);
+        $this->assertSame('profile_media_rules', $response['source']);
+        $this->assertStringContainsString('No tengo fotos disponibles en Instagram', $response['text']);
     }
 
     public function test_get_answer_uses_instagram_media_fallback_when_model_has_no_answer(): void

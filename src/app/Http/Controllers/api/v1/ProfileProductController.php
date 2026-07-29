@@ -13,6 +13,7 @@ use App\Http\Responses\Products\ProfileProductResponse;
 use App\Models\Profile;
 use App\Models\ProfileProduct;
 use App\Models\User;
+use App\Services\Features\FeatureService;
 use App\Services\Products\ProfileProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,9 +21,17 @@ use InvalidArgumentException;
 
 class ProfileProductController extends Controller
 {
-    public function index(Request $request, Profile $profile, ProfileProductService $service): JsonResponse
-    {
+    public function index(
+        Request $request,
+        Profile $profile,
+        ProfileProductService $service,
+        FeatureService $features
+    ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -71,9 +80,14 @@ class ProfileProductController extends Controller
     public function store(
         StoreProfileProductRequest $request,
         Profile $profile,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -93,9 +107,14 @@ class ProfileProductController extends Controller
         UpdateProfileProductRequest $request,
         Profile $profile,
         ProfileProduct $product,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProduct($request, $profile, $product)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -115,9 +134,14 @@ class ProfileProductController extends Controller
         Request $request,
         Profile $profile,
         ProfileProduct $product,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProduct($request, $profile, $product)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -129,9 +153,14 @@ class ProfileProductController extends Controller
     public function settings(
         UpdateProfileProductsSettingRequest $request,
         Profile $profile,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -146,9 +175,14 @@ class ProfileProductController extends Controller
     public function bulkStatus(
         BulkProfileProductStatusRequest $request,
         Profile $profile,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -167,9 +201,14 @@ class ProfileProductController extends Controller
     public function bulkDestination(
         BulkProfileProductDestinationRequest $request,
         Profile $profile,
-        ProfileProductService $service
+        ProfileProductService $service,
+        FeatureService $features
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureProductsEnabled($profile, $features)) {
             return $response;
         }
 
@@ -200,6 +239,15 @@ class ProfileProductController extends Controller
         }
 
         return null;
+    }
+
+    private function ensureProductsEnabled(Profile $profile, FeatureService $features): ?JsonResponse
+    {
+        if ($features->isProfileFeatureEnabled($profile, FeatureService::PRODUCTS)) {
+            return null;
+        }
+
+        return response()->json(['message' => 'Products are not enabled for this profile.'], 403);
     }
 
     private function authorizeProfile(Request $request, Profile $profile): ?JsonResponse

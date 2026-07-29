@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
-use App\Enums\ProfileStatus;
 use App\Enums\ProfileSourceStatus;
+use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
@@ -16,6 +16,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Features\FeatureService;
 use Illuminate\Support\Facades\Hash;
 
 class ProfileControllerTest extends TestAPI
@@ -97,6 +98,24 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.voice_id', $baseVoice->id);
         $response->assertJsonPath('data.publication.can_activate', false);
         $response->assertJsonPath('data.publication.is_published', false);
+        $settings = collect($response->json('data.feature_settings'))->keyBy('key');
+
+        foreach ([
+            FeatureService::PRODUCTS,
+            FeatureService::INTEGRATIONS_INSTAGRAM,
+            FeatureService::INTEGRATIONS_TIKTOK,
+            FeatureService::INTEGRATIONS_ONLYFANS,
+        ] as $featureKey) {
+            $this->assertTrue($settings->has($featureKey));
+            $this->assertTrue($settings[$featureKey]['available']);
+            $this->assertFalse($settings[$featureKey]['enabled']);
+            $this->assertFalse($settings[$featureKey]['effective']);
+            $this->assertDatabaseHas('profile_feature_settings', [
+                'profile_id' => $new_profile->id,
+                'feature_key' => $featureKey,
+                'enabled' => false,
+            ]);
+        }
         $this->assertDatabaseHas('subscription_uses', [
             'user_id' => $new_profile->user_id,
             'profile_id' => $new_profile->id,
