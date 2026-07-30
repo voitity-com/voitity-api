@@ -34,7 +34,7 @@ class VideoAIService
             $ratio
         );
 
-        if (!$result->id) {
+        if (! $result->id) {
             throw new RuntimeException('Video AI image generation did not return a source id.');
         }
 
@@ -78,6 +78,7 @@ class VideoAIService
     public function setVideoAIClient(VideoAIClient $videoAIClient): self
     {
         $this->videoAIClient = $videoAIClient;
+
         return $this;
     }
 

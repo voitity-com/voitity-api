@@ -3,8 +3,8 @@
 namespace Tests\Unit\Classes\PaymentService;
 
 use App\Classes\PaymentService\PaymentRequest;
-use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
+use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\Wompi\WompiPaymentClient;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;

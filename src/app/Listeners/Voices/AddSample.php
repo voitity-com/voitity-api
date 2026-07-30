@@ -36,9 +36,6 @@ class AddSample implements ShouldQueue
 
     /**
      * Handle the event.
-     *
-     * @param VoiceSampleAdded $event
-     * @return void
      */
     public function handle(VoiceSampleAdded $event): void
     {
@@ -52,9 +49,10 @@ class AddSample implements ShouldQueue
                 'user_id' => $voice->user_id,
                 'voice_sample_id' => $voiceSample->id,
             ]);
+
             return;
         }
-        
+
         Log::info('AddSample listener triggered', [
             'voice_id' => $voice->id,
             'voice_name' => $voice->name,
@@ -67,17 +65,17 @@ class AddSample implements ShouldQueue
         try {
             // Create VoiceService instance - it will resolve the VoiceClient from VoiceManager
             $voiceService = new VoiceService($voice);
-            
+
             // Add the voice sample to the voice
             $success = $voiceService->addSample($voiceSample);
-            
+
             Log::info('Voice sample addition successful', [
                 'voice_id' => $voice->id,
                 'voice_sample_id' => $voiceSample->id,
                 'success' => $success,
                 'file' => $voiceSample->file,
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('Voice sample addition failed during processing', [
                 'voice_id' => $voice->id,
@@ -86,11 +84,11 @@ class AddSample implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             // Re-throw to trigger the failed method
             throw $e;
         }
-        
+
         Log::info('AddSample processing completed', [
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,
@@ -99,16 +97,12 @@ class AddSample implements ShouldQueue
 
     /**
      * Handle a job failure.
-     *
-     * @param VoiceSampleAdded $event
-     * @param \Throwable $exception
-     * @return void
      */
     public function failed(VoiceSampleAdded $event, \Throwable $exception): void
     {
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
-        
+
         Log::error('AddSample listener failed', [
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,
@@ -125,7 +119,7 @@ class AddSample implements ShouldQueue
         // - Send notification to user about the failure
         // - Store detailed error information for debugging
         // - Consider retry logic based on error type
-        
+
         // Example implementation could be:
         // $voiceService = new VoiceService($voice);
         // $voiceService->markSampleAdditionAsFailed($voiceSample, $exception->getMessage());

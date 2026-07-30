@@ -94,7 +94,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription.user_id', $user->id);
         $response->assertJsonPath('data.subscription.plan', 'starter');
         $response->assertJsonPath('data.subscription.plan_name', 'Starter');
-        $response->assertJsonPath('data.subscription.price_usd', 9.99);
+        $response->assertJsonPath('data.subscription.price_usd', 12.99);
         $response->assertJsonPath('data.subscription.currency', 'USD');
         $response->assertJsonPath('data.subscription.interval', 'monthly');
         $response->assertJsonPath('data.subscription.status', 'first');
@@ -108,7 +108,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.avatar_video_seconds.included', 5);
         $response->assertJsonPath('data.limits.avatar_video_seconds.remaining', 3);
         $response->assertJsonPath('data.limits.avatar_video_seconds.used', 2);
-        $response->assertJsonPath('data.limits.tts_characters.included', 10000);
+        $response->assertJsonPath('data.limits.tts_characters.included', 20000);
         $response->assertJsonPath('data.limits.tts_characters.remaining', 9000);
         $response->assertJsonPath('data.limits.tts_characters.used', 1000);
         $response->assertJsonPath('data.usage.totals.credits', 50);

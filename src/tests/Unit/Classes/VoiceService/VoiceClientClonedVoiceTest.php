@@ -32,7 +32,7 @@ class VoiceClientClonedVoiceTest extends TestCase
         $response = ['quality' => 'high', 'duration' => '10s'];
         $requestUrl = 'https://api.elevenlabs.io/v1/voice-generation/create-voice';
 
-                // Act
+        // Act
         $clonedVoice = new VoiceClientClonedVoice($source, $providerVoiceId, $status, $response, $requestUrl);
 
         // Assert
@@ -211,7 +211,7 @@ class VoiceClientClonedVoiceTest extends TestCase
         $providerVoiceId = 'provider-voice-456';
         $status = 'completed';
         $response = ['quality' => 'high'];
-        
+
         $clonedVoice = new VoiceClientClonedVoice(
             $source,
             $providerVoiceId,
@@ -256,7 +256,7 @@ class VoiceClientClonedVoiceTest extends TestCase
     {
         // Test different source providers
         $sources = ['elevenlabs', 'aws-polly', 'google-cloud', 'azure'];
-        
+
         foreach ($sources as $source) {
             $clonedVoice = new VoiceClientClonedVoice($source);
             $this->assertEquals($source, $clonedVoice->source);
@@ -273,10 +273,10 @@ class VoiceClientClonedVoiceTest extends TestCase
             'sample_rate' => 48000,
             'nested' => [
                 'key1' => 'value1',
-                'key2' => ['nested_array']
-            ]
+                'key2' => ['nested_array'],
+            ],
         ];
-        
+
         $clonedVoice = new VoiceClientClonedVoice('elevenlabs', 'test-id', 'completed', $complexResponse);
 
         // Act

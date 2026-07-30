@@ -16,7 +16,9 @@ use Tests\TestCase;
 class VideoAIManagerTest extends TestCase
 {
     private VideoAIManager $videoAIManager;
+
     private MockInterface $mockConfig;
+
     private MockInterface $mockContainer;
 
     protected function setUp(): void

@@ -16,6 +16,7 @@ class VoiceSampleFileManager
     const VOICE_SAMPLES_FOLDER = 'files/samples';
 
     private string $fileName;
+
     private int $fileDuration;
 
     /**
@@ -33,19 +34,16 @@ class VoiceSampleFileManager
     }
 
     /**
-     * Process the uploaded voice sample file. 
+     * Process the uploaded voice sample file.
      * Store the file and extract duration.
-     *
-     * @param UploadedFile $file
-     * @return boolean
      */
     public function processSampleFile(UploadedFile $file): bool
     {
         try {
             // Generate unique filename
             $extension = $file->getClientOriginalExtension();
-            $this->fileName = Str::uuid() . '.' . $extension;
-            
+            $this->fileName = Str::uuid().'.'.$extension;
+
             // Store file
             $path = Storage::putFileAs(
                 self::VOICE_SAMPLES_FOLDER,
@@ -53,7 +51,7 @@ class VoiceSampleFileManager
                 $this->fileName
             );
 
-            if (!$path) {
+            if (! $path) {
                 return false;
             }
 
@@ -74,18 +72,14 @@ class VoiceSampleFileManager
 
     /**
      * Get the name of the processed audio file.
-     *
-     * @return string
      */
     public function getFileName(): string
     {
-        return self::VOICE_SAMPLES_FOLDER . '/' . $this->fileName;
+        return self::VOICE_SAMPLES_FOLDER.'/'.$this->fileName;
     }
 
     /**
      * Get the duration of the processed audio file.
-     *
-     * @return integer
      */
     public function getFileDuration(): int
     {

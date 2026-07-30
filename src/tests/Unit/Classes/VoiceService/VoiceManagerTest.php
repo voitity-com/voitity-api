@@ -2,9 +2,9 @@
 
 namespace Tests\Unit\Classes\VoiceService;
 
-use App\Classes\VoiceService\VoiceManager;
-use App\Classes\VoiceService\VoiceClient;
 use App\Classes\VoiceService\ElevenLabs\ElevenLabsVoiceClient;
+use App\Classes\VoiceService\VoiceClient;
+use App\Classes\VoiceService\VoiceManager;
 use Illuminate\Config\Repository as Config;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
@@ -16,14 +16,16 @@ use Tests\TestCase;
 class VoiceManagerTest extends TestCase
 {
     private VoiceManager $voiceManager;
+
     private MockInterface $mockConfig;
+
     /** @var MockInterface&Container */
     private MockInterface $mockContainer;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->mockConfig = Mockery::mock(Config::class);
         $this->mockContainer = Mockery::mock(Container::class);
 
@@ -35,7 +37,7 @@ class VoiceManagerTest extends TestCase
         $this->voiceManager = new VoiceManager($this->mockContainer);
     }
 
-    public function tearDown(): void
+    protected function tearDown(): void
     {
         Mockery::close();
         parent::tearDown();
@@ -111,7 +113,7 @@ class VoiceManagerTest extends TestCase
         $this->mockConfig->shouldReceive('get')
             ->with('voice.default', 'elevenlabs')
             ->andReturn('elevenlabs');
-        
+
         $this->mockConfig->shouldReceive('get')
             ->with('voice.drivers.elevenlabs', [])
             ->andReturn([]);
@@ -153,12 +155,12 @@ class VoiceManagerTest extends TestCase
     {
         // Arrange
         $mockVoiceClient = Mockery::mock(VoiceClient::class);
-        $customCallable = function() use ($mockVoiceClient) {
+        $customCallable = function () use ($mockVoiceClient) {
             return $mockVoiceClient;
         };
-        
+
         $config = [
-            'via' => $customCallable
+            'via' => $customCallable,
         ];
 
         $this->mockContainer->shouldReceive('call')
@@ -184,7 +186,7 @@ class VoiceManagerTest extends TestCase
     {
         // Arrange
         $config = [
-            'some_other_key' => 'value'
+            'some_other_key' => 'value',
         ];
 
         // Use reflection to call the protected method
@@ -195,7 +197,7 @@ class VoiceManagerTest extends TestCase
         // Act & Assert
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Custom voice driver must specify a "via" callable.');
-        
+
         $method->invoke($this->voiceManager, $config);
     }
 
@@ -213,7 +215,7 @@ class VoiceManagerTest extends TestCase
         // Act & Assert
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Custom voice driver must specify a "via" callable.');
-        
+
         $method->invoke($this->voiceManager, $config);
     }
 
@@ -223,7 +225,7 @@ class VoiceManagerTest extends TestCase
         // Arrange
         $mockVoiceClient = Mockery::mock(VoiceClient::class);
         $config = [
-            'via' => 'SomeCustomVoiceClientClass'
+            'via' => 'SomeCustomVoiceClientClass',
         ];
 
         $this->mockContainer->shouldReceive('call')

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionEntitlementService
 {
+    private const CREDIT_PRECISION = 6;
+
     /**
      * @var array<string, string>
      */
@@ -22,6 +24,8 @@ class SubscriptionEntitlementService
         'voice_clones' => 'voice_clones_remaining',
         'tts_characters' => 'tts_characters_remaining',
         'chat_messages' => 'chat_messages_remaining',
+        'incoming_audio_messages' => 'incoming_audio_messages_remaining',
+        'incoming_audio_seconds' => 'incoming_audio_seconds_remaining',
     ];
 
     public function __construct(
@@ -195,7 +199,7 @@ class SubscriptionEntitlementService
             $creditsUsed += $amount * ($credits / $units);
         }
 
-        return round($creditsUsed, 2);
+        return round($creditsUsed, self::CREDIT_PRECISION);
     }
 
     /**
@@ -239,7 +243,7 @@ class SubscriptionEntitlementService
             'profiles' => 'profile_limit_reached',
             'avatar_images', 'avatar_video_seconds' => 'avatar_limit_reached',
             'voice_clones', 'tts_characters' => 'voice_limit_reached',
-            'chat_messages' => 'message_or_chat_limit_reached',
+            'chat_messages', 'incoming_audio_messages', 'incoming_audio_seconds' => 'message_or_chat_limit_reached',
             default => null,
         };
     }

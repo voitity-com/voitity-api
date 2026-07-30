@@ -124,20 +124,16 @@ class AnswerBuilderTest extends TestCase
 
         $this->assertSame('https://cdn.example.com/audio/answer.mp3', $response['audio_url']);
         $this->assertSame('Doing great!', $response['text']);
-        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $question) {
-            return $event->usageType === SubscriptionUsageType::ChatOpenAiCall
-                && $event->userId === $profile->user_id
-                && $event->profileId === $profile->id
-                && $event->sourceId === (string) $question->id
-                && $event->amounts === ['chat_messages' => 1];
-        });
-        Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $voice) {
-            return $event->usageType === SubscriptionUsageType::VoiceTtsCharacters
-                && $event->userId === $profile->user_id
-                && $event->profileId === $profile->id
-                && $event->sourceId === (string) $voice->id
-                && $event->amounts === ['tts_characters' => strlen('Doing great!')];
-        });
+        $this->assertDatabaseHas('subscription_uses', [
+            'profile_id' => $profile->id,
+            'source_id' => (string) $voice->id,
+            'usage_type' => SubscriptionUsageType::VoiceTtsCharacters->value,
+            'tts_characters_used' => strlen('Doing great!'),
+            'status' => 'finalized',
+        ]);
+        $this->assertDatabaseMissing('subscription_uses', [
+            'usage_type' => SubscriptionUsageType::ChatOpenAiCall->value,
+        ]);
     }
 
     public function test_get_answer_attaches_only_requested_available_products(): void
@@ -378,12 +374,10 @@ class AnswerBuilderTest extends TestCase
             $builder->getAnswer($profile, $question);
         } finally {
             $this->assertSame(0, Message::where('chat_id', $chat->id)->where('type', 'answer')->count());
-            Event::assertDispatched(SubscriptionUsageRequested::class, function (SubscriptionUsageRequested $event) use ($profile, $question) {
-                return $event->usageType === SubscriptionUsageType::ChatOpenAiCall
-                    && $event->userId === $profile->user_id
-                    && $event->profileId === $profile->id
-                    && $event->sourceId === (string) $question->id;
-            });
+            $this->assertDatabaseMissing('subscription_uses', [
+                'profile_id' => $profile->id,
+                'usage_type' => SubscriptionUsageType::ChatOpenAiCall->value,
+            ]);
         }
     }
 
@@ -2228,7 +2222,7 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame('No tengo contenido coincidente disponible en OnlyFans por ahora.', $response['text']);
     }
 
-    public function test_get_answer_limits_stored_and_returned_answer_to_200_characters(): void
+    public function test_get_answer_limits_stored_and_returned_answer_to_400_characters(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);
 
@@ -2274,7 +2268,7 @@ class AnswerBuilderTest extends TestCase
             ->latest('id')
             ->first();
 
-        $this->assertLessThanOrEqual(200, mb_strlen($response['text']));
+        $this->assertLessThanOrEqual(400, mb_strlen($response['text']));
         $this->assertSame($response['text'], $storedAnswer?->text);
         $this->assertStringEndsWith('...', $response['text']);
     }
@@ -2357,7 +2351,7 @@ class AnswerBuilderTest extends TestCase
             'avatar_images_remaining' => 1,
             'avatar_video_seconds_remaining' => 5,
             'voice_clones_remaining' => 1,
-            'tts_characters_remaining' => 10000,
+            'tts_characters_remaining' => 20000,
             'chat_messages_remaining' => 1000,
             'credits_remaining' => 1000,
         ]);

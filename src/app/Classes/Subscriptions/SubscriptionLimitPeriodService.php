@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class SubscriptionLimitPeriodService
 {
+    private const CREDIT_PRECISION = 6;
+
     private const UNLIMITED_INTEGER = 2147483647;
 
     private const UNLIMITED_CREDITS = 99999999.99;
@@ -24,6 +26,8 @@ class SubscriptionLimitPeriodService
         'voice_clones' => 'voice_clones_remaining',
         'tts_characters' => 'tts_characters_remaining',
         'chat_messages' => 'chat_messages_remaining',
+        'incoming_audio_messages' => 'incoming_audio_messages_remaining',
+        'incoming_audio_seconds' => 'incoming_audio_seconds_remaining',
     ];
 
     public function createInitialLimit(Subscription $subscription): SubscriptionLimit
@@ -101,14 +105,15 @@ class SubscriptionLimitPeriodService
     private function limitAttributes(Subscription $subscription, Carbon $periodStartedAt): array
     {
         $planConfig = config("subscriptions.plans.{$subscription->plan->value}", []);
-        $limits = $planConfig['limits'] ?? [];
+        $usageConfig = $this->usageConfig($subscription, $planConfig);
+        $limits = $usageConfig['limits'] ?? [];
         $unlimited = (bool) ($planConfig['unlimited'] ?? false);
         $columns = [
             'subscription_id' => $subscription->id,
             'user_id' => $subscription->user_id,
             'period_started_at' => $periodStartedAt,
             'period_renews_at' => $this->periodEnd($subscription, $periodStartedAt),
-            'credits_remaining' => $this->creditTotal($planConfig, $unlimited),
+            'credits_remaining' => $this->creditTotal($usageConfig, $unlimited),
         ];
 
         foreach (self::METRIC_COLUMNS as $metric => $column) {
@@ -161,7 +166,7 @@ class SubscriptionLimitPeriodService
             return self::UNLIMITED_CREDITS;
         }
 
-        return round(max(0, (float) ($total ?? 0)), 2);
+        return round(max(0, (float) ($total ?? 0)), self::CREDIT_PRECISION);
     }
 
     private function limitValue(mixed $value, bool $unlimited): int
@@ -171,5 +176,21 @@ class SubscriptionLimitPeriodService
         }
 
         return max(0, (int) ($value ?? 0));
+    }
+
+    /**
+     * @param  array<string, mixed>  $planConfig
+     * @return array<string, mixed>
+     */
+    private function usageConfig(Subscription $subscription, array $planConfig): array
+    {
+        if ($subscription->status === \App\Enums\SubscriptionStatus::Trialing) {
+            return array_replace_recursive($planConfig, [
+                'limits' => config('subscriptions.trial.limits', []),
+                'credits' => config('subscriptions.trial.credits', []),
+            ]);
+        }
+
+        return $planConfig;
     }
 }

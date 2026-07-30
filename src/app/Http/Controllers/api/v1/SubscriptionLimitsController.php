@@ -42,7 +42,7 @@ class SubscriptionLimitsController extends Controller
      *                     @OA\Property(property="user_id", type="integer", example=4),
      *                     @OA\Property(property="plan", type="string", example="starter"),
      *                     @OA\Property(property="plan_name", type="string", example="Starter"),
-     *                     @OA\Property(property="price_usd", type="number", format="float", example=9.99),
+     *                     @OA\Property(property="price_usd", type="number", format="float", example=12.99),
      *                     @OA\Property(property="currency", type="string", example="USD"),
      *                     @OA\Property(property="interval", type="string", example="monthly"),
      *                     @OA\Property(property="status", type="string", example="first"),
@@ -143,6 +143,8 @@ class SubscriptionLimitsController extends Controller
             'voice_clones' => (int) $usageBreakdown->sum('voice_clones_used'),
             'tts_characters' => (int) $usageBreakdown->sum('tts_characters_used'),
             'chat_messages' => (int) $usageBreakdown->sum('chat_messages_used'),
+            'incoming_audio_messages' => (int) $usageBreakdown->sum('incoming_audio_messages_used'),
+            'incoming_audio_seconds' => (int) $usageBreakdown->sum('incoming_audio_seconds_used'),
         ];
     }
 
@@ -158,7 +160,10 @@ class SubscriptionLimitsController extends Controller
             ->selectRaw('SUM(voice_clones_used) as voice_clones_used')
             ->selectRaw('SUM(tts_characters_used) as tts_characters_used')
             ->selectRaw('SUM(chat_messages_used) as chat_messages_used')
+            ->selectRaw('SUM(incoming_audio_messages_used) as incoming_audio_messages_used')
+            ->selectRaw('SUM(incoming_audio_seconds_used) as incoming_audio_seconds_used')
             ->selectRaw('MAX(used_at) as last_used_at')
+            ->where('status', '!=', \App\Models\SubscriptionUse::STATUS_RELEASED)
             ->where('used_at', '>=', $limit->period_started_at)
             ->where('used_at', '<', $limit->period_renews_at)
             ->groupBy('usage_type')

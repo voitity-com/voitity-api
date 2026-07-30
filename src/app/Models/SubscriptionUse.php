@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SubscriptionUse extends Model
 {
+    public const STATUS_RESERVED = 'reserved';
+
+    public const STATUS_FINALIZED = 'finalized';
+
+    public const STATUS_RELEASED = 'released';
+
     protected $table = 'subscription_uses';
 
     protected $fillable = [
@@ -24,15 +30,24 @@ class SubscriptionUse extends Model
         'voice_clones_used',
         'tts_characters_used',
         'chat_messages_used',
+        'incoming_audio_messages_used',
+        'incoming_audio_seconds_used',
         'credits_used',
+        'status',
         'metadata',
         'used_at',
+        'reserved_at',
+        'finalized_at',
+        'released_at',
     ];
 
     protected $casts = [
         'usage_type' => SubscriptionUsageType::class,
         'metadata' => 'array',
         'used_at' => 'datetime',
+        'reserved_at' => 'datetime',
+        'finalized_at' => 'datetime',
+        'released_at' => 'datetime',
         'credits_used' => 'float',
     ];
 

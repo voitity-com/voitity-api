@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\Models;
 
-use App\Models\Profile;
-use App\Models\User;
 use App\Models\AiImage;
 use App\Models\AiVideo;
+use App\Models\Profile;
+use App\Models\User;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;

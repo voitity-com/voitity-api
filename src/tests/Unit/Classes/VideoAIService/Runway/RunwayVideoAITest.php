@@ -2,9 +2,9 @@
 
 namespace Tests\Unit\Classes\VideoAIService\Runway;
 
-use App\Classes\VideoAIService\Runway\RunwayVideoAI;
 use App\Classes\VideoAIService\AiImage;
 use App\Classes\VideoAIService\AiVideo;
+use App\Classes\VideoAIService\Runway\RunwayVideoAI;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;

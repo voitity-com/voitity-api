@@ -108,12 +108,12 @@ class ProfileControllerTest extends TestAPI
         ] as $featureKey) {
             $this->assertTrue($settings->has($featureKey));
             $this->assertTrue($settings[$featureKey]['available']);
-            $this->assertFalse($settings[$featureKey]['enabled']);
-            $this->assertFalse($settings[$featureKey]['effective']);
+            $this->assertTrue($settings[$featureKey]['enabled']);
+            $this->assertTrue($settings[$featureKey]['effective']);
             $this->assertDatabaseHas('profile_feature_settings', [
                 'profile_id' => $new_profile->id,
                 'feature_key' => $featureKey,
-                'enabled' => false,
+                'enabled' => true,
             ]);
         }
         $this->assertDatabaseHas('subscription_uses', [

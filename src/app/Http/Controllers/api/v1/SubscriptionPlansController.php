@@ -34,4 +34,23 @@ class SubscriptionPlansController extends Controller
             ))->toArray(),
         ]);
     }
+
+    /**
+     * @OA\Get(
+     *     path="/api/subscription/public-plans",
+     *     summary="Get public plan prices, limits, credits, and capabilities",
+     *     tags={"Subscription"},
+     *
+     *     @OA\Response(response=200, description="Public subscription plans retrieved successfully")
+     * )
+     */
+    public function publicIndex(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Public subscription plans retrieved successfully.',
+            'data' => (new SubscriptionPlansResponse(
+                config('subscriptions.plans', []),
+            ))->toArray(),
+        ]);
+    }
 }

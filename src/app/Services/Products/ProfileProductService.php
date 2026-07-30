@@ -2,6 +2,7 @@
 
 namespace App\Services\Products;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Enums\ProfileProductDestinationType;
 use App\Enums\ProfileProductStatus;
 use App\Models\Profile;
@@ -16,7 +17,10 @@ use InvalidArgumentException;
 
 class ProfileProductService
 {
-    public function __construct(private readonly ProfileProductImageService $images) {}
+    public function __construct(
+        private readonly ProfileProductImageService $images,
+        private readonly SubscriptionPlanCapabilityService $capabilities,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -283,15 +287,17 @@ class ProfileProductService
         ];
     }
 
-    public function maxProducts(): int
+    public function maxProducts(Profile $profile): int
     {
-        return max(1, (int) config('products.max_products', 15));
+        return $this->capabilities->productsPerProfile($profile);
     }
 
     private function assertCapacity(Profile $profile): void
     {
-        if ($profile->products()->count() >= $this->maxProducts()) {
-            throw new InvalidArgumentException("A profile can have up to {$this->maxProducts()} products.");
+        $limit = $this->maxProducts($profile);
+
+        if ($profile->products()->count() >= $limit) {
+            throw new InvalidArgumentException("A profile can have up to {$limit} products.");
         }
     }
 

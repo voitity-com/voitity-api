@@ -16,6 +16,7 @@ use App\Http\Controllers\api\v1\ProfileConversationMessageController;
 use App\Http\Controllers\api\v1\ProfileFeatureController;
 use App\Http\Controllers\api\v1\ProfileIntegrationController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
+use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
@@ -35,6 +36,7 @@ Route::get('health', function () {
 
 Route::post('/contact-submissions', [ContactSubmissionController::class, 'store'])
     ->middleware('throttle:contact-submissions');
+Route::get('/subscription/public-plans', [SubscriptionPlansController::class, 'publicIndex']);
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
@@ -131,8 +133,9 @@ Route::prefix('/profile')->group(function () {
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/chats', [ProfileChatController::class, 'listChats'])->middleware(['auth:sanctum', 'abilities:chat:read']);
-    Route::post('/{profile}/messages/audio', [MessageController::class, 'storeAudio'])->middleware(['auth:sanctum', 'abilities:messages:write']);
-    Route::post('/{profile}/messages', [MessageController::class, 'store'])->middleware(['auth:sanctum', 'abilities:messages:write']);
+    Route::get('/{profile}/messaging-capabilities', [ProfileMessagingCapabilitiesController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/messages/audio', [MessageController::class, 'storeAudio'])->middleware(['auth:sanctum', 'abilities:messages:write', 'throttle:profile-messages']);
+    Route::post('/{profile}/messages', [MessageController::class, 'store'])->middleware(['auth:sanctum', 'abilities:messages:write', 'throttle:profile-messages']);
 });
 
 Route::prefix('/voice')->group(function () {

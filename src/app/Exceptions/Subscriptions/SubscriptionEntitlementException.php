@@ -29,4 +29,25 @@ class SubscriptionEntitlementException extends RuntimeException
     {
         return $this->statusCode;
     }
+
+    public function errorCode(): string
+    {
+        if (isset($this->errors['incoming_audio_messages']) || isset($this->errors['incoming_audio_seconds'])) {
+            return 'AUDIO_MESSAGE_LIMIT_REACHED';
+        }
+
+        if (isset($this->errors['chat_messages'])) {
+            return 'CHAT_MESSAGE_LIMIT_REACHED';
+        }
+
+        if (isset($this->errors['tts_characters'])) {
+            return 'TTS_CHARACTER_LIMIT_REACHED';
+        }
+
+        if (isset($this->errors['subscription'])) {
+            return 'SUBSCRIPTION_INACTIVE';
+        }
+
+        return 'SUBSCRIPTION_LIMIT_REACHED';
+    }
 }

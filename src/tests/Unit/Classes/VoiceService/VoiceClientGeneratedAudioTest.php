@@ -10,20 +10,23 @@ use Tests\TestCase;
 class VoiceClientGeneratedAudioTest extends TestCase
 {
     private Voice $voice;
+
     private string $sampleText;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->voice = new class extends Voice {
-            public function __construct() {
+
+        $this->voice = new class extends Voice
+        {
+            public function __construct()
+            {
                 $this->id = 1;
                 $this->name = 'Test Voice';
                 $this->source_voice_id = 'test-voice-123';
             }
         };
-        
+
         $this->sampleText = 'Hello, this is a test audio generation.';
     }
 
@@ -488,7 +491,7 @@ class VoiceClientGeneratedAudioTest extends TestCase
         $duration = 18.3;
         $status = 'completed';
         $metadata = ['quality' => 'high', 'bitrate' => '256kbps'];
-        
+
         $generatedAudio = new VoiceClientGeneratedAudio(
             $this->voice,
             $this->sampleText,
@@ -513,7 +516,7 @@ class VoiceClientGeneratedAudioTest extends TestCase
             'status' => $status,
             'metadata' => $metadata,
         ];
-        
+
         $this->assertEquals($expected, $result);
     }
 
@@ -536,7 +539,7 @@ class VoiceClientGeneratedAudioTest extends TestCase
             'status' => 'pending',
             'metadata' => [],
         ];
-        
+
         $this->assertEquals($expected, $result);
     }
 

@@ -11,7 +11,7 @@ class VoiceTestResponseTest extends TestCase
 {
     public function test_to_array_returns_generated_audio_payload(): void
     {
-        $voice = new Voice();
+        $voice = new Voice;
         $voice->setRawAttributes([
             'id' => 10,
             'profile_id' => 20,

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a3f09815-0f6f-4f8a-9ab3-2a79890d15c1",
     "name": "Voitity API",
-    "description": "Postman collection for the local Docker Voitity API.",
+    "description": "Postman collection for the local Docker Voitity API. Starter is USD 12.99 monthly or USD 129 annually, with monthly usage periods, 1,000 visitor messages, 500 incoming audios of up to 30 seconds, and 20,000 TTS characters.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -1180,6 +1180,34 @@
       "name": "Subscription",
       "item": [
         {
+          "name": "Get Public Subscription Plans",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/public-plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "public-plans"
+              ]
+            },
+            "description": "Public catalog used by the website. Returns USD 12.99 monthly and USD 129 annual Starter prices plus monthly limits, credits, product capacity, social links, and Instagram/TikTok/OnlyFans selection limits. No authentication is required."
+          },
+          "response": []
+        },
+        {
           "name": "Get Subscription Plans",
           "event": [
             {
@@ -1220,7 +1248,7 @@
                 "plans"
               ]
             },
-            "description": "Lists only active visible subscription plans, purchasable status, display currency, processing currency, and the USD/COP exchange rate. The admin plan is hidden here because it is only assignable by an admin. Requires token ability: subscription-plans:read."
+            "description": "Lists active visible plans with current prices, monthly usage limits, capabilities, purchasable status, currencies, and USD/COP exchange rate. Starter is USD 12.99 monthly or USD 129 annually. The admin plan remains hidden. Requires subscription-plans:read."
           },
           "response": []
         },
@@ -1245,7 +1273,7 @@
                 "limits"
               ]
             },
-            "description": "Gets the active subscription for the authenticated user, remaining limits including credits, total usage, and usage grouped by usage_type. Requires token ability: subscription-limits:read."
+            "description": "Gets the active subscription, current monthly period, remaining limits, and finalized/reserved usage grouped by usage_type. Includes incoming_audio_messages and incoming_audio_seconds. Released reservations are excluded. Requires subscription-limits:read."
           },
           "response": [
             {
@@ -1280,7 +1308,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 15,\n      \"user_id\": 7,\n      \"plan\": \"starter_annual\",\n      \"plan_name\": \"Starter Annual\",\n      \"unlimited\": false,\n      \"price_usd\": 80,\n      \"currency\": \"USD\",\n      \"interval\": \"annual\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"recurring\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2027-07-09T00:00:00.000000Z\",\n      \"next_billing_at\": \"2027-07-09T00:00:00.000000Z\"\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": 1000,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 500\n      },\n      \"profiles\": {\n        \"included\": 1,\n        \"remaining\": 0,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"avatar_images\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": 5,\n        \"remaining\": 5,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": 10000,\n        \"remaining\": 10000,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": 1000,\n        \"remaining\": 999,\n        \"unlimited\": false,\n        \"used\": 1\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 500,\n        \"profiles\": 1,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 1\n      },\n      \"by_type\": [\n        {\n          \"usage_type\": \"profile_created\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 0,\n            \"profiles\": 1,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:20:00.000000Z\"\n        },\n        {\n          \"usage_type\": \"chat_message\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 500,\n            \"profiles\": 0,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 1\n          },\n          \"last_used_at\": \"2026-07-09T13:35:00.000000Z\"\n        }\n      ]\n    }\n  }\n}"
+              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 15,\n      \"user_id\": 7,\n      \"plan\": \"starter_annual\",\n      \"plan_name\": \"Starter\",\n      \"unlimited\": false,\n      \"price_usd\": 129,\n      \"currency\": \"USD\",\n      \"interval\": \"annual\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"recurring\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2027-07-09T00:00:00.000000Z\",\n      \"next_billing_at\": \"2027-07-09T00:00:00.000000Z\"\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": 1000,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 500\n      },\n      \"profiles\": {\n        \"included\": 1,\n        \"remaining\": 0,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"avatar_images\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": 5,\n        \"remaining\": 5,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": 20000,\n        \"remaining\": 20000,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": 1000,\n        \"remaining\": 999,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"incoming_audio_messages\": {\n        \"included\": 500,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"incoming_audio_seconds\": {\n        \"included\": 15000,\n        \"remaining\": 15000,\n        \"unlimited\": false,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 500,\n        \"profiles\": 1,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 1,\n        \"incoming_audio_messages\": 0,\n        \"incoming_audio_seconds\": 0\n      },\n      \"by_type\": [\n        {\n          \"usage_type\": \"profile_created\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 0,\n            \"profiles\": 1,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 0,\n            \"incoming_audio_messages\": 0,\n            \"incoming_audio_seconds\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:20:00.000000Z\"\n        },\n        {\n          \"usage_type\": \"chat_message_received\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 500,\n            \"profiles\": 0,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 1,\n            \"incoming_audio_messages\": 0,\n            \"incoming_audio_seconds\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:35:00.000000Z\"\n        }\n      ]\n    }\n  }\n}"
             },
             {
               "name": "Admin Unlimited",
@@ -1314,7 +1342,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 1,\n      \"user_id\": 1,\n      \"plan\": \"admin\",\n      \"plan_name\": \"Admin\",\n      \"unlimited\": true,\n      \"price_usd\": 0,\n      \"currency\": \"USD\",\n      \"interval\": \"monthly\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"free\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2026-08-09T00:00:00.000000Z\",\n      \"next_billing_at\": null\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"profiles\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_images\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 0,\n        \"profiles\": 0,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 0\n      },\n      \"by_type\": []\n    }\n  }\n}"
+              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 1,\n      \"user_id\": 1,\n      \"plan\": \"admin\",\n      \"plan_name\": \"Admin\",\n      \"unlimited\": true,\n      \"price_usd\": 0,\n      \"currency\": \"USD\",\n      \"interval\": \"monthly\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"free\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2026-08-09T00:00:00.000000Z\",\n      \"next_billing_at\": null\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"profiles\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_images\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"incoming_audio_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"incoming_audio_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 0,\n        \"profiles\": 0,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 0,\n        \"incoming_audio_messages\": 0,\n        \"incoming_audio_seconds\": 0\n      },\n      \"by_type\": []\n    }\n  }\n}"
             }
           ]
         },
@@ -4663,6 +4691,32 @@
           "response": []
         },
         {
+          "name": "Get Profile Messaging Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/messaging-capabilities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "messaging-capabilities"
+              ]
+            },
+            "description": "Returns whether visitor text and audio controls should be enabled, the 30-second audio maximum, and a stable reason when messaging is unavailable. Requires profile:read; API/admin users may inspect any profile."
+          },
+          "response": []
+        },
+        {
           "name": "Send Message - New Chat",
           "event": [
             {
@@ -4708,7 +4762,7 @@
                 "messages"
               ]
             },
-            "description": "Creates a new chat for the profile when chat_id is omitted."
+            "description": "Creates a new chat for the profile when chat_id is omitted. The API atomically reserves one monthly visitor-message unit before persistence. A 402 response includes a stable code and messaging_capabilities."
           },
           "response": [
             {
@@ -4802,7 +4856,7 @@
                 "messages"
               ]
             },
-            "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id. Chat answers are limited to 200 characters and can include a media array when the profile attaches a selected integration photo."
+            "description": "Sends a message to an existing chat. Run 'Send Message - New Chat' first to populate chat_id. Chat answers are limited to 400 characters and can include a media array when the profile attaches a selected integration photo. The API atomically reserves one monthly visitor-message unit before persistence. A 402 response includes a stable code and messaging_capabilities."
           },
           "response": []
         },
@@ -4852,7 +4906,7 @@
                 "messages"
               ]
             },
-            "description": "Exercises AI-inferred media constraints for selected integration media. The AI returns provider/source constraints, and the backend validates attached media against those constraints. If the profile only has excluded photos, the response should not include media and should say no matching photo is available. If other providers exist, the backend can attach one of those instead."
+            "description": "Exercises AI-inferred media constraints for selected integration media. The AI returns provider/source constraints, and the backend validates attached media against those constraints. If the profile only has excluded photos, the response should not include media and should say no matching photo is available. If other providers exist, the backend can attach one of those instead. The API atomically reserves one monthly visitor-message unit before persistence. A 402 response includes a stable code and messaging_capabilities."
           },
           "response": [
             {
@@ -4992,7 +5046,7 @@
                 "audio"
               ]
             },
-            "description": "Uploads an audio recording, transcribes it, creates a new chat when chat_id is omitted, and sends the transcribed text as a message. Requires messages:write. The response includes request_text and request_audio_url for the stored user audio message. Set message_audio_file_path to a local audio file such as webm, mp3, wav, m4a, ogg, or flac. Browser recordings in WebM/MP4 containers are accepted."
+            "description": "Uploads an audio recording of up to 30 seconds and 10 MB. Before Whisper, the API atomically reserves one visitor message, one incoming audio, and its measured duration. The response includes request_text, request_audio_url, and messaging_capabilities. If TTS is exhausted, the answer remains available as text. Stable 402/422 codes describe quota and duration failures. Requires messages:write. A new chat is created when chat_id is omitted."
           },
           "response": []
         },
@@ -5050,7 +5104,7 @@
                 "audio"
               ]
             },
-            "description": "Uploads an audio recording to an existing chat, transcribes it, stores the audio URL on the message, and sends the transcribed text. The response includes request_text and request_audio_url for the stored user audio message. Browser recordings in WebM/MP4 containers are accepted. Run 'Send Message - New Chat' or 'Send Audio Message - New Chat' first to populate chat_id."
+            "description": "Uploads an audio recording of up to 30 seconds and 10 MB. Before Whisper, the API atomically reserves one visitor message, one incoming audio, and its measured duration. The response includes request_text, request_audio_url, and messaging_capabilities. If TTS is exhausted, the answer remains available as text. Stable 402/422 codes describe quota and duration failures. Requires messages:write. Provide chat_id for an existing chat."
           },
           "response": []
         }

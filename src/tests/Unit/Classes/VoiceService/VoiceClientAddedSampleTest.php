@@ -158,7 +158,7 @@ class VoiceClientAddedSampleTest extends TestCase
         $status = 'completed';
         $response = ['sample_id' => 'sample-123'];
         $requestUrl = 'https://api.elevenlabs.io/v1/voices/voice-123/samples';
-        
+
         $addedSample = new VoiceClientAddedSample($source, $status, $response, $requestUrl);
 
         // Act
@@ -196,7 +196,7 @@ class VoiceClientAddedSampleTest extends TestCase
     {
         // Test different source providers
         $providers = ['elevenlabs', 'azure', 'google', 'aws'];
-        
+
         foreach ($providers as $source) {
             $addedSample = new VoiceClientAddedSample($source);
             $this->assertEquals($source, $addedSample->source);
@@ -213,10 +213,10 @@ class VoiceClientAddedSampleTest extends TestCase
             'duration' => '30s',
             'nested' => [
                 'key1' => 'value1',
-                'key2' => ['nested_array']
-            ]
+                'key2' => ['nested_array'],
+            ],
         ];
-        
+
         $addedSample = new VoiceClientAddedSample('elevenlabs', 'completed', $complexResponse);
 
         // Act

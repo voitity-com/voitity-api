@@ -18,7 +18,7 @@ class StoreAudioMessageRequest extends FormRequest
                 'required',
                 'file',
                 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/webm,audio/flac,video/webm,video/mp4',
-                'max:51200',
+                'max:'.max(1, (int) config('subscriptions.audio_message_max_size_kb', 10240)),
             ],
             'chat_id' => ['nullable', 'integer', 'exists:chats,id'],
         ];

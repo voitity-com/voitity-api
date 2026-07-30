@@ -2,9 +2,9 @@
 
 namespace App\Classes\VideoAIService\Runway;
 
-use App\Classes\VideoAIService\VideoAIClient;
 use App\Classes\VideoAIService\AiImage;
 use App\Classes\VideoAIService\AiVideo;
+use App\Classes\VideoAIService\VideoAIClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -13,13 +13,21 @@ use Throwable;
 class RunwayVideoAI implements VideoAIClient
 {
     protected string $apiKey;
+
     protected string $baseUrl;
+
     protected string $apiVersion;
+
     protected string $imageModel;
+
     protected string $videoModel;
+
     protected string $referenceImageTag;
+
     protected string $defaultImageRatio;
+
     protected string $defaultVideoRatio;
+
     protected int $defaultDuration;
 
     public function __construct(
@@ -43,7 +51,7 @@ class RunwayVideoAI implements VideoAIClient
         $this->defaultVideoRatio = $defaultVideoRatio ?: (string) config('videoai.drivers.runway.default_video_ratio', '960:960');
         $this->defaultDuration = $defaultDuration ?: (int) config('videoai.drivers.runway.default_duration', 2);
 
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             throw new InvalidArgumentException('Runway API key is not configured');
         }
     }

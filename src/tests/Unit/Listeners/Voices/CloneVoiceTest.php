@@ -63,7 +63,10 @@ class CloneVoiceTest extends TestCase
             new RuntimeException('Provider rejected sample')
         );
 
-        $this->assertSame(0, SubscriptionUse::where('idempotency_key', "voice-clone:{$voice->id}")->count());
+        $this->assertSame(
+            SubscriptionUse::STATUS_RELEASED,
+            SubscriptionUse::where('idempotency_key', "voice-clone:{$voice->id}")->value('status')
+        );
         $this->assertSame(1, (int) $subscription->limit()->firstOrFail()->voice_clones_remaining);
 
         $providerRequest->refresh();

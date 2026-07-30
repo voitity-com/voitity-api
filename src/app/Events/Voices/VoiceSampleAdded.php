@@ -29,14 +29,12 @@ class VoiceSampleAdded
 
     /**
      * Create a new event instance.
-     *
-     * @param Voice $voice
      */
     public function __construct(Voice $voice, VoiceSample $voiceSample)
     {
         $this->voice = $voice;
         $this->voiceSample = $voiceSample;
-        
+
         Log::info('VoiceSampleAdded event instantiated', [
             'voice_id' => $voice->id,
             'voice_name' => $voice->name,

@@ -39,8 +39,10 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
         $this->assertSame(1, $limit->avatar_images_remaining);
         $this->assertSame(5, $limit->avatar_video_seconds_remaining);
         $this->assertSame(1, $limit->voice_clones_remaining);
-        $this->assertSame(10000, $limit->tts_characters_remaining);
+        $this->assertSame(20000, $limit->tts_characters_remaining);
         $this->assertSame(1000, $limit->chat_messages_remaining);
+        $this->assertSame(500, $limit->incoming_audio_messages_remaining);
+        $this->assertSame(15000, $limit->incoming_audio_seconds_remaining);
         $this->assertSame(1000.0, $limit->credits_remaining);
     }
 

@@ -202,11 +202,13 @@ class GetAIVideoForAvatarTest extends TestCase
         $this->assertSame('Video generation failed moderation.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
         $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
         $notification = AppNotification::where('user_id', $user->id)
             ->where('notification_key', 'avatar_generation_failed')
