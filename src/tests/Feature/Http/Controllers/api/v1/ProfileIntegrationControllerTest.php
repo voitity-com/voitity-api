@@ -349,7 +349,7 @@ class ProfileIntegrationControllerTest extends TestAPI
 
     public function test_tiktok_selection_limit_is_enforced(): void
     {
-        config(['tiktok.selection_limit' => 1]);
+        config(['subscriptions.plans.starter.capabilities.integrations.tiktok.selected_media' => 1]);
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = Profile::factory()->for($user)->create();
@@ -494,7 +494,7 @@ class ProfileIntegrationControllerTest extends TestAPI
 
     public function test_instagram_selection_limit_is_enforced(): void
     {
-        config(['instagram.selection_limit' => 1]);
+        config(['subscriptions.plans.starter.capabilities.integrations.instagram.selected_media' => 1]);
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = Profile::factory()->for($user)->create();
@@ -665,7 +665,7 @@ class ProfileIntegrationControllerTest extends TestAPI
 
     public function test_onlyfans_selection_limit_is_enforced(): void
     {
-        config(['onlyfans.selection_limit' => 1]);
+        config(['subscriptions.plans.starter.capabilities.integrations.onlyfans.selected_media' => 1]);
 
         $user = User::factory()->create(['role' => 'user']);
         $profile = Profile::factory()->for($user)->create();

@@ -11,7 +11,6 @@ use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAuthenticate;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
 use App\Models\Voice;
 use App\Models\VoiceSample;
-use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -48,7 +47,7 @@ class ElevenLabsVoiceClient implements VoiceClient
         $this->apiKey = config('voice.drivers.elevenlabs.api_key');
         $this->defaultVoiceSettings = config('voice.drivers.elevenlabs.default_voice_settings');
 
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             throw new ElevenLabsVoiceClientCouldNotAuthenticate('ElevenLabs API key is not configured');
         }
     }
@@ -56,8 +55,8 @@ class ElevenLabsVoiceClient implements VoiceClient
     /**
      * Clone a voice using a voice sample.
      *
-     * @param Voice $voice The voice to clone
-     * @param VoiceSample $voiceSample The voice sample to use for cloning
+     * @param  Voice  $voice  The voice to clone
+     * @param  VoiceSample  $voiceSample  The voice sample to use for cloning
      * @return VoiceClientClonedVoice The result of the cloning operation
      */
     public function cloneVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientClonedVoice
@@ -69,7 +68,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             ]);
 
             // Get the audio file from storage
-            if (!Storage::exists($voiceSample->file)) {
+            if (! Storage::exists($voiceSample->file)) {
                 throw new \Exception("Voice sample file not found: {$voiceSample->file}");
             }
 
@@ -87,8 +86,8 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'description' => $voice->description ?? "Cloned voice for {$voice->name}",
                 'remove_background_noise' => true,
                 'labels' => json_encode([
-                    'voice_id' => (string)$voice->id,
-                    'source' => 'voitity_clone'
+                    'voice_id' => (string) $voice->id,
+                    'source' => 'voitity_clone',
                 ]),
             ]);
 
@@ -111,7 +110,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             } else {
                 $json = $response->json();
                 $error = isset($json['detail']['message']) ? $json['detail']['message'] : 'Unknown error';
-                
+
                 Log::error('ElevenLabs: Voice cloning failed', [
                     'voice_id' => $voice->id,
                     'error' => $error,
@@ -126,15 +125,15 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'error' => $e->getMessage(),
             ]);
 
-            throw new ElevenLabsVoiceClientCouldNotCloneVoice('ElevenLabs: Voice cloning failed: ' . $e->getMessage());
+            throw new ElevenLabsVoiceClientCouldNotCloneVoice('ElevenLabs: Voice cloning failed: '.$e->getMessage());
         }
     }
 
     /**
      * Add a voice sample to a voice.
      *
-     * @param Voice $voice The voice to add the sample to
-     * @param VoiceSample $voiceSample The voice sample to add
+     * @param  Voice  $voice  The voice to add the sample to
+     * @param  VoiceSample  $voiceSample  The voice sample to add
      * @return VoiceClientAddedSample The result of the sample addition operation
      */
     public function addVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientAddedSample
@@ -146,7 +145,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             ]);
 
             // For ElevenLabs, we need the source voice ID to add samples
-            if (!$voice->source_voice_id) {
+            if (! $voice->source_voice_id) {
                 Log::error('ElevenLabs: No source voice ID found for voice', [
                     'voice_id' => $voice->id,
                 ]);
@@ -154,7 +153,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             }
 
             // Get the audio file from storage
-            if (!Storage::exists($voiceSample->file)) {
+            if (! Storage::exists($voiceSample->file)) {
                 throw new \Exception("Voice sample file not found: {$voiceSample->file}");
             }
 
@@ -171,7 +170,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 basename($voiceSample->file)
             )->post($requestUrl, [
                 'name' => $voice->name,
-                'remove_background_noise' => true
+                'remove_background_noise' => true,
             ]);
 
             if ($response->successful()) {
@@ -179,6 +178,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                     'voice_id' => $voice->id,
                     'voice_sample_id' => $voiceSample->id,
                 ]);
+
                 return new VoiceClientAddedSample(
                     'elevenlabs',
                     'completed',
@@ -199,15 +199,15 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'error' => $e->getMessage(),
             ]);
 
-            throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Failed to add voice sample: ' . $e->getMessage());
+            throw new ElevenLabsVoiceClientCouldNotAddSample('ElevenLabs: Failed to add voice sample: '.$e->getMessage());
         }
     }
 
     /**
      * Generate audio using a voice and text.
      *
-     * @param Voice $voice The voice to use for generation
-     * @param string $text The text to convert to audio
+     * @param  Voice  $voice  The voice to use for generation
+     * @param  string  $text  The text to convert to audio
      * @return VoiceClientGeneratedAudio The generated audio result
      */
     public function generateAudio(Voice $voice, string $text): VoiceClientGeneratedAudio
@@ -219,7 +219,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             ]);
 
             // For ElevenLabs, we need the provider voice ID
-            if (!$voice->source_voice_id) {
+            if (! $voice->source_voice_id) {
                 throw new \Exception("No provider voice ID found for voice {$voice->id}");
             }
 
@@ -290,10 +290,6 @@ class ElevenLabsVoiceClient implements VoiceClient
 
     /**
      * Store generated audio file and return URL.
-     *
-     * @param Voice $voice
-     * @param string $audioContent
-     * @return string|null
      */
     protected function storeGeneratedAudio(Voice $voice, string $audioContent): ?string
     {
@@ -301,7 +297,7 @@ class ElevenLabsVoiceClient implements VoiceClient
             $diskName = config('voice.generated_audio.disk', 'public');
             $folder = trim((string) config('voice.generated_audio.folder', 'generated'), '/');
             $visibility = config('voice.generated_audio.visibility', 'public');
-            $filename = ($folder ? "{$folder}/" : '') . $voice->id . '/' . uniqid() . '.mp3';
+            $filename = ($folder ? "{$folder}/" : '').$voice->id.'/'.uniqid().'.mp3';
             $disk = Storage::disk($diskName);
 
             $disk->put($filename, $audioContent, [
@@ -315,6 +311,7 @@ class ElevenLabsVoiceClient implements VoiceClient
                 'voice_id' => $voice->id,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

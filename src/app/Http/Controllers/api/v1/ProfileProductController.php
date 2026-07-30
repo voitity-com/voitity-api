@@ -62,8 +62,8 @@ class ProfileProductController extends Controller
             'message' => 'Profile products retrieved successfully.',
             'data' => [
                 'products_enabled' => (bool) $profile->products_enabled,
-                'max_products' => $service->maxProducts(),
-                'available_slots' => max(0, $service->maxProducts() - $profile->products()->count()),
+                'max_products' => $service->maxProducts($profile),
+                'available_slots' => max(0, $service->maxProducts($profile) - $profile->products()->count()),
                 'products' => collect($products->items())
                     ->map(fn (ProfileProduct $product): array => (new ProfileProductResponse($product))->toArray())
                     ->all(),

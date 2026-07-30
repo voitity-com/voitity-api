@@ -16,7 +16,6 @@ use Tests\TestCase;
 
 class ProcessStoredMessageTest extends TestCase
 {
-
     protected function tearDown(): void
     {
         Mockery::close();

@@ -26,5 +26,15 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('contact.rate_limit_per_minute', 5))
                 ->by((string) $request->ip());
         });
+
+        RateLimiter::for('profile-messages', function (Request $request) {
+            $profile = $request->route('profile');
+            $profileId = $profile instanceof \App\Models\Profile ? $profile->id : (string) $profile;
+
+            return Limit::perMinute(max(
+                1,
+                (int) config('subscriptions.message_rate_limit_per_minute', 20)
+            ))->by($request->ip().':'.$profileId);
+        });
     }
 }

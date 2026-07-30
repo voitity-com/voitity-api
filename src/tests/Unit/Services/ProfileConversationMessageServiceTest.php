@@ -8,8 +8,11 @@ use App\Classes\VoiceService\VoiceClientAddedSample;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
+use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
 use App\Models\Profile;
 use App\Models\Subscription;
+use App\Models\SubscriptionLimit;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
@@ -110,6 +113,7 @@ class ProfileConversationMessageServiceTest extends TestCase
     public function test_generates_missing_audios_when_voice_is_cloned_after_text_is_saved(): void
     {
         $user = User::factory()->create();
+        $this->createActiveSubscriptionFor($user);
         $profile = Profile::factory()->create(['user_id' => $user->id]);
         $this->service->updateMessages($profile, [
             'fallback_no_answer' => ['text' => 'No tengo esa respuesta todavía.'],
@@ -152,6 +156,7 @@ class ProfileConversationMessageServiceTest extends TestCase
     private function createProfileWithClonedVoice(): array
     {
         $user = User::factory()->create();
+        $this->createActiveSubscriptionFor($user);
         $profile = Profile::factory()->create(['user_id' => $user->id]);
         $voice = Voice::factory()->create([
             'active' => true,
@@ -162,6 +167,36 @@ class ProfileConversationMessageServiceTest extends TestCase
         ]);
 
         return [$profile, $voice];
+    }
+
+    private function createActiveSubscriptionFor(User $user): Subscription
+    {
+        $subscription = Subscription::create([
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Starter,
+            'started_at' => now()->subDay(),
+            'renews_at' => now()->addMonth(),
+            'status' => SubscriptionStatus::First,
+            'active' => true,
+        ]);
+
+        SubscriptionLimit::create([
+            'subscription_id' => $subscription->id,
+            'user_id' => $user->id,
+            'period_started_at' => $subscription->started_at,
+            'period_renews_at' => $subscription->renews_at,
+            'profiles_remaining' => 1,
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 5,
+            'voice_clones_remaining' => 1,
+            'tts_characters_remaining' => 20000,
+            'chat_messages_remaining' => 1000,
+            'incoming_audio_messages_remaining' => 500,
+            'incoming_audio_seconds_remaining' => 15000,
+            'credits_remaining' => 1000,
+        ]);
+
+        return $subscription;
     }
 }
 

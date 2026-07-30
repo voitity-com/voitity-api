@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Http\Controllers\Controller;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Log;
 
 class ProfileIntegrationController extends Controller
 {
+    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
+
     public function index(Request $request, Profile $profile, FeatureService $features): JsonResponse
     {
         if ($response = $this->authorizeProfile($request, $profile)) {
@@ -290,7 +293,7 @@ class ProfileIntegrationController extends Controller
                     'integration' => null,
                     'media' => [],
                     'oauth' => $this->instagramOAuthDiagnostics(),
-                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
+                    'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_INSTAGRAM),
                 ],
             ]);
         }
@@ -309,7 +312,7 @@ class ProfileIntegrationController extends Controller
                 ])),
                 'media' => $media->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))->all(),
                 'oauth' => $this->instagramOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_INSTAGRAM),
             ],
         ]);
     }
@@ -333,7 +336,7 @@ class ProfileIntegrationController extends Controller
                     'integration' => null,
                     'media' => [],
                     'oauth' => $this->tiktokOAuthDiagnostics(),
-                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
+                    'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_TIKTOK),
                 ],
             ]);
         }
@@ -352,7 +355,7 @@ class ProfileIntegrationController extends Controller
                 ])),
                 'media' => $media->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))->all(),
                 'oauth' => $this->tiktokOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_TIKTOK),
             ],
         ]);
     }
@@ -416,7 +419,7 @@ class ProfileIntegrationController extends Controller
                 'data' => [
                     'integration' => null,
                     'media' => [],
-                    'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+                    'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_ONLYFANS),
                 ],
             ]);
         }
@@ -434,7 +437,7 @@ class ProfileIntegrationController extends Controller
                     ->get()
                     ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
                     ->all(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_ONLYFANS),
             ],
         ]);
     }
@@ -539,7 +542,7 @@ class ProfileIntegrationController extends Controller
                     ->get()
                     ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
                     ->all(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_ONLYFANS),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_ONLYFANS),
             ],
         ]);
     }
@@ -626,7 +629,7 @@ class ProfileIntegrationController extends Controller
                     ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
                     ->all(),
                 'oauth' => $this->instagramOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_INSTAGRAM),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_INSTAGRAM),
             ],
         ]);
     }
@@ -681,7 +684,7 @@ class ProfileIntegrationController extends Controller
                     ->map(fn (ProfileIntegrationMedia $media) => $this->mediaToArray($media))
                     ->all(),
                 'oauth' => $this->tiktokOAuthDiagnostics(),
-                'selection_limit' => $this->selectionLimit(ProfileIntegration::PROVIDER_TIKTOK),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_TIKTOK),
             ],
         ]);
     }
@@ -837,15 +840,9 @@ class ProfileIntegrationController extends Controller
         ];
     }
 
-    private function selectionLimit(string $provider): int
+    private function selectionLimit(Profile $profile, string $provider): int
     {
-        $key = match ($provider) {
-            ProfileIntegration::PROVIDER_TIKTOK => 'tiktok',
-            ProfileIntegration::PROVIDER_ONLYFANS => 'onlyfans',
-            default => 'instagram',
-        };
-
-        return max(1, (int) config("{$key}.selection_limit", 10));
+        return $this->capabilities->selectedMediaPerProfile($profile, $provider);
     }
 
     /**

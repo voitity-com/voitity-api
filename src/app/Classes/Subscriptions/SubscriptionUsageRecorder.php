@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionUsageRecorder
 {
+    private const CREDIT_PRECISION = 6;
+
     /**
      * @var array<string, array{limit: string, use: string}>
      */
@@ -45,6 +47,14 @@ class SubscriptionUsageRecorder
             'limit' => 'chat_messages_remaining',
             'use' => 'chat_messages_used',
         ],
+        'incoming_audio_messages' => [
+            'limit' => 'incoming_audio_messages_remaining',
+            'use' => 'incoming_audio_messages_used',
+        ],
+        'incoming_audio_seconds' => [
+            'limit' => 'incoming_audio_seconds_remaining',
+            'use' => 'incoming_audio_seconds_used',
+        ],
     ];
 
     public function __construct(
@@ -66,12 +76,36 @@ class SubscriptionUsageRecorder
         ?string $sourceId = null,
         array $metadata = []
     ): SubscriptionUse {
-        $existingUse = SubscriptionUse::where('idempotency_key', $idempotencyKey)->first();
+        $this->reserve(
+            userId: $userId,
+            usageType: $usageType,
+            amounts: $amounts,
+            idempotencyKey: $idempotencyKey,
+            profileId: $profileId,
+            sourceType: $sourceType,
+            sourceId: $sourceId,
+            metadata: $metadata,
+        );
 
-        if ($existingUse) {
-            return $existingUse;
-        }
+        return $this->finalize($idempotencyKey);
+    }
 
+    /**
+     * Atomically reserves quota before a paid provider operation starts.
+     *
+     * @param  array<string, int>  $amounts
+     * @param  array<string, mixed>  $metadata
+     */
+    public function reserve(
+        int $userId,
+        SubscriptionUsageType $usageType,
+        array $amounts,
+        string $idempotencyKey,
+        ?int $profileId = null,
+        ?string $sourceType = null,
+        ?string $sourceId = null,
+        array $metadata = []
+    ): SubscriptionUse {
         try {
             $use = DB::transaction(function () use (
                 $userId,
@@ -82,12 +116,35 @@ class SubscriptionUsageRecorder
                 $sourceType,
                 $sourceId,
                 $metadata
-            ) {
+            ): SubscriptionUse {
+                /** @var SubscriptionUse|null $existingUse */
                 $existingUse = SubscriptionUse::where('idempotency_key', $idempotencyKey)
                     ->lockForUpdate()
                     ->first();
 
-                if ($existingUse) {
+                if ($existingUse && $existingUse->status !== SubscriptionUse::STATUS_RELEASED) {
+                    $normalizedAmounts = $this->normalizeAmounts($amounts);
+
+                    if (! $this->matchesExistingUsage(
+                        $existingUse,
+                        $userId,
+                        $usageType,
+                        $normalizedAmounts,
+                        $profileId
+                    )) {
+                        Log::warning('Subscription usage idempotency conflict rejected.', [
+                            'existing_subscription_use_id' => $existingUse->id,
+                            'idempotency_key' => $idempotencyKey,
+                            'profile_id' => $profileId,
+                            'usage_type' => $usageType->value,
+                            'user_id' => $userId,
+                        ]);
+
+                        throw new \RuntimeException(
+                            'Idempotency key was already used for different subscription usage.'
+                        );
+                    }
+
                     return $existingUse;
                 }
 
@@ -103,7 +160,7 @@ class SubscriptionUsageRecorder
                     $this->assertLimitCanRecord($limit, $normalizedAmounts, $creditsUsed);
                 }
 
-                $use = SubscriptionUse::create(array_merge([
+                $attributes = array_merge([
                     'subscription_id' => $subscription->id,
                     'user_id' => $user->id,
                     'profile_id' => $profileId,
@@ -111,9 +168,21 @@ class SubscriptionUsageRecorder
                     'source_type' => $sourceType,
                     'source_id' => $sourceId,
                     'idempotency_key' => $idempotencyKey,
+                    'status' => SubscriptionUse::STATUS_RESERVED,
                     'metadata' => $metadata,
                     'used_at' => now(),
-                ], $this->usageColumns($normalizedAmounts, $creditsUsed)));
+                    'reserved_at' => now(),
+                    'finalized_at' => null,
+                    'released_at' => null,
+                ], $this->usageColumns($normalizedAmounts, $creditsUsed));
+
+                if ($existingUse) {
+                    $existingUse->fill($attributes);
+                    $existingUse->save();
+                    $use = $existingUse;
+                } else {
+                    $use = SubscriptionUse::create($attributes);
+                }
 
                 if (! $unlimited) {
                     foreach ($normalizedAmounts as $metric => $amount) {
@@ -121,14 +190,22 @@ class SubscriptionUsageRecorder
                         $limit->{$limitColumn} = max(0, ((int) $limit->{$limitColumn}) - $amount);
                     }
 
-                    $limit->credits_remaining = round(max(0, ((float) $limit->credits_remaining) - $creditsUsed), 2);
+                    $limit->credits_remaining = round(
+                        max(0, ((float) $limit->credits_remaining) - $creditsUsed),
+                        self::CREDIT_PRECISION
+                    );
                     $limit->save();
                 }
 
                 return $use;
             });
 
-            $this->notifyUsageUpdated($use);
+            Log::info('Subscription usage reserved.', [
+                'idempotency_key' => $idempotencyKey,
+                'profile_id' => $profileId,
+                'usage_type' => $usageType->value,
+                'user_id' => $userId,
+            ]);
 
             return $use;
         } catch (SubscriptionEntitlementException $exception) {
@@ -140,15 +217,68 @@ class SubscriptionUsageRecorder
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    public function finalize(
+        string $idempotencyKey,
+        array $metadata = [],
+        ?string $sourceType = null,
+        ?string $sourceId = null,
+    ): SubscriptionUse {
+        $transitioned = false;
+        $use = DB::transaction(function () use (
+            $idempotencyKey,
+            $metadata,
+            $sourceType,
+            $sourceId,
+            &$transitioned
+        ): SubscriptionUse {
+            /** @var SubscriptionUse $use */
+            $use = SubscriptionUse::where('idempotency_key', $idempotencyKey)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($use->status === SubscriptionUse::STATUS_RELEASED) {
+                throw new \RuntimeException('Released subscription usage cannot be finalized.');
+            }
+
+            if ($use->status === SubscriptionUse::STATUS_FINALIZED) {
+                return $use;
+            }
+
+            $use->status = SubscriptionUse::STATUS_FINALIZED;
+            $use->finalized_at = now();
+            $use->metadata = array_replace($use->metadata ?? [], $metadata);
+            $use->source_type = $sourceType ?? $use->source_type;
+            $use->source_id = $sourceId ?? $use->source_id;
+            $use->save();
+            $transitioned = true;
+
+            return $use;
+        });
+
+        if ($transitioned) {
+            $this->notifyUsageUpdated($use);
+            Log::info('Subscription usage finalized.', [
+                'idempotency_key' => $idempotencyKey,
+                'subscription_use_id' => $use->id,
+                'usage_type' => $use->usage_type->value,
+            ]);
+        }
+
+        return $use;
+    }
+
     public function release(string $idempotencyKey): bool
     {
-        return DB::transaction(function () use ($idempotencyKey): bool {
+        $released = DB::transaction(function () use ($idempotencyKey): bool {
             /** @var SubscriptionUse|null $use */
             $use = SubscriptionUse::where('idempotency_key', $idempotencyKey)
                 ->lockForUpdate()
                 ->first();
 
-            if (! $use) {
+            if (! $use || $use->status === SubscriptionUse::STATUS_RELEASED) {
                 return false;
             }
 
@@ -180,15 +310,63 @@ class SubscriptionUsageRecorder
 
                 $limit->credits_remaining = min(
                     $this->includedCreditsFor($subscription),
-                    round(((float) $limit->credits_remaining) + ((float) $use->credits_used), 2)
+                    round(
+                        ((float) $limit->credits_remaining) + ((float) $use->credits_used),
+                        self::CREDIT_PRECISION
+                    )
                 );
                 $limit->save();
             }
 
-            $use->delete();
+            $use->status = SubscriptionUse::STATUS_RELEASED;
+            $use->released_at = now();
+            $use->save();
 
             return true;
         });
+
+        if ($released) {
+            Log::info('Subscription usage released.', [
+                'idempotency_key' => $idempotencyKey,
+            ]);
+        }
+
+        return $released;
+    }
+
+    public function releaseStaleReservations(?Carbon $now = null): int
+    {
+        $cutoff = ($now ?? now())->copy()->subMinutes(
+            max(1, (int) config('subscriptions.usage_reservation_ttl_minutes', 60))
+        );
+        $released = 0;
+
+        SubscriptionUse::query()
+            ->where('status', SubscriptionUse::STATUS_RESERVED)
+            ->where('reserved_at', '<=', $cutoff)
+            ->orderBy('id')
+            ->select(['id', 'idempotency_key'])
+            ->chunkById(100, function ($uses) use (&$released): void {
+                foreach ($uses as $use) {
+                    if ($this->release((string) $use->idempotency_key)) {
+                        $released++;
+                    }
+                }
+            });
+
+        if ($released > 0) {
+            Log::warning('Stale subscription usage reservations released.', [
+                'cutoff' => $cutoff->toIso8601String(),
+                'released_count' => $released,
+            ]);
+        } else {
+            Log::info('Stale subscription usage reservation sweep completed.', [
+                'cutoff' => $cutoff->toIso8601String(),
+                'released_count' => 0,
+            ]);
+        }
+
+        return $released;
     }
 
     private function currentSubscriptionFor(User $user): Subscription
@@ -353,7 +531,34 @@ class SubscriptionUsageRecorder
             $creditsUsed += $amount * ($credits / $units);
         }
 
-        return round($creditsUsed, 2);
+        return round($creditsUsed, self::CREDIT_PRECISION);
+    }
+
+    /**
+     * @param  array<string, int>  $amounts
+     */
+    private function matchesExistingUsage(
+        SubscriptionUse $use,
+        int $userId,
+        SubscriptionUsageType $usageType,
+        array $amounts,
+        ?int $profileId
+    ): bool {
+        if (
+            (int) $use->user_id !== $userId
+            || $use->usage_type !== $usageType
+            || ($use->profile_id === null ? null : (int) $use->profile_id) !== $profileId
+        ) {
+            return false;
+        }
+
+        foreach ($amounts as $metric => $amount) {
+            if ((int) $use->{self::METRIC_COLUMNS[$metric]['use']} !== $amount) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function useBelongsToLimitPeriod(SubscriptionUse $use, SubscriptionLimit $limit): bool
@@ -370,12 +575,26 @@ class SubscriptionUsageRecorder
 
     private function includedLimitFor(Subscription $subscription, string $metric): int
     {
+        if ($subscription->status === SubscriptionStatus::Trialing) {
+            return max(0, (int) config("subscriptions.trial.limits.{$metric}", 0));
+        }
+
         return max(0, (int) config("subscriptions.plans.{$subscription->plan->value}.limits.{$metric}", 0));
     }
 
     private function includedCreditsFor(Subscription $subscription): float
     {
-        return round(max(0, (float) config("subscriptions.plans.{$subscription->plan->value}.credits.total", 0)), 2);
+        if ($subscription->status === SubscriptionStatus::Trialing) {
+            return round(
+                max(0, (float) config('subscriptions.trial.credits.total', 0)),
+                self::CREDIT_PRECISION
+            );
+        }
+
+        return round(
+            max(0, (float) config("subscriptions.plans.{$subscription->plan->value}.credits.total", 0)),
+            self::CREDIT_PRECISION
+        );
     }
 
     private function limitPeriods(): SubscriptionLimitPeriodService
@@ -440,7 +659,7 @@ class SubscriptionUsageRecorder
             'profiles' => 'profile_limit_reached',
             'avatar_images', 'avatar_video_seconds' => 'avatar_limit_reached',
             'voice_clones', 'tts_characters' => 'voice_limit_reached',
-            'chat_messages' => 'message_or_chat_limit_reached',
+            'chat_messages', 'incoming_audio_messages', 'incoming_audio_seconds' => 'message_or_chat_limit_reached',
             default => null,
         };
     }

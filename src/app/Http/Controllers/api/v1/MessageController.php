@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\ChatAIService\AudioMessageInspector;
 use App\Classes\ChatAIService\AudioTranscriptionService;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
-use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Enums\SubscriptionUsageType;
 use App\Events\MessageStored;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
@@ -17,7 +20,9 @@ use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class MessageController extends Controller
@@ -82,7 +87,8 @@ class MessageController extends Controller
     public function store(
         StoreMessageRequest $request,
         Profile $profile,
-        SubscriptionEntitlementService $entitlements
+        SubscriptionUsageRecorder $usage,
+        ProfileMessagingCapabilitiesService $capabilities,
     ): JsonResponse {
         try {
             $payload = $request->validated();
@@ -97,13 +103,11 @@ class MessageController extends Controller
                 user: $user,
                 text: $payload['message'],
                 chatId: isset($payload['chat_id']) ? (int) $payload['chat_id'] : null,
-                entitlements: $entitlements,
+                usage: $usage,
+                capabilities: $capabilities,
             );
         } catch (SubscriptionEntitlementException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => $e->errors(),
-            ], $e->statusCode());
+            return $this->entitlementErrorResponse($e, $profile, $capabilities);
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -113,7 +117,7 @@ class MessageController extends Controller
      * @OA\Post(
      *     path="/api/profile/{profile}/messages/audio",
      *     summary="Send an audio message to a profile",
-     *     description="Transcribes a user audio recording, stores it as a message, and triggers the AI workflow to generate a reply.",
+     *     description="Accepts a recording of up to 30 seconds, reserves chat, incoming-audio count, and incoming-audio seconds before transcription, stores the message, and generates a reply. If TTS quota is exhausted, the reply is returned as text without generated audio.",
      *     tags={"Messages"},
      *     security={{"sanctum": {}}},
      *
@@ -135,7 +139,7 @@ class MessageController extends Controller
      *             @OA\Schema(
      *                 required={"audio"},
      *
-     *                 @OA\Property(property="audio", type="file", format="binary", description="Audio recording to transcribe. Browser WebM/MP4 recordings may be detected as video/webm or video/mp4 containers."),
+     *                 @OA\Property(property="audio", type="file", format="binary", description="Audio recording of up to 30 seconds and 10 MB. Browser WebM/MP4 recordings may be detected as video/webm or video/mp4 containers."),
      *                 @OA\Property(property="chat_id", type="integer", nullable=true, example=12, description="Existing chat identifier")
      *             )
      *         )
@@ -164,9 +168,9 @@ class MessageController extends Controller
      *
      *     @OA\Response(response=202, description="Audio message stored and processing pending"),
      *     @OA\Response(response=401, description="Unauthenticated"),
-     *     @OA\Response(response=402, description="Subscription limit exceeded"),
+     *     @OA\Response(response=402, description="Subscription, visitor-message, incoming-audio count, incoming-audio duration, TTS, or credit limit exceeded. Stable error codes are returned in code."),
      *     @OA\Response(response=404, description="Profile or chat not found"),
-     *     @OA\Response(response=422, description="Validation error or empty transcription"),
+     *     @OA\Response(response=422, description="Validation error, duration unknown, duration above 30 seconds, or empty transcription"),
      *     @OA\Response(response=502, description="Audio transcription failed"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
@@ -175,8 +179,14 @@ class MessageController extends Controller
         StoreAudioMessageRequest $request,
         Profile $profile,
         AudioTranscriptionService $transcriptionService,
-        SubscriptionEntitlementService $entitlements
+        AudioMessageInspector $audioInspector,
+        SubscriptionUsageRecorder $usage,
+        ProfileMessagingCapabilitiesService $capabilities,
     ): JsonResponse {
+        $audioUsageKey = null;
+        $audioUsageFinalized = false;
+        $transcriptionAttempted = false;
+
         try {
             $payload = $request->validated();
             $user = $request->user();
@@ -192,22 +202,88 @@ class MessageController extends Controller
                 return $targetError;
             }
 
-            if ($profile->user_id) {
-                $entitlements->assertCanUse($profile->user_id, ['chat_messages' => 1]);
-            }
-
             $audio = $payload['audio'] ?? null;
 
             if (! $audio instanceof UploadedFile) {
                 return response()->json(['message' => 'The audio field is required.'], 422);
             }
 
+            try {
+                $durationSeconds = $audioInspector->durationSeconds($audio);
+            } catch (\Throwable $exception) {
+                Log::warning('Incoming audio rejected because its duration could not be determined.', [
+                    'error' => $exception->getMessage(),
+                    'profile_id' => $profile->id,
+                    'size' => $audio->getSize(),
+                ]);
+
+                return response()->json([
+                    'message' => 'Audio duration could not be determined.',
+                    'code' => 'AUDIO_DURATION_UNKNOWN',
+                    'errors' => ['audio' => ['Audio duration could not be determined.']],
+                    'data' => [
+                        'messaging_capabilities' => $capabilities->forProfile($profile),
+                    ],
+                ], 422);
+            }
+
+            $maxDuration = max(1, (int) config('subscriptions.audio_message_max_duration_seconds', 30));
+
+            if ($durationSeconds > $maxDuration) {
+                Log::notice('Incoming audio rejected because it exceeds the duration limit.', [
+                    'duration_seconds' => $durationSeconds,
+                    'max_duration_seconds' => $maxDuration,
+                    'profile_id' => $profile->id,
+                ]);
+
+                return response()->json([
+                    'message' => "Audio messages can be up to {$maxDuration} seconds.",
+                    'code' => 'AUDIO_DURATION_EXCEEDED',
+                    'errors' => ['audio' => ["Audio messages can be up to {$maxDuration} seconds."]],
+                    'data' => [
+                        'messaging_capabilities' => $capabilities->forProfile($profile),
+                    ],
+                ], 422);
+            }
+
+            if ($profile->user_id) {
+                $audioUsageKey = 'incoming-audio:'.Str::uuid();
+                $usage->reserve(
+                    userId: $profile->user_id,
+                    usageType: SubscriptionUsageType::IncomingAudioMessage,
+                    amounts: [
+                        'chat_messages' => 1,
+                        'incoming_audio_messages' => 1,
+                        'incoming_audio_seconds' => $durationSeconds,
+                    ],
+                    idempotencyKey: $audioUsageKey,
+                    profileId: $profile->id,
+                    metadata: [
+                        'duration_seconds' => $durationSeconds,
+                        'mime_type' => $audio->getMimeType(),
+                        'size' => $audio->getSize(),
+                    ],
+                );
+            }
+
+            $transcriptionAttempted = true;
             $transcription = $transcriptionService->transcribe($audio);
+
+            if ($audioUsageKey) {
+                $usage->finalize($audioUsageKey, [
+                    'transcription_source' => $transcription->source,
+                    'transcription_status' => $transcription->status,
+                ]);
+                $audioUsageFinalized = true;
+            }
 
             if ($transcription->isFailed()) {
                 return response()->json([
                     'message' => 'Audio transcription failed.',
-                    'data' => $this->transcriptionFailurePayload($transcription),
+                    'code' => 'AUDIO_TRANSCRIPTION_FAILED',
+                    'data' => array_merge($this->transcriptionFailurePayload($transcription), [
+                        'messaging_capabilities' => $capabilities->forProfile($profile),
+                    ]),
                 ], 502);
             }
 
@@ -216,7 +292,10 @@ class MessageController extends Controller
             if ($text === '') {
                 return response()->json([
                     'message' => 'Audio transcription did not produce text.',
-                    'data' => $this->transcriptionFailurePayload($transcription),
+                    'code' => 'AUDIO_TRANSCRIPTION_EMPTY',
+                    'data' => array_merge($this->transcriptionFailurePayload($transcription), [
+                        'messaging_capabilities' => $capabilities->forProfile($profile),
+                    ]),
                 ], 422);
             }
 
@@ -233,14 +312,30 @@ class MessageController extends Controller
                     'audio_url' => $audioUrl,
                     'transcription' => $this->transcriptionPayload($transcription),
                 ],
-                entitlements: $entitlements,
+                usage: $usage,
+                capabilities: $capabilities,
+                usageReservationKey: $audioUsageKey,
             );
         } catch (SubscriptionEntitlementException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => $e->errors(),
-            ], $e->statusCode());
+            return $this->entitlementErrorResponse($e, $profile, $capabilities);
         } catch (\Throwable $e) {
+            if ($audioUsageKey && ! $audioUsageFinalized) {
+                if ($transcriptionAttempted) {
+                    $usage->finalize($audioUsageKey, [
+                        'transcription_status' => 'exception',
+                        'error' => $e->getMessage(),
+                    ]);
+                } else {
+                    $usage->release($audioUsageKey);
+                }
+            }
+
+            Log::error('Incoming audio message failed.', [
+                'error' => $e->getMessage(),
+                'profile_id' => $profile->id,
+                'usage_key' => $audioUsageKey,
+            ]);
+
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
@@ -249,11 +344,13 @@ class MessageController extends Controller
         Profile $profile,
         User $user,
         string $text,
-        SubscriptionEntitlementService $entitlements,
+        SubscriptionUsageRecorder $usage,
+        ProfileMessagingCapabilitiesService $capabilities,
         ?int $chatId = null,
         ?string $audioUrl = null,
         bool $includeRequestMetadata = false,
         array $requestData = [],
+        ?string $usageReservationKey = null,
     ): JsonResponse {
         $targetError = $this->validateMessageTarget($user, $profile, $chatId);
 
@@ -261,35 +358,62 @@ class MessageController extends Controller
             return $targetError;
         }
 
-        if ($profile->user_id) {
-            $entitlements->assertCanUse($profile->user_id, ['chat_messages' => 1]);
+        $ownsReservation = false;
+
+        if ($profile->user_id && ! $usageReservationKey) {
+            $usageReservationKey = 'chat-message:'.Str::uuid();
+            $usage->reserve(
+                userId: $profile->user_id,
+                usageType: SubscriptionUsageType::ChatMessageReceived,
+                amounts: ['chat_messages' => 1],
+                idempotencyKey: $usageReservationKey,
+                profileId: $profile->id,
+            );
+            $ownsReservation = true;
         }
 
-        $isNewChat = $chatId === null;
-        $chat = $chatId
-            ? $profile->chats()->find($chatId)
-            : $profile->chats()->create();
+        try {
+            $isNewChat = $chatId === null;
+            $chat = $chatId
+                ? $profile->chats()->find($chatId)
+                : $profile->chats()->create();
 
-        if (! $chat instanceof Chat) {
-            throw new RuntimeException('Unable to resolve chat for the provided profile.');
-        }
+            if (! $chat instanceof Chat) {
+                throw new RuntimeException('Unable to resolve chat for the provided profile.');
+            }
 
-        $requestPayload = array_merge(['message' => $text], $requestData);
+            $requestPayload = array_merge(['message' => $text], $requestData);
 
-        $message = $chat->messages()->create([
-            'profile_id' => $profile->id,
-            'text' => $text,
-            'type' => 'question',
-            'source' => 'api',
-            'audio' => $audioUrl,
-            'data' => [
-                'request' => $requestPayload,
-                'processing' => false,
-            ],
-        ]);
+            $message = $chat->messages()->create([
+                'profile_id' => $profile->id,
+                'text' => $text,
+                'type' => 'question',
+                'source' => 'api',
+                'audio' => $audioUrl,
+                'data' => [
+                    'request' => $requestPayload,
+                    'processing' => false,
+                ],
+            ]);
 
-        if (! $message instanceof Message) {
-            throw new RuntimeException('Unable to store message.');
+            if (! $message instanceof Message) {
+                throw new RuntimeException('Unable to store message.');
+            }
+
+            if ($usageReservationKey) {
+                $usage->finalize(
+                    $usageReservationKey,
+                    ['message_id' => $message->id],
+                    Message::class,
+                    (string) $message->id,
+                );
+            }
+        } catch (\Throwable $exception) {
+            if ($ownsReservation && $usageReservationKey) {
+                $usage->release($usageReservationKey);
+            }
+
+            throw $exception;
         }
 
         $this->notifyMessageReceived($profile, $user, $chat->id, $isNewChat);
@@ -307,6 +431,7 @@ class MessageController extends Controller
                 if ($includeRequestMetadata) {
                     $failure = $this->appendRequestMetadata($failure, $message);
                 }
+                $failure['messaging_capabilities'] = $capabilities->forProfile($profile);
 
                 return response()->json([
                     'message' => 'Message answer generation failed.',
@@ -324,6 +449,7 @@ class MessageController extends Controller
             if ($includeRequestMetadata) {
                 $data = $this->appendRequestMetadata($data, $message);
             }
+            $data['messaging_capabilities'] = $capabilities->forProfile($profile);
 
             return response()->json([
                 'message' => 'Message stored, processing pending.',
@@ -336,6 +462,7 @@ class MessageController extends Controller
         if ($includeRequestMetadata) {
             $data = $this->appendRequestMetadata($data, $message);
         }
+        $data['messaging_capabilities'] = $capabilities->forProfile($profile);
 
         return response()->json([
             'message' => 'Message processed successfully.',
@@ -376,6 +503,21 @@ class MessageController extends Controller
         $data['request_audio_url'] = $message->audio;
 
         return $data;
+    }
+
+    private function entitlementErrorResponse(
+        SubscriptionEntitlementException $exception,
+        Profile $profile,
+        ProfileMessagingCapabilitiesService $capabilities,
+    ): JsonResponse {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'code' => $exception->errorCode(),
+            'errors' => $exception->errors(),
+            'data' => [
+                'messaging_capabilities' => $capabilities->forProfile($profile),
+            ],
+        ], $exception->statusCode());
     }
 
     private function validateMessageTarget(User $user, Profile $profile, ?int $chatId): ?JsonResponse

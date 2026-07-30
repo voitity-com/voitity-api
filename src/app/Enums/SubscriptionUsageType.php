@@ -10,4 +10,6 @@ enum SubscriptionUsageType: string
     case VoiceCloned = 'voice_cloned';
     case VoiceTtsCharacters = 'voice_tts_characters';
     case ChatOpenAiCall = 'chat_openai_call';
+    case ChatMessageReceived = 'chat_message_received';
+    case IncomingAudioMessage = 'incoming_audio_message';
 }

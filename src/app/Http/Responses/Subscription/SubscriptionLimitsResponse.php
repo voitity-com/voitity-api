@@ -38,6 +38,14 @@ class SubscriptionLimitsResponse
             'remaining' => 'chat_messages_remaining',
             'used' => 'chat_messages_used',
         ],
+        'incoming_audio_messages' => [
+            'remaining' => 'incoming_audio_messages_remaining',
+            'used' => 'incoming_audio_messages_used',
+        ],
+        'incoming_audio_seconds' => [
+            'remaining' => 'incoming_audio_seconds_remaining',
+            'used' => 'incoming_audio_seconds_used',
+        ],
     ];
 
     /**
@@ -142,6 +150,8 @@ class SubscriptionLimitsResponse
                     'voice_clones' => (int) $row->voice_clones_used,
                     'tts_characters' => (int) $row->tts_characters_used,
                     'chat_messages' => (int) $row->chat_messages_used,
+                    'incoming_audio_messages' => (int) $row->incoming_audio_messages_used,
+                    'incoming_audio_seconds' => (int) $row->incoming_audio_seconds_used,
                 ]),
                 'last_used_at' => $this->dateTimeToJson($row->last_used_at ?? null),
             ])
@@ -180,8 +190,18 @@ class SubscriptionLimitsResponse
 
     private function includedValue(string $metric, ?string $plan): int|float
     {
+        $trialing = $this->enumValue($this->subscription->status) === 'trialing';
+
         if ($metric === 'credits') {
+            if ($trialing) {
+                return $this->usageValue($metric, config('subscriptions.trial.credits.total', 0));
+            }
+
             return $this->usageValue($metric, config("subscriptions.plans.{$plan}.credits.total", 0));
+        }
+
+        if ($trialing) {
+            return $this->usageValue($metric, config("subscriptions.trial.limits.{$metric}", 0));
         }
 
         return $this->usageValue($metric, config("subscriptions.plans.{$plan}.limits.{$metric}", 0));

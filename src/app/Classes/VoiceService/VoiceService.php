@@ -2,12 +2,13 @@
 
 namespace App\Classes\VoiceService;
 
-use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
 use App\Models\VoiceSample;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class VoiceService
 {
@@ -100,30 +101,53 @@ class VoiceService
      */
     public function generateAudio(string $text): VoiceClientGeneratedAudio
     {
+        $usageKey = null;
+        $recorder = app(SubscriptionUsageRecorder::class);
+
         if ($this->voice->user_id) {
-            app(SubscriptionEntitlementService::class)->assertCanUse($this->voice->user_id, [
-                'tts_characters' => $this->characterCount($text),
-            ]);
-        }
-
-        $generatedAudio = $this->voiceClient->generateAudio($this->voice, $text);
-
-        if ($generatedAudio->isSuccessful() && $this->voice->user_id) {
-            event(new SubscriptionUsageRequested(
+            $usageKey = 'voice-tts:'.$this->voice->id.':'.Str::uuid();
+            $recorder->reserve(
                 userId: $this->voice->user_id,
                 usageType: SubscriptionUsageType::VoiceTtsCharacters,
                 amounts: ['tts_characters' => $this->characterCount($text)],
+                idempotencyKey: $usageKey,
                 profileId: $this->voice->profile_id,
                 sourceType: Voice::class,
                 sourceId: (string) $this->voice->id,
-                idempotencyKey: 'voice-tts:'.$this->voice->id.':'.sha1($text),
                 metadata: [
+                    'provider' => $this->voice->source,
+                    'voice_id' => $this->voice->id,
+                ],
+            );
+        }
+
+        try {
+            $generatedAudio = $this->voiceClient->generateAudio($this->voice, $text);
+        } catch (\Throwable $exception) {
+            if ($usageKey) {
+                $recorder->release($usageKey);
+            }
+
+            Log::warning('TTS provider call failed after reserving usage.', [
+                'error' => $exception->getMessage(),
+                'usage_key' => $usageKey,
+                'voice_id' => $this->voice->id,
+            ]);
+
+            throw $exception;
+        }
+
+        if ($usageKey) {
+            if ($generatedAudio->isSuccessful()) {
+                $recorder->finalize($usageKey, [
                     'provider' => $this->voice->source,
                     'voice_id' => $this->voice->id,
                     'audio_format' => $generatedAudio->audioFormat,
                     'status' => $generatedAudio->status,
-                ]
-            ));
+                ]);
+            } else {
+                $recorder->release($usageKey);
+            }
         }
 
         return $generatedAudio;

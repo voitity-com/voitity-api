@@ -32,6 +32,7 @@ class SubscriptionPlansResponse
                     'interval' => $plan['interval'] ?? null,
                     'limits' => $plan['limits'] ?? [],
                     'credits' => $plan['credits'] ?? [],
+                    'capabilities' => $plan['capabilities'] ?? [],
                     'purchasable' => (bool) ($plan['purchasable'] ?? (is_numeric($plan['price_usd'] ?? null) && ((float) $plan['price_usd']) > 0)),
                     'unlimited' => (bool) ($plan['unlimited'] ?? false),
                 ])

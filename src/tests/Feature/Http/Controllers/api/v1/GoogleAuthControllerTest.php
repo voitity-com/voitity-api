@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Http;
 
 class GoogleAuthControllerTest extends TestAPI
 {
-
     private const GOOGLE_USER_INFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
     public function test_google_sign_up_creates_new_user_successfully()
@@ -19,8 +18,8 @@ class GoogleAuthControllerTest extends TestAPI
                 'email' => 'test@gmail.com',
                 'name' => 'Test User',
                 'picture' => 'https://lh3.googleusercontent.com/test.jpg',
-                'verified_email' => true
-            ])
+                'verified_email' => true,
+            ]),
         ]);
 
         $response = $this->postJson('/api/auth/google/sign-up', [
@@ -30,20 +29,20 @@ class GoogleAuthControllerTest extends TestAPI
             'first_name' => 'Test',
             'last_name' => 'User',
             'avatar' => 'https://lh3.googleusercontent.com/test.jpg',
-            'access_token' => 'mock_google_token'
+            'access_token' => 'mock_google_token',
         ]);
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'access_token',
-                    'user' => [
-                        'id',
-                        'name',
-                        'email',
-                        'avatar',
-                        'provider'
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'access_token',
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                    'avatar',
+                    'provider',
+                ],
+            ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'test@gmail.com',
@@ -63,7 +62,7 @@ class GoogleAuthControllerTest extends TestAPI
             'last_name' => 'User',
             'email' => 'test@gmail.com',
             'password' => bcrypt('password'),
-            'role' => 'user'
+            'role' => 'user',
         ]);
 
         // Mock Google API response
@@ -73,8 +72,8 @@ class GoogleAuthControllerTest extends TestAPI
                 'email' => 'test@gmail.com',
                 'name' => 'Test User Google',
                 'picture' => 'https://lh3.googleusercontent.com/test.jpg',
-                'verified_email' => true
-            ])
+                'verified_email' => true,
+            ]),
         ]);
 
         $response = $this->postJson('/api/auth/google/sign-in', [
@@ -84,7 +83,7 @@ class GoogleAuthControllerTest extends TestAPI
             'first_name' => 'Test',
             'last_name' => 'Google',
             'avatar' => 'https://lh3.googleusercontent.com/test.jpg',
-            'access_token' => 'mock_google_token'
+            'access_token' => 'mock_google_token',
         ]);
 
         $response->assertStatus(200);
@@ -106,8 +105,8 @@ class GoogleAuthControllerTest extends TestAPI
                 'id' => '123456789012345678901',
                 'email' => 'missing@gmail.com',
                 'name' => 'Missing User',
-                'verified_email' => true
-            ])
+                'verified_email' => true,
+            ]),
         ]);
 
         $response = $this->postJson('/api/auth/google/sign-in', [
@@ -116,20 +115,20 @@ class GoogleAuthControllerTest extends TestAPI
             'name' => 'Missing User',
             'first_name' => 'Missing',
             'last_name' => 'User',
-            'access_token' => 'mock_google_token'
+            'access_token' => 'mock_google_token',
         ]);
 
         $response->assertStatus(404)
-                ->assertJson([
-                    'message' => 'User not found. Please sign up.'
-                ]);
+            ->assertJson([
+                'message' => 'User not found. Please sign up.',
+            ]);
     }
 
     public function test_google_auth_fails_with_invalid_token()
     {
         // Mock Google API failure
         Http::fake([
-            self::GOOGLE_USER_INFO_URL => Http::response([], 401)
+            self::GOOGLE_USER_INFO_URL => Http::response([], 401),
         ]);
 
         $response = $this->postJson('/api/auth/google/sign-up', [
@@ -138,13 +137,13 @@ class GoogleAuthControllerTest extends TestAPI
             'name' => 'Test User',
             'first_name' => 'Test',
             'last_name' => 'User',
-            'access_token' => 'invalid_google_token'
+            'access_token' => 'invalid_google_token',
         ]);
 
         $response->assertStatus(401)
-                ->assertJson([
-                    'message' => 'Invalid Google access token.'
-                ]);
+            ->assertJson([
+                'message' => 'Invalid Google access token.',
+            ]);
     }
 
     public function test_google_auth_fails_with_mismatched_google_id()
@@ -155,8 +154,8 @@ class GoogleAuthControllerTest extends TestAPI
                 'id' => '999999999999999999999',
                 'email' => 'test@gmail.com',
                 'name' => 'Test User',
-                'verified_email' => true
-            ])
+                'verified_email' => true,
+            ]),
         ]);
 
         $response = $this->postJson('/api/auth/google/sign-up', [
@@ -165,13 +164,13 @@ class GoogleAuthControllerTest extends TestAPI
             'name' => 'Test User',
             'first_name' => 'Test',
             'last_name' => 'User',
-            'access_token' => 'mock_google_token'
+            'access_token' => 'mock_google_token',
         ]);
 
         $response->assertStatus(401)
-                ->assertJson([
-                    'message' => 'Google ID mismatch.'
-                ]);
+            ->assertJson([
+                'message' => 'Google ID mismatch.',
+            ]);
     }
 
     public function test_google_auth_validation_fails_with_missing_fields()
@@ -182,7 +181,7 @@ class GoogleAuthControllerTest extends TestAPI
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['google_id', 'name', 'first_name', 'last_name', 'access_token']);
+            ->assertJsonValidationErrors(['google_id', 'name', 'first_name', 'last_name', 'access_token']);
     }
 
     public function test_logout_revokes_tokens_successfully()
@@ -190,18 +189,18 @@ class GoogleAuthControllerTest extends TestAPI
         $user = User::factory()->create();
         $token = $user->createToken('test-token');
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token->plainTextToken)
-                        ->postJson('/api/auth/logout');
+        $response = $this->withHeader('Authorization', 'Bearer '.$token->plainTextToken)
+            ->postJson('/api/auth/logout');
 
         $response->assertStatus(200)
-                ->assertJson([
-                    'message' => 'Successfully logged out.'
-                ]);
+            ->assertJson([
+                'message' => 'Successfully logged out.',
+            ]);
 
         // Verify token was revoked
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
-            'name' => 'test-token'
+            'name' => 'test-token',
         ]);
     }
 }

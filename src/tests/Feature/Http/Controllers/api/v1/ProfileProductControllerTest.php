@@ -286,23 +286,30 @@ class ProfileProductControllerTest extends TestAPI
         Storage::disk('profiles')->assertExists($updated->social_storage_path);
     }
 
-    public function test_profile_cannot_create_more_than_fifteen_products(): void
+    public function test_profile_cannot_create_more_products_than_its_plan_allows(): void
     {
+        config(['subscriptions.plans.starter.capabilities.products_per_profile' => 2]);
         [$user, $profile, $token] = $this->ownerContext();
 
-        for ($index = 1; $index <= 15; $index++) {
+        for ($index = 1; $index <= 2; $index++) {
             $this->createRemoteProduct($profile, $user, "Producto {$index}");
         }
 
         $this->withToken($token)->post("/api/profile/{$profile->id}/products", [
-            'name' => 'Producto 16',
+            'name' => 'Producto 3',
             'description' => 'No debe crearse.',
             'image' => UploadedFile::fake()->create('product.jpg', 10, 'image/jpeg'),
             'destination_type' => 'external_url',
-            'destination_url' => 'https://shop.example.com/product-16',
+            'destination_url' => 'https://shop.example.com/product-3',
             'status' => 'draft',
         ])->assertUnprocessable()
-            ->assertJsonPath('message', 'A profile can have up to 15 products.');
+            ->assertJsonPath('message', 'A profile can have up to 2 products.');
+
+        $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/products")
+            ->assertOk()
+            ->assertJsonPath('data.max_products', 2)
+            ->assertJsonPath('data.available_slots', 0);
     }
 
     public function test_manual_products_without_external_ids_can_share_the_same_name(): void

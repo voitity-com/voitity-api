@@ -3,6 +3,7 @@
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
+use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\UsdCopRateService\UsdCopRateService;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
@@ -92,6 +93,14 @@ Artisan::command('subscriptions:reset-usage-limits', function (SubscriptionLimit
 
     return Command::SUCCESS;
 })->purpose('Reset due monthly usage limits for active subscriptions');
+
+Artisan::command('subscriptions:release-stale-usage-reservations', function (SubscriptionUsageRecorder $usage): int {
+    $released = $usage->releaseStaleReservations();
+
+    $this->info("Stale subscription usage reservations released: {$released}");
+
+    return Command::SUCCESS;
+})->purpose('Release provider usage reservations left pending after an interrupted process');
 
 Artisan::command('subscriptions:bill-recurring', function (UsdCopRateService $usdCopRateService): int {
     $usdCopRateService->syncConfig();
@@ -237,9 +246,19 @@ Artisan::command('notifications:service-notice {message}', function (
     return Command::SUCCESS;
 })->purpose('Send a service maintenance or degradation notice to users');
 
-Schedule::command('subscriptions:bill-recurring')->hourly();
-Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10);
-Schedule::command('subscriptions:renew-free')->dailyAt('00:05');
-Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10');
-Schedule::command('notifications:subscription-renewal-reminders')->dailyAt('08:00');
-Schedule::command('notifications:monthly-usage-summary')->monthlyOn(1, '08:15');
+Schedule::command('subscriptions:bill-recurring')->hourly()->withoutOverlapping(60)->onOneServer();
+Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();
+Schedule::command('subscriptions:renew-free')->dailyAt('00:05')->withoutOverlapping(60)->onOneServer();
+Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10')->withoutOverlapping(60)->onOneServer();
+Schedule::command('subscriptions:release-stale-usage-reservations')
+    ->everyTenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+Schedule::command('notifications:subscription-renewal-reminders')
+    ->dailyAt('08:00')
+    ->withoutOverlapping(60)
+    ->onOneServer();
+Schedule::command('notifications:monthly-usage-summary')
+    ->monthlyOn(1, '08:15')
+    ->withoutOverlapping(60)
+    ->onOneServer();

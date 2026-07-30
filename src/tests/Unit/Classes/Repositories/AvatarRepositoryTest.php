@@ -14,6 +14,7 @@ use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -169,11 +170,13 @@ class AvatarRepositoryTest extends TestCase
         $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
         $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
         Event::assertNotDispatched(AiImageForAvatarCreated::class);
     }

@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Lead;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -20,17 +19,17 @@ class UserSeeder extends Seeder
         try {
             $user = User::find(1);
 
-            if (!$user) {
+            if (! $user) {
                 $user = User::create([
-                    'role'              => 'admin',
-                    'name'              => 'Admin',
-                    'email'             => 'voitity@gmail.com',
-                    'password'          => Hash::make('qwerty123'),
+                    'role' => 'admin',
+                    'name' => 'Admin',
+                    'email' => 'voitity@gmail.com',
+                    'password' => Hash::make('qwerty123'),
                 ]);
             }
 
         } catch (\Throwable $e) {
-            Log::info(get_class() . $e->getMessage());
+            Log::info(get_class().$e->getMessage());
         }
     }
 }

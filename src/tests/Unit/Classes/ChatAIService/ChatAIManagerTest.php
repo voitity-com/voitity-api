@@ -18,7 +18,9 @@ use Tests\TestCase;
 class ChatAIManagerTest extends TestCase
 {
     private ChatAIManager $chatAIManager;
+
     private MockInterface $mockConfig;
+
     /** @var MockInterface&Container */
     private MockInterface $mockContainer;
 

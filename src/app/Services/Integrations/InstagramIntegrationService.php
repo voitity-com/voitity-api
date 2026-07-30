@@ -2,6 +2,7 @@
 
 namespace App\Services\Integrations;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
@@ -19,6 +20,8 @@ use RuntimeException;
 class InstagramIntegrationService
 {
     private const STATE_CACHE_PREFIX = 'instagram_oauth_state:';
+
+    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
 
     public function connectUrl(Profile $profile, User $user): string
     {
@@ -171,7 +174,10 @@ class InstagramIntegrationService
         $selectedItems = collect($items)
             ->filter(fn (array $item): bool => (bool) ($item['selected'] ?? false))
             ->values();
-        $selectionLimit = max(1, (int) config('instagram.selection_limit', 10));
+        $selectionLimit = $this->capabilities->selectedMediaPerProfile(
+            $integration->profile,
+            ProfileIntegration::PROVIDER_INSTAGRAM
+        );
 
         if ($selectedItems->count() > $selectionLimit) {
             throw new InvalidArgumentException("You can select up to {$selectionLimit} Instagram items.");
@@ -223,7 +229,10 @@ class InstagramIntegrationService
             ->where('selected', true)
             ->orderByDesc('taken_at')
             ->orderByDesc('id')
-            ->limit(max(1, (int) config('instagram.selection_limit', 10)))
+            ->limit($this->capabilities->selectedMediaPerProfile(
+                $profile,
+                ProfileIntegration::PROVIDER_INSTAGRAM
+            ))
             ->get()
             ->map(fn (ProfileIntegrationMedia $media): array => [
                 'id' => $media->id,

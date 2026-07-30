@@ -42,11 +42,7 @@ class VoiceClientClonedVoice
     /**
      * Create a new VoiceClientClonedVoice instance.
      *
-     * @param string $source
-     * @param string|null $providerVoiceId
-     * @param string $status
-     * @param array $response The response data
-     * @param string|null $requestUrl
+     * @param  array  $response  The response data
      */
     public function __construct(
         string $source,
@@ -64,8 +60,6 @@ class VoiceClientClonedVoice
 
     /**
      * Check if the cloning operation was successful.
-     *
-     * @return bool
      */
     public function isSuccessful(): bool
     {
@@ -74,8 +68,6 @@ class VoiceClientClonedVoice
 
     /**
      * Check if the cloning operation failed.
-     *
-     * @return bool
      */
     public function isFailed(): bool
     {
@@ -84,8 +76,6 @@ class VoiceClientClonedVoice
 
     /**
      * Check if the cloning operation is pending.
-     *
-     * @return bool
      */
     public function isPending(): bool
     {
@@ -94,8 +84,6 @@ class VoiceClientClonedVoice
 
     /**
      * Get the provider voice ID.
-     *
-     * @return string|null
      */
     public function getProviderVoiceId(): ?string
     {
@@ -104,20 +92,16 @@ class VoiceClientClonedVoice
 
     /**
      * Set the provider voice ID.
-     *
-     * @param string $providerVoiceId
-     * @return self
      */
     public function setProviderVoiceId(string $providerVoiceId): self
     {
         $this->providerVoiceId = $providerVoiceId;
+
         return $this;
     }
 
     /**
      * Get the request URL.
-     *
-     * @return string|null
      */
     public function getRequestUrl(): ?string
     {
@@ -126,8 +110,6 @@ class VoiceClientClonedVoice
 
     /**
      * Get the response data.
-     *
-     * @return array|null
      */
     public function getResponse(): ?array
     {
@@ -136,8 +118,6 @@ class VoiceClientClonedVoice
 
     /**
      * Convert to array representation.
-     *
-     * @return array
      */
     public function toArray(): array
     {

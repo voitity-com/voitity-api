@@ -10,8 +10,6 @@ class VoiceManager extends Manager
 {
     /**
      * Get the default driver name.
-     *
-     * @return string
      */
     public function getDefaultDriver(): string
     {
@@ -20,19 +18,16 @@ class VoiceManager extends Manager
 
     /**
      * Create an ElevenLabs voice driver instance.
-     *
-     * @return VoiceClient
      */
     public function createElevenlabsDriver(): VoiceClient
     {
-        return new ElevenLabsVoiceClient();
+        return new ElevenLabsVoiceClient;
     }
 
     /**
      * Get a voice client instance.
      *
-     * @param string|null $driver
-     * @return VoiceClient
+     * @param  string|null  $driver
      */
     public function driver($driver = null): VoiceClient
     {
@@ -41,13 +36,10 @@ class VoiceManager extends Manager
 
     /**
      * Create a custom voice driver instance.
-     *
-     * @param array $config
-     * @return VoiceClient
      */
     protected function createCustomDriver(array $config): VoiceClient
     {
-        if (!isset($config['via'])) {
+        if (! isset($config['via'])) {
             throw new InvalidArgumentException('Custom voice driver must specify a "via" callable.');
         }
 

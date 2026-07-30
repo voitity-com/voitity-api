@@ -120,10 +120,57 @@ class SubscriptionUsageRecorderTest extends TestCase
         $limit = SubscriptionLimit::first();
 
         $this->assertSame(0.5, $chatUse->credits_used);
-        $this->assertSame(7.5, $ttsUse->credits_used);
+        $this->assertSame(3.75, $ttsUse->credits_used);
         $this->assertSame(999, $limit->chat_messages_remaining);
         $this->assertSame(9850, $limit->tts_characters_remaining);
-        $this->assertSame(992.0, $limit->credits_remaining);
+        $this->assertSame(995.75, $limit->credits_remaining);
+    }
+
+    public function test_fractional_credit_charges_do_not_accumulate_rounding_drift(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $recorder = new SubscriptionUsageRecorder;
+
+        foreach (range(1, 40) as $index) {
+            $recorder->record(
+                userId: $user->id,
+                usageType: SubscriptionUsageType::VoiceTtsCharacters,
+                amounts: ['tts_characters' => 1],
+                idempotencyKey: "tts-precision-{$index}",
+            );
+        }
+
+        $this->assertEqualsWithDelta(999.0, (float) $subscription->limit->fresh()->credits_remaining, 0.0001);
+        $this->assertEqualsWithDelta(1.0, (float) SubscriptionUse::sum('credits_used'), 0.0001);
+    }
+
+    public function test_an_idempotency_key_cannot_be_reused_for_different_usage(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $recorder = new SubscriptionUsageRecorder;
+        $recorder->reserve(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::ChatOpenAiCall,
+            amounts: ['chat_messages' => 1],
+            idempotencyKey: 'usage-conflict',
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Idempotency key was already used for different subscription usage.');
+
+        try {
+            $recorder->reserve(
+                userId: $user->id,
+                usageType: SubscriptionUsageType::VoiceTtsCharacters,
+                amounts: ['tts_characters' => 1],
+                idempotencyKey: 'usage-conflict',
+            );
+        } finally {
+            $this->assertSame(999.5, (float) $subscription->limit->fresh()->credits_remaining);
+            $this->assertDatabaseCount('subscription_uses', 1);
+        }
     }
 
     public function test_it_releases_recorded_usage_and_restores_current_period_limits(): void
@@ -144,7 +191,7 @@ class SubscriptionUsageRecorderTest extends TestCase
         $limit = SubscriptionLimit::firstOrFail();
 
         $this->assertSame(9980, $limit->tts_characters_remaining);
-        $this->assertSame(999.0, $limit->credits_remaining);
+        $this->assertSame(999.5, $limit->credits_remaining);
         $this->assertDatabaseHas('subscription_uses', ['id' => $use->id]);
 
         $this->assertTrue($recorder->release('tts:voice:release-test'));
@@ -153,7 +200,10 @@ class SubscriptionUsageRecorderTest extends TestCase
 
         $this->assertSame(10000, $limit->tts_characters_remaining);
         $this->assertSame(1000.0, $limit->credits_remaining);
-        $this->assertDatabaseMissing('subscription_uses', ['id' => $use->id]);
+        $this->assertDatabaseHas('subscription_uses', [
+            'id' => $use->id,
+            'status' => 'released',
+        ]);
         $this->assertFalse($recorder->release('tts:voice:release-test'));
         $this->assertSame(10000, $limit->fresh()->tts_characters_remaining);
         $this->assertSame(1000.0, $limit->fresh()->credits_remaining);
@@ -252,6 +302,60 @@ class SubscriptionUsageRecorderTest extends TestCase
         $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
         $this->assertSame(0, $limit->profiles_remaining);
         $this->assertSame(1, SubscriptionUse::where('idempotency_key', 'profile-created:new-annual-period')->firstOrFail()->profiles_used);
+    }
+
+    public function test_reserved_usage_blocks_a_second_request_before_the_first_one_is_finalized(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $subscription->limit()->update(['chat_messages_remaining' => 1]);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $use = $recorder->reserve(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::ChatMessageReceived,
+            amounts: ['chat_messages' => 1],
+            idempotencyKey: 'chat-message:reserved-first',
+            profileId: $profile->id
+        );
+
+        $this->assertSame(SubscriptionUse::STATUS_RESERVED, $use->status);
+        $this->assertSame(0, $subscription->limit()->firstOrFail()->chat_messages_remaining);
+
+        $this->expectException(SubscriptionEntitlementException::class);
+
+        $recorder->reserve(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::ChatMessageReceived,
+            amounts: ['chat_messages' => 1],
+            idempotencyKey: 'chat-message:reserved-second',
+            profileId: $profile->id
+        );
+    }
+
+    public function test_it_releases_stale_reservations_and_restores_quota(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+
+        $user = User::factory()->create();
+        $profile = $this->profileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $recorder = new SubscriptionUsageRecorder;
+
+        $use = $recorder->reserve(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::ChatMessageReceived,
+            amounts: ['chat_messages' => 1],
+            idempotencyKey: 'chat-message:stale',
+            profileId: $profile->id
+        );
+        $use->forceFill(['reserved_at' => now()->subMinutes(61)])->save();
+
+        $this->assertSame(1, $recorder->releaseStaleReservations());
+        $this->assertSame(1000, $subscription->limit()->firstOrFail()->chat_messages_remaining);
+        $this->assertSame(SubscriptionUse::STATUS_RELEASED, $use->fresh()->status);
+        $this->assertSame(0, $recorder->releaseStaleReservations());
     }
 
     private function profileFor(User $user): Profile

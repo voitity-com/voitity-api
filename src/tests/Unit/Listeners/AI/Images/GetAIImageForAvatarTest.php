@@ -159,11 +159,13 @@ class GetAIImageForAvatarTest extends TestCase
         $this->assertSame('Image did not pass public figure content moderation.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
         $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
-        $this->assertDatabaseMissing('subscription_uses', [
+        $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $user->id,

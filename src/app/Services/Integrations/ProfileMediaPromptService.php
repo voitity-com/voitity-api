@@ -2,6 +2,7 @@
 
 namespace App\Services\Integrations;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\ProfileIntegrationMedia;
@@ -9,7 +10,10 @@ use App\Services\Features\FeatureService;
 
 class ProfileMediaPromptService
 {
-    public function __construct(private readonly FeatureService $features) {}
+    public function __construct(
+        private readonly FeatureService $features,
+        private readonly SubscriptionPlanCapabilityService $capabilities,
+    ) {}
 
     /**
      * @return array{
@@ -114,19 +118,28 @@ class ProfileMediaPromptService
     public function selectedMediaForPrompt(Profile $profile): array
     {
         $disabledProviders = $this->features->disabledCatalogIntegrationProviders($profile);
-
-        return $profile->integrationMedia()
-            ->when($disabledProviders !== [], fn ($query) => $query->whereNotIn('provider', $disabledProviders))
+        $providers = $profile->integrationMedia()
             ->where('selected', true)
-            ->orderByDesc('taken_at')
-            ->orderByDesc('id')
-            ->limit(max(
-                1,
-                (int) config('instagram.selection_limit', 10)
-                    + (int) config('tiktok.selection_limit', 10)
-                    + (int) config('onlyfans.selection_limit', 10)
+            ->distinct()
+            ->pluck('provider')
+            ->reject(fn (string $provider): bool => in_array($provider, $disabledProviders, true));
+
+        return $providers
+            ->flatMap(function (string $provider) use ($profile) {
+                return $profile->integrationMedia()
+                    ->where('provider', $provider)
+                    ->where('selected', true)
+                    ->orderByDesc('taken_at')
+                    ->orderByDesc('id')
+                    ->limit($this->capabilities->selectedMediaPerProfile($profile, $provider))
+                    ->get();
+            })
+            ->sortByDesc(fn (ProfileIntegrationMedia $media): string => sprintf(
+                '%s-%020d',
+                $media->taken_at?->format('Y-m-d H:i:s.u') ?? '',
+                $media->id
             ))
-            ->get()
+            ->values()
             ->map(fn (ProfileIntegrationMedia $media): array => [
                 'id' => $media->id,
                 'provider' => $this->providerLabel($media->provider),

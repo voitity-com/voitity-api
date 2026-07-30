@@ -13,7 +13,7 @@ class VoiceSampleServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(VoiceSampleFileManager::class, function ($app) {
-            return new VoiceSampleFileManager();
+            return new VoiceSampleFileManager;
         });
     }
 

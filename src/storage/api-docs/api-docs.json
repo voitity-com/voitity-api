@@ -688,7 +688,7 @@
                     "Messages"
                 ],
                 "summary": "Send an audio message to a profile",
-                "description": "Transcribes a user audio recording, stores it as a message, and triggers the AI workflow to generate a reply.",
+                "description": "Accepts a recording of up to 30 seconds, reserves chat, incoming-audio count, and incoming-audio seconds before transcription, stores the message, and generates a reply. If TTS quota is exhausted, the reply is returned as text without generated audio.",
                 "operationId": "73a4ae83f788e491ba26facbd8c3f70c",
                 "parameters": [
                     {
@@ -711,7 +711,7 @@
                                 ],
                                 "properties": {
                                     "audio": {
-                                        "description": "Audio recording to transcribe. Browser WebM/MP4 recordings may be detected as video/webm or video/mp4 containers.",
+                                        "description": "Audio recording of up to 30 seconds and 10 MB. Browser WebM/MP4 recordings may be detected as video/webm or video/mp4 containers.",
                                         "type": "file",
                                         "format": "binary"
                                     },
@@ -789,13 +789,13 @@
                         "description": "Unauthenticated"
                     },
                     "402": {
-                        "description": "Subscription limit exceeded"
+                        "description": "Subscription, visitor-message, incoming-audio count, incoming-audio duration, TTS, or credit limit exceeded. Stable error codes are returned in code."
                     },
                     "404": {
                         "description": "Profile or chat not found"
                     },
                     "422": {
-                        "description": "Validation error or empty transcription"
+                        "description": "Validation error, duration unknown, duration above 30 seconds, or empty transcription"
                     },
                     "502": {
                         "description": "Audio transcription failed"
@@ -1930,6 +1930,80 @@
                 ]
             }
         },
+        "/api/profile/{profile}/messaging-capabilities": {
+            "get": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Get current public messaging capabilities for a profile",
+                "operationId": "de2b16284b4b5285350237b2441565ae",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Capabilities retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "text_messages_enabled": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "audio_messages_enabled": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "audio_max_duration_seconds": {
+                                                    "type": "integer",
+                                                    "example": 30
+                                                },
+                                                "reason": {
+                                                    "type": "string",
+                                                    "example": null,
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing profile:read ability"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "profile:read"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/subscription/limits": {
             "get": {
                 "tags": [
@@ -1971,7 +2045,7 @@
                                                         "price_usd": {
                                                             "type": "number",
                                                             "format": "float",
-                                                            "example": 9.99
+                                                            "example": 12.99
                                                         },
                                                         "currency": {
                                                             "type": "string",
@@ -2056,6 +2130,20 @@
                         ]
                     }
                 ]
+            }
+        },
+        "/api/subscription/public-plans": {
+            "get": {
+                "tags": [
+                    "Subscription"
+                ],
+                "summary": "Get public plan prices, limits, credits, and capabilities",
+                "operationId": "89d77841e5eab41cff71d157b25e838a",
+                "responses": {
+                    "200": {
+                        "description": "Public subscription plans retrieved successfully"
+                    }
+                }
             }
         },
         "/api/payments/usd-cop-rate": {

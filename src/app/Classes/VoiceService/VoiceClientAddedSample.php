@@ -35,10 +35,7 @@ class VoiceClientAddedSample
     /**
      * Create a new VoiceClientAddedSample instance.
      *
-     * @param string $source
-     * @param string $status
-     * @param array $response The response data
-     * @param string|null $requestUrl
+     * @param  array  $response  The response data
      */
     public function __construct(
         string $source,
@@ -54,8 +51,6 @@ class VoiceClientAddedSample
 
     /**
      * Check if the sample addition was successful.
-     *
-     * @return bool
      */
     public function isSuccessful(): bool
     {
@@ -64,8 +59,6 @@ class VoiceClientAddedSample
 
     /**
      * Check if the sample addition failed.
-     *
-     * @return bool
      */
     public function isFailed(): bool
     {
@@ -74,8 +67,6 @@ class VoiceClientAddedSample
 
     /**
      * Check if the sample addition is pending.
-     *
-     * @return bool
      */
     public function isPending(): bool
     {
@@ -84,8 +75,6 @@ class VoiceClientAddedSample
 
     /**
      * Convert the added sample result to an array.
-     *
-     * @return array
      */
     public function toArray(): array
     {

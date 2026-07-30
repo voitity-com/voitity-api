@@ -81,8 +81,8 @@ class PaymentControllerTest extends TestAPI
         $this->assertFalse($plans->has('pro'));
         $this->assertFalse($plans->has('business'));
         $this->assertTrue($plans->has('starter_annual'));
-        $this->assertSame(9.99, $plans->get('starter')['price_usd']);
-        $this->assertSame(99, $plans->get('starter_annual')['price_usd']);
+        $this->assertSame(12.99, $plans->get('starter')['price_usd']);
+        $this->assertSame(129, $plans->get('starter_annual')['price_usd']);
         $this->assertSame('annual', $plans->get('starter_annual')['interval']);
         $this->assertSame(1, $plans->get('starter_annual')['limits']['profiles']);
         $this->assertSame(1000, $plans->get('starter_annual')['credits']['total']);
@@ -205,7 +205,7 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_order.recurring', true);
         $response->assertJsonPath('data.payment_order.billing_reason', 'trial_setup');
         $response->assertJsonPath('data.payment_order.customer_terms.version', '2026-07-29');
-        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 9.99);
+        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 12.99);
         $this->assertNotNull($response->json('data.payment_order.customer_terms.accepted_at'));
 
         $user->refresh();
@@ -218,7 +218,7 @@ class PaymentControllerTest extends TestAPI
             'recurring' => true,
             'billing_reason' => 'trial_setup',
             'customer_terms_version' => '2026-07-29',
-            'accepted_plan_price_usd' => 9.99,
+            'accepted_plan_price_usd' => 12.99,
             'amount_in_cents' => 0,
             'currency' => 'COP',
         ]);
@@ -301,7 +301,7 @@ class PaymentControllerTest extends TestAPI
                 'data' => [
                     'id' => 'trx_initial_1',
                     'status' => 'APPROVED',
-                    'amount_in_cents' => 3996000,
+                    'amount_in_cents' => 5196000,
                     'currency' => 'COP',
                 ],
             ], 201),
@@ -335,8 +335,8 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_source.status', 'active');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
-        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 9.99);
-        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 3996000);
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 12.99);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 5196000);
         $response->assertJsonPath('data.payment_order.status', 'approved');
         $response->assertJsonPath('data.payment_order.recurring', true);
         $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
@@ -348,7 +348,7 @@ class PaymentControllerTest extends TestAPI
             'status' => 'approved',
             'recurring' => true,
             'billing_reason' => 'subscription_initial',
-            'amount_in_cents' => 3996000,
+            'amount_in_cents' => 5196000,
             'currency' => 'COP',
         ]);
         $this->assertDatabaseHas('subscriptions', [
@@ -362,7 +362,7 @@ class PaymentControllerTest extends TestAPI
         Http::assertSent(function ($request) use ($user): bool {
             return $request->url() === 'https://sandbox.wompi.co/v1/transactions'
                 && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
-                && $request['amount_in_cents'] === 3996000
+                && $request['amount_in_cents'] === 5196000
                 && $request['currency'] === 'COP'
                 && $request['customer_email'] === $user->email
                 && $request['payment_source_id'] === 3891
@@ -390,7 +390,7 @@ class PaymentControllerTest extends TestAPI
                     'data' => [
                         'id' => 'trx_initial_1',
                         'status' => 'APPROVED',
-                        'amount_in_cents' => 3996000,
+                        'amount_in_cents' => 5196000,
                         'currency' => 'COP',
                     ],
                 ], 201)
@@ -398,7 +398,7 @@ class PaymentControllerTest extends TestAPI
                     'data' => [
                         'id' => 'trx_renewal_1',
                         'status' => 'APPROVED',
-                        'amount_in_cents' => 3996000,
+                        'amount_in_cents' => 5196000,
                         'currency' => 'COP',
                     ],
                 ], 201),
@@ -438,13 +438,13 @@ class PaymentControllerTest extends TestAPI
             'user_id' => $user->id,
             'billing_reason' => 'subscription_initial',
             'status' => 'approved',
-            'amount_in_cents' => 3996000,
+            'amount_in_cents' => 5196000,
         ]);
         $this->assertDatabaseHas('payment_orders', [
             'user_id' => $user->id,
             'billing_reason' => 'subscription_renewal',
             'status' => 'approved',
-            'amount_in_cents' => 3996000,
+            'amount_in_cents' => 5196000,
         ]);
         $this->assertSame(2, PaymentOrder::query()->where('user_id', $user->id)->where('status', 'approved')->count());
 
@@ -472,7 +472,7 @@ class PaymentControllerTest extends TestAPI
                 'data' => [
                     'id' => 'trx_initial_declined',
                     'status' => 'DECLINED',
-                    'amount_in_cents' => 3996000,
+                    'amount_in_cents' => 5196000,
                     'currency' => 'COP',
                 ],
             ], 201),
@@ -553,16 +553,16 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Wompi checkout created successfully.');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
-        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 9.99);
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 12.99);
         $response->assertJsonPath('data.payment_order.amounts.exchange_rate', 4000);
-        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 39960);
-        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 3996000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 51960);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 5196000);
         $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
         $response->assertJsonPath('data.payment_order.status', 'pending');
         $response->assertJsonPath('data.payment_order.recurring', true);
         $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
         $response->assertJsonPath('data.payment_order.customer_terms.version', '2026-07-29');
-        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 9.99);
+        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 12.99);
         $response->assertJsonPath('data.checkout.public_key', 'pub_test_key');
         $response->assertJsonPath('data.checkout.widget_url', 'https://checkout.wompi.co/widget.js');
         $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
@@ -585,8 +585,8 @@ class PaymentControllerTest extends TestAPI
             'recurring' => true,
             'billing_reason' => 'subscription_initial',
             'customer_terms_version' => '2026-07-29',
-            'accepted_plan_price_usd' => 9.99,
-            'amount_in_cents' => 3996000,
+            'accepted_plan_price_usd' => 12.99,
+            'amount_in_cents' => 5196000,
             'currency' => 'COP',
         ]);
     }
@@ -603,14 +603,14 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Wompi checkout created successfully.');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter_annual');
-        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 99);
+        $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 129);
         $response->assertJsonPath('data.payment_order.amounts.exchange_rate', 4000);
-        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 396000);
-        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 39600000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 516000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 51600000);
         $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
         $response->assertJsonPath('data.payment_order.status', 'pending');
         $response->assertJsonPath('data.payment_order.recurring', true);
-        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 99);
+        $response->assertJsonPath('data.payment_order.customer_terms.accepted_plan_price_usd', 129);
         $this->assertStringStartsWith('https://checkout.wompi.co/p/?', $response->json('data.checkout.checkout_url'));
 
         $this->assertDatabaseHas('payment_orders', [
@@ -620,8 +620,8 @@ class PaymentControllerTest extends TestAPI
             'status' => 'pending',
             'recurring' => true,
             'customer_terms_version' => '2026-07-29',
-            'accepted_plan_price_usd' => 99,
-            'amount_in_cents' => 39600000,
+            'accepted_plan_price_usd' => 129,
+            'amount_in_cents' => 51600000,
             'currency' => 'COP',
         ]);
     }
@@ -772,7 +772,7 @@ class PaymentControllerTest extends TestAPI
     public function test_valid_wompi_approved_event_activates_annual_subscription(): void
     {
         $user = User::factory()->create();
-        $paymentOrder = $this->createPendingPaymentOrder($user, SubscriptionPlan::StarterAnnual, 99);
+        $paymentOrder = $this->createPendingPaymentOrder($user, SubscriptionPlan::StarterAnnual, 129);
         $payload = $this->wompiPayload($paymentOrder);
 
         $response = $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $payload, [
@@ -831,7 +831,7 @@ class PaymentControllerTest extends TestAPI
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
-            'credits_remaining' => 1000,
+            'credits_remaining' => 100,
             'profiles_remaining' => 1,
         ]);
     }

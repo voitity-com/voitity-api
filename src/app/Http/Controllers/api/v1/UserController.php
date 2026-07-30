@@ -17,10 +17,13 @@ class UserController extends Controller
      *     summary="Get authenticated user",
      *     tags={"User"},
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Response(
      *         response=200,
      *         description="User retrieved successfully.",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="User retrieved successfully."),
      *             @OA\Property(property="data", type="object",
      *                 @OA\Property(property="id", type="integer", example=1),
@@ -38,6 +41,7 @@ class UserController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Missing user:read ability"),
      *     @OA\Response(response=404, description="User not found"),
@@ -49,7 +53,7 @@ class UserController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user instanceof User) {
+            if (! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 

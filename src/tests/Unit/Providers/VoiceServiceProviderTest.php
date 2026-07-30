@@ -2,22 +2,20 @@
 
 namespace Tests\Unit\Providers;
 
-use App\Classes\VoiceService\VoiceService;
-use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceClient;
+use App\Classes\VoiceService\VoiceManager;
+use App\Classes\VoiceService\VoiceService;
 use App\Models\Voice;
-use App\Models\User;
 use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class VoiceServiceProviderTest extends TestCase
 {
-
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
-        
+
         // Mock ElevenLabs configuration for testing
         Config::set('voice.drivers.elevenlabs.api_key', 'test-api-key');
         Config::set('voice.drivers.elevenlabs.base_url', 'https://api.elevenlabs.io');

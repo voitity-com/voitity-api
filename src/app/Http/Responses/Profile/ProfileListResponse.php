@@ -6,9 +6,7 @@ use Illuminate\Support\Collection;
 
 class ProfileListResponse
 {
-    public function __construct(private readonly Collection $profiles)
-    {
-    }
+    public function __construct(private readonly Collection $profiles) {}
 
     public function toArray(): array
     {

@@ -52,6 +52,8 @@ services:
       - DB_DATABASE=voitity
       - DB_USERNAME=voitity
       - DB_PASSWORD=voitity
+      - DB_QUEUE_RETRY_AFTER=360
+      - DB_QUEUE_AFTER_COMMIT=true
       - RUN_QUEUE_WORKER=false
 
   scheduler:

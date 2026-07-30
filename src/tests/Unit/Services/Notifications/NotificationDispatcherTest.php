@@ -93,6 +93,7 @@ class NotificationDispatcherTest extends TestCase
 
             if (! $message->actionUrl) {
                 $this->assertNull($message->actionUrl);
+
                 continue;
             }
 

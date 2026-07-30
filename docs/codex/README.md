@@ -18,5 +18,6 @@ Current local skills:
 - `voitity-api-feature`: API endpoints, auth, responses, tests, Swagger, Postman.
 - `voitity-ai-service-adapter`: drivers for ChatAIService, VideoAIService, and VoiceService.
 - `voitity-service-adapter`: new service families or external integrations using the adapter pattern.
+- `voitity-subscription-limit-testing`: five-cycle plan, quota, billing, queue, and responsive UI validation.
 
 Keep these files short. Add only information Codex cannot infer from the code.

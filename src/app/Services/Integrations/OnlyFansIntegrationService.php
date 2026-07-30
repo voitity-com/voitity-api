@@ -2,6 +2,7 @@
 
 namespace App\Services\Integrations;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
@@ -14,6 +15,8 @@ use InvalidArgumentException;
 
 class OnlyFansIntegrationService
 {
+    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
+
     /**
      * @param  array{username: string, profile_url: string}  $attributes
      */
@@ -117,7 +120,10 @@ class OnlyFansIntegrationService
                     : (bool) $media->selected;
             })
             ->count();
-        $selectionLimit = max(1, (int) config('onlyfans.selection_limit', 10));
+        $selectionLimit = $this->capabilities->selectedMediaPerProfile(
+            $integration->profile,
+            ProfileIntegration::PROVIDER_ONLYFANS
+        );
 
         if ($selectedCount > $selectionLimit) {
             throw new InvalidArgumentException("You can select up to {$selectionLimit} OnlyFans items.");
@@ -234,7 +240,10 @@ class OnlyFansIntegrationService
             return;
         }
 
-        $selectionLimit = max(1, (int) config('onlyfans.selection_limit', 10));
+        $selectionLimit = $this->capabilities->selectedMediaPerProfile(
+            $integration->profile,
+            ProfileIntegration::PROVIDER_ONLYFANS
+        );
 
         if ($integration->media()->where('selected', true)->count() >= $selectionLimit) {
             throw new InvalidArgumentException("You can select up to {$selectionLimit} OnlyFans items.");

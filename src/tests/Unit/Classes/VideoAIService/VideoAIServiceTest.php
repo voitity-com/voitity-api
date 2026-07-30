@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\Classes\VideoAIService;
 
-use App\Classes\VideoAIService\VideoAIClient;
 use App\Classes\VideoAIService\AiImage;
-use App\Classes\VideoAIService\VideoAIService;
 use App\Classes\VideoAIService\AiVideo;
+use App\Classes\VideoAIService\VideoAIClient;
+use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Models\Profile;
 use App\Models\User;

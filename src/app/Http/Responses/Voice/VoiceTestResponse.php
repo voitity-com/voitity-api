@@ -6,9 +6,7 @@ use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 
 class VoiceTestResponse
 {
-    public function __construct(private readonly VoiceClientGeneratedAudio $generatedAudio)
-    {
-    }
+    public function __construct(private readonly VoiceClientGeneratedAudio $generatedAudio) {}
 
     public function toArray(): array
     {

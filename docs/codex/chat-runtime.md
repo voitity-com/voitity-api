@@ -2,19 +2,29 @@
 
 Current flow:
 
-1. `MessageController` validates and stores a user question.
-2. It dispatches `MessageStored`.
-3. `ProcessStoredMessage` loads the message, profile, and chat.
-4. `AnswerBuilder` calls the configured `ChatAIClient`.
-5. `OpenAIClient` builds the system prompt and calls OpenAI.
-6. `AnswerBuilder` optionally generates voice audio through `VoiceService`.
-7. The answer is stored as a `Message`.
+1. `MessageController` validates the profile, chat, request, and subscription.
+2. Text requests atomically reserve one visitor message before persistence.
+3. Audio requests inspect the real duration, reject recordings over 30 seconds,
+   and atomically reserve visitor-message, audio-count, and audio-duration quota
+   before transcription.
+4. The accepted question is stored and its reservation is finalized.
+5. `MessageStored` dispatches processing and `ProcessStoredMessage` loads the
+   message, profile, and chat.
+6. `AnswerBuilder` calls the configured `ChatAIClient`.
+7. `OpenAIClient` builds the system prompt and calls OpenAI.
+8. `AnswerBuilder` optionally generates voice audio through `VoiceService`.
+9. `VoiceService` reserves TTS characters before the provider call, finalizes
+   successful usage, and releases failed usage.
+10. If TTS quota is unavailable, the answer is stored and returned as text only.
 
 Important files:
 
 - `src/app/Http/Controllers/api/v1/MessageController.php`
+- `src/app/Classes/ChatAIService/AudioMessageInspector.php`
 - `src/app/Listeners/AI/ProcessStoredMessage.php`
 - `src/app/Classes/ChatAIService/AnswerBuilder.php`
+- `src/app/Classes/Subscriptions/SubscriptionUsageRecorder.php`
+- `src/app/Classes/Subscriptions/ProfileMessagingCapabilitiesService.php`
 - `src/app/Classes/ChatAIService/ChatAIClient.php`
 - `src/app/Classes/ChatAIService/OpenAI/OpenAIClient.php`
 - `src/app/Models/Profile.php`

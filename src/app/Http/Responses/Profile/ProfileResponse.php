@@ -3,6 +3,7 @@
 namespace App\Http\Responses\Profile;
 
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
+use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
 use App\Models\Profile;
 use App\Models\Voice;
 use App\Services\Features\FeatureService;
@@ -40,6 +41,7 @@ class ProfileResponse
             'networks' => (object) ($this->profile->networks ?? []),
             'products_enabled' => (bool) $this->profile->products_enabled,
             'feature_settings' => app(FeatureService::class)->profileFeatureRows($this->profile),
+            'messaging_capabilities' => app(ProfileMessagingCapabilitiesService::class)->forProfile($this->profile),
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];

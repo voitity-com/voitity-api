@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\ChatAIService\AudioMessageInspector;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
@@ -623,6 +624,7 @@ class MessageControllerTest extends TestAPI
             ));
         $chatAiClient->shouldNotReceive('getAnswer');
         $this->instance(ChatAIClient::class, $chatAiClient);
+        $this->mockAudioDuration(4);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
@@ -634,6 +636,53 @@ class MessageControllerTest extends TestAPI
         $response->assertJsonPath('data.status', 'failed');
         $this->assertSame(0, Message::count());
         Storage::disk('public')->assertMissing('messages/audio/'.$profile->id);
+    }
+
+    public function test_audio_longer_than_thirty_seconds_is_rejected_before_transcription(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+        $this->mockAudioDuration(31);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldNotReceive('getTextFromAudio');
+        $chatAiClient->shouldNotReceive('getAnswer');
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->validAudioUpload(),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('code', 'AUDIO_DURATION_EXCEEDED');
+        $this->assertDatabaseCount('subscription_uses', 0);
+    }
+
+    public function test_audio_is_rejected_before_transcription_when_monthly_audio_limit_is_exhausted(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $subscription->limit()->update(['incoming_audio_messages_remaining' => 0]);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+        $this->mockAudioDuration(30);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldNotReceive('getTextFromAudio');
+        $chatAiClient->shouldNotReceive('getAnswer');
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->validAudioUpload(),
+            ]);
+
+        $response->assertStatus(402);
+        $response->assertJsonPath('code', 'AUDIO_MESSAGE_LIMIT_REACHED');
+        $this->assertDatabaseCount('subscription_uses', 0);
     }
 
     private function createProfileFor(User $user): Profile
@@ -667,8 +716,10 @@ class MessageControllerTest extends TestAPI
             'avatar_images_remaining' => 1,
             'avatar_video_seconds_remaining' => 5,
             'voice_clones_remaining' => 1,
-            'tts_characters_remaining' => 10000,
+            'tts_characters_remaining' => 20000,
             'chat_messages_remaining' => 1000,
+            'incoming_audio_messages_remaining' => 500,
+            'incoming_audio_seconds_remaining' => 15000,
             'credits_remaining' => 1000,
         ]);
 
@@ -687,6 +738,8 @@ class MessageControllerTest extends TestAPI
 
     private function mockAudioChatClient(Profile $profile, string $transcribedText, string $answerText): void
     {
+        $this->mockAudioDuration(4);
+
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getTextFromAudio')
             ->once()
@@ -715,6 +768,15 @@ class MessageControllerTest extends TestAPI
             ));
 
         $this->instance(ChatAIClient::class, $chatAiClient);
+    }
+
+    private function mockAudioDuration(int $seconds): void
+    {
+        $inspector = Mockery::mock(AudioMessageInspector::class);
+        $inspector->shouldReceive('durationSeconds')
+            ->once()
+            ->andReturn($seconds);
+        $this->instance(AudioMessageInspector::class, $inspector);
     }
 
     private function storagePathFromUrl(string $url): string

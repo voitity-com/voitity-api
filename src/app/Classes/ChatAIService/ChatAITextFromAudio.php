@@ -69,16 +69,6 @@ class ChatAITextFromAudio
 
     /**
      * Create a new ChatAITextFromAudio instance.
-     *
-     * @param string $source
-     * @param string $audioPath
-     * @param string $text
-     * @param string $status
-     * @param array $response
-     * @param string|null $requestUrl
-     * @param float|null $confidence
-     * @param string|null $detectedLanguage
-     * @param float|null $duration
      */
     public function __construct(
         string $source,
@@ -104,8 +94,6 @@ class ChatAITextFromAudio
 
     /**
      * Check if the text extraction was successful.
-     *
-     * @return bool
      */
     public function isSuccessful(): bool
     {
@@ -114,8 +102,6 @@ class ChatAITextFromAudio
 
     /**
      * Check if the text extraction failed.
-     *
-     * @return bool
      */
     public function isFailed(): bool
     {
@@ -124,8 +110,6 @@ class ChatAITextFromAudio
 
     /**
      * Check if the text extraction is pending.
-     *
-     * @return bool
      */
     public function isPending(): bool
     {
@@ -134,18 +118,14 @@ class ChatAITextFromAudio
 
     /**
      * Check if the transcription has text content.
-     *
-     * @return bool
      */
     public function hasText(): bool
     {
-        return !empty($this->text);
+        return ! empty($this->text);
     }
 
     /**
      * Get the word count of the extracted text.
-     *
-     * @return int
      */
     public function getWordCount(): int
     {
@@ -154,8 +134,6 @@ class ChatAITextFromAudio
 
     /**
      * Convert the text extraction result to an array.
-     *
-     * @return array
      */
     public function toArray(): array
     {

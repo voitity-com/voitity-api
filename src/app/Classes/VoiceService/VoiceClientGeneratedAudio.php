@@ -64,15 +64,6 @@ class VoiceClientGeneratedAudio
 
     /**
      * Create a new VoiceClientGeneratedAudio instance.
-     *
-     * @param Voice $voice
-     * @param string $text
-     * @param string|null $audioUrl
-     * @param string|null $audioContent
-     * @param string $audioFormat
-     * @param float|null $duration
-     * @param string $status
-     * @param array $metadata
      */
     public function __construct(
         Voice $voice,
@@ -96,8 +87,6 @@ class VoiceClientGeneratedAudio
 
     /**
      * Check if the generation operation was successful.
-     *
-     * @return bool
      */
     public function isSuccessful(): bool
     {
@@ -106,8 +95,6 @@ class VoiceClientGeneratedAudio
 
     /**
      * Check if the generation operation failed.
-     *
-     * @return bool
      */
     public function isFailed(): bool
     {
@@ -116,8 +103,6 @@ class VoiceClientGeneratedAudio
 
     /**
      * Check if the generation operation is pending.
-     *
-     * @return bool
      */
     public function isPending(): bool
     {
@@ -126,18 +111,14 @@ class VoiceClientGeneratedAudio
 
     /**
      * Check if audio content is available.
-     *
-     * @return bool
      */
     public function hasAudioContent(): bool
     {
-        return !empty($this->audioContent) || !empty($this->audioUrl);
+        return ! empty($this->audioContent) || ! empty($this->audioUrl);
     }
 
     /**
      * Get the audio URL.
-     *
-     * @return string|null
      */
     public function getAudioUrl(): ?string
     {
@@ -146,20 +127,16 @@ class VoiceClientGeneratedAudio
 
     /**
      * Set the audio URL.
-     *
-     * @param string $audioUrl
-     * @return self
      */
     public function setAudioUrl(string $audioUrl): self
     {
         $this->audioUrl = $audioUrl;
+
         return $this;
     }
 
     /**
      * Get the audio content.
-     *
-     * @return string|null
      */
     public function getAudioContent(): ?string
     {
@@ -168,20 +145,16 @@ class VoiceClientGeneratedAudio
 
     /**
      * Set the audio content.
-     *
-     * @param string $audioContent
-     * @return self
      */
     public function setAudioContent(string $audioContent): self
     {
         $this->audioContent = $audioContent;
+
         return $this;
     }
 
     /**
      * Get the audio duration.
-     *
-     * @return float|null
      */
     public function getDuration(): ?float
     {
@@ -190,20 +163,16 @@ class VoiceClientGeneratedAudio
 
     /**
      * Set the audio duration.
-     *
-     * @param float $duration
-     * @return self
      */
     public function setDuration(float $duration): self
     {
         $this->duration = $duration;
+
         return $this;
     }
 
     /**
      * Convert to array representation.
-     *
-     * @return array
      */
     public function toArray(): array
     {

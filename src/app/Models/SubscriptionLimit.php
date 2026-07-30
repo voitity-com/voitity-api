@@ -18,6 +18,8 @@ class SubscriptionLimit extends Model
         'voice_clones_remaining',
         'tts_characters_remaining',
         'chat_messages_remaining',
+        'incoming_audio_messages_remaining',
+        'incoming_audio_seconds_remaining',
         'credits_remaining',
     ];
 

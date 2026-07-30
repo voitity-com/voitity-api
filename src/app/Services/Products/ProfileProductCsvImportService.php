@@ -105,9 +105,9 @@ class ProfileProductCsvImportService
                 'invalid_rows' => $counts[ProfileProductImportRowStatus::Invalid->value],
                 'duplicate_rows' => $duplicateRows,
                 'summary' => [
-                    'available_slots' => max(0, $this->products->maxProducts() - $profile->products()->count()),
+                    'available_slots' => max(0, $this->products->maxProducts($profile) - $profile->products()->count()),
                     'current_products' => $profile->products()->count(),
-                    'max_products' => $this->products->maxProducts(),
+                    'max_products' => $this->products->maxProducts($profile),
                 ],
             ])->save();
 
@@ -198,7 +198,7 @@ class ProfileProductCsvImportService
                 $creations[] = $row;
             }
 
-            $availableSlots = max(0, $this->products->maxProducts() - $existingProducts->count());
+            $availableSlots = max(0, $this->products->maxProducts($profile) - $existingProducts->count());
 
             if (count($creations) > $availableSlots) {
                 throw new InvalidArgumentException(
@@ -238,7 +238,7 @@ class ProfileProductCsvImportService
                 'replaced' => count($replacements),
                 'skipped' => max(0, $lockedImport->total_rows - count($creations) - count($replacements)),
                 'product_count' => $lockedProfile->products()->count(),
-                'max_products' => $this->products->maxProducts(),
+                'max_products' => $this->products->maxProducts($profile),
             ];
             $lockedImport->forceFill([
                 'status' => ProfileProductImportStatus::Applied,

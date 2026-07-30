@@ -5,9 +5,8 @@ namespace App\Classes\ChatAIService;
 use App\Classes\VoiceService\VoiceClientGeneratedAudio;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
-use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
+use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
@@ -21,7 +20,7 @@ use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
 {
-    private const MAX_ANSWER_CHARACTERS = 200;
+    private const MAX_ANSWER_CHARACTERS = 400;
 
     private const MAX_PRODUCT_ANSWER_CHARACTERS = 400;
 
@@ -39,22 +38,6 @@ class AnswerBuilder
             $question->chat_id,
             $question->id
         );
-
-        if ($profile->user_id && $chatAIAnswer->source === 'openai') {
-            event(new SubscriptionUsageRequested(
-                userId: $profile->user_id,
-                usageType: SubscriptionUsageType::ChatOpenAiCall,
-                amounts: ['chat_messages' => 1],
-                profileId: $profile->id,
-                sourceType: Message::class,
-                sourceId: (string) $question->id,
-                idempotencyKey: "chat-openai:message:{$question->id}",
-                metadata: [
-                    'status' => $chatAIAnswer->status,
-                    'confidence' => $chatAIAnswer->confidence,
-                ]
-            ));
-        }
 
         if (! $chatAIAnswer->isSuccessful() || ! $chatAIAnswer->hasAnswer()) {
             throw new ChatAIAnswerGenerationFailed($chatAIAnswer);
@@ -540,6 +523,14 @@ class AnswerBuilder
             }
 
             return $audio;
+        } catch (SubscriptionEntitlementException $e) {
+            Log::info('Audio response skipped because the TTS quota is unavailable.', [
+                'code' => $e->errorCode(),
+                'profile_id' => $profile->id,
+                'voice_id' => $voice->id,
+            ]);
+
+            return null;
         } catch (\Throwable $e) {
             $this->notifyAudioGenerationFailed($profile, $e->getMessage());
 
