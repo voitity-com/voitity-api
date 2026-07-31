@@ -2,6 +2,7 @@
 
 namespace App\Classes\Subscriptions;
 
+use App\Classes\PaymentService\CopAmount;
 use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCharge;
@@ -542,20 +543,20 @@ class SubscriptionBillingService
     }
 
     /**
-     * @return array{display_amount_usd:float,exchange_rate:float,amount_cop:float,amount_in_cents:int}
+     * @return array{display_amount_usd:float,exchange_rate:float,amount_cop:int,amount_in_cents:int}
      */
     private function amountsForPlan(Subscription $subscription): array
     {
         $planConfig = $this->planCatalog->configFor($subscription->plan);
         $displayAmountUsd = round((float) ($planConfig['price_usd'] ?? 0), 2);
         $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
-        $amountInCents = (int) round($displayAmountUsd * $exchangeRate * 100);
+        $amountCop = CopAmount::fromUsd($displayAmountUsd, $exchangeRate);
 
         return [
             'display_amount_usd' => $displayAmountUsd,
             'exchange_rate' => $exchangeRate,
-            'amount_cop' => round($amountInCents / 100, 2),
-            'amount_in_cents' => $amountInCents,
+            'amount_cop' => $amountCop->pesos,
+            'amount_in_cents' => $amountCop->inCents(),
         ];
     }
 

@@ -48,7 +48,7 @@ class SubscriptionBillingServiceTest extends TestCase
     public function it_bills_due_recurring_subscription_and_activates_new_subscription(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
-        config(['payment.usd_cop_rate' => 4000]);
+        config(['payment.usd_cop_rate' => 3132.42]);
 
         $user = User::factory()->create(['email' => 'subscriber@example.com']);
         $paymentSource = $this->activePaymentSource($user);
@@ -70,14 +70,16 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertSame('subscriber@example.com', $paymentClient->charges[0]->customerEmail);
         $this->assertSame('3891', $paymentClient->charges[0]->paymentSourceProviderId);
         $this->assertTrue($paymentClient->charges[0]->recurrent);
-        $this->assertSame(5196000, $paymentClient->charges[0]->amountInCents);
+        $this->assertSame(4069000, $paymentClient->charges[0]->amountInCents);
+        $this->assertSame(0, $paymentClient->charges[0]->amountInCents % 100);
         $this->assertSame('COP', $paymentClient->charges[0]->currency);
 
         $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->status);
         $this->assertSame('subscription_renewal', $paymentOrder->billing_reason);
         $this->assertTrue($paymentOrder->recurring);
         $this->assertSame($paymentSource->id, $paymentOrder->payment_source_id);
-        $this->assertSame(5196000, $paymentOrder->amount_in_cents);
+        $this->assertSame(4069000, $paymentOrder->amount_in_cents);
+        $this->assertSame(40690.0, $paymentOrder->amount_cop);
         $this->assertSame('trx_'.$paymentOrder->reference, $paymentOrder->provider_transaction_id);
         $this->assertNotNull($paymentOrder->subscription_id);
         $this->assertNotNull($paymentOrder->paid_at);

@@ -9,6 +9,10 @@ webhooks, stored data, and payment security.
 - Bigmelo displays plan and credit prices in USD.
 - Wompi processes charges in COP using the USD/COP rate captured on each
   `payment_orders` record.
+- The converted value is rounded to the nearest whole COP peso before it is
+  multiplied by 100 for Wompi. The persisted COP amount, checkout signature,
+  charge request, and webhook validation all use this same value, so every
+  `amount_in_cents` sent to Wompi is divisible by 100.
 - Wompi, not Bigmelo, receives the card PAN and CVC.
 - The browser tokenizes the card directly against Wompi. Bigmelo receives a
   short-lived card token and exchanges it for a reusable Wompi payment source.

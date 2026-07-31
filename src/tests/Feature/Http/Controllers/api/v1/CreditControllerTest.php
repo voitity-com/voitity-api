@@ -57,12 +57,16 @@ class CreditControllerTest extends TestAPI
 
     public function test_paid_user_can_purchase_credits_with_reusable_payment_source(): void
     {
+        Config::set('payment.usd_cop_rate', 3132.42);
+        Config::set('payment.exchange_rates.usd_cop.driver', 'config');
+        Config::set('payment.usd_cop_rate_drivers.config.rate', 3132.42);
+
         Http::fake([
             'https://sandbox.wompi.co/v1/transactions' => Http::response([
                 'data' => [
                     'id' => 'trx_credits_1',
                     'status' => 'APPROVED',
-                    'amount_in_cents' => 4000000,
+                    'amount_in_cents' => 3132400,
                     'currency' => 'COP',
                 ],
             ], 201),
@@ -80,7 +84,8 @@ class CreditControllerTest extends TestAPI
             ->assertJsonPath('data.payment_order.product_type', 'credit_pack')
             ->assertJsonPath('data.payment_order.credits', 1000)
             ->assertJsonPath('data.payment_order.amounts.display_amount_usd', 10)
-            ->assertJsonPath('data.payment_order.amounts.amount_in_cents', 4000000)
+            ->assertJsonPath('data.payment_order.amounts.amount_cop', 31324)
+            ->assertJsonPath('data.payment_order.amounts.amount_in_cents', 3132400)
             ->assertJsonPath('data.payment_order.status', 'approved')
             ->assertJsonPath('data.wallet.available', 1000)
             ->assertJsonPath('data.wallet.lifetime_purchased', 1000);
@@ -95,11 +100,14 @@ class CreditControllerTest extends TestAPI
             'purchase_idempotency_key' => 'credits-purchase-1',
             'status' => 'approved',
             'recurring' => false,
+            'amount_cop' => 31324,
+            'amount_in_cents' => 3132400,
         ]);
 
         Http::assertSent(function ($request): bool {
             return $request->url() === 'https://sandbox.wompi.co/v1/transactions'
-                && $request['amount_in_cents'] === 4000000
+                && $request['amount_in_cents'] === 3132400
+                && $request['amount_in_cents'] % 100 === 0
                 && $request['payment_source_id'] === 3891
                 && $request['recurrent'] === false;
         });

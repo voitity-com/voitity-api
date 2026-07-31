@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\PaymentService\CopAmount;
 use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
@@ -63,8 +64,7 @@ class PaymentController extends Controller
         }
 
         $displayAmountUsd = round((float) $priceUsd, 2);
-        $amountInCents = (int) round($displayAmountUsd * $exchangeRate * 100);
-        $amountCop = round($amountInCents / 100, 2);
+        $amountCop = CopAmount::fromUsd($displayAmountUsd, $exchangeRate);
         $reference = $this->uniqueReference($user->id);
         $expiresAt = now()->addMinutes(max(1, (int) config('payment.checkout_expires_in_minutes', 60)));
         $termsAcceptance = new CustomerTermsAcceptance(now());
@@ -80,8 +80,8 @@ class PaymentController extends Controller
             'display_amount_usd' => $displayAmountUsd,
             'display_currency' => PaymentCurrency::Usd,
             'exchange_rate' => $exchangeRate,
-            'amount_cop' => $amountCop,
-            'amount_in_cents' => $amountInCents,
+            'amount_cop' => $amountCop->pesos,
+            'amount_in_cents' => $amountCop->inCents(),
             'currency' => PaymentCurrency::Cop,
             'status' => PaymentOrderStatus::Pending,
             'expires_at' => $expiresAt,

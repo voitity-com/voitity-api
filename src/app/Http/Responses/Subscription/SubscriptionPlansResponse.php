@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses\Subscription;
 
+use App\Classes\PaymentService\CopAmount;
 use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Models\User;
 
@@ -52,7 +53,7 @@ class SubscriptionPlansResponse
     {
         $setupAmountUsd = max(0, round((float) config('subscriptions.trial.setup_amount_usd', 0), 2));
         $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
-        $setupAmountInCents = (int) round($setupAmountUsd * $exchangeRate * 100);
+        $setupAmountCop = CopAmount::fromUsd($setupAmountUsd, $exchangeRate);
 
         return [
             'enabled' => (bool) config('subscriptions.trial.enabled', true),
@@ -61,8 +62,8 @@ class SubscriptionPlansResponse
                 : false,
             'days' => max(1, (int) config('subscriptions.trial.days', 7)),
             'setup_amount_usd' => $setupAmountUsd,
-            'setup_amount_cop' => round($setupAmountInCents / 100, 2),
-            'setup_amount_in_cents' => $setupAmountInCents,
+            'setup_amount_cop' => $setupAmountCop->pesos,
+            'setup_amount_in_cents' => $setupAmountCop->inCents(),
         ];
     }
 }

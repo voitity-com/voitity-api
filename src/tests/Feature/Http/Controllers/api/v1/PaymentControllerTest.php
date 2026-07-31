@@ -290,6 +290,10 @@ class PaymentControllerTest extends TestAPI
 
     public function test_user_can_start_paid_subscription_with_payment_source(): void
     {
+        Config::set('payment.usd_cop_rate', 3132.42);
+        Config::set('payment.exchange_rates.usd_cop.driver', 'config');
+        Config::set('payment.usd_cop_rate_drivers.config.rate', 3132.42);
+
         Http::fake([
             'https://sandbox.wompi.co/v1/payment_sources' => Http::response([
                 'data' => [
@@ -306,7 +310,7 @@ class PaymentControllerTest extends TestAPI
                 'data' => [
                     'id' => 'trx_initial_1',
                     'status' => 'APPROVED',
-                    'amount_in_cents' => 5196000,
+                    'amount_in_cents' => 4069000,
                     'currency' => 'COP',
                 ],
             ], 201),
@@ -341,7 +345,8 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
         $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 12.99);
-        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 5196000);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 40690);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 4069000);
         $response->assertJsonPath('data.payment_order.status', 'approved');
         $response->assertJsonPath('data.payment_order.recurring', true);
         $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
@@ -353,7 +358,8 @@ class PaymentControllerTest extends TestAPI
             'status' => 'approved',
             'recurring' => true,
             'billing_reason' => 'subscription_initial',
-            'amount_in_cents' => 5196000,
+            'amount_cop' => 40690,
+            'amount_in_cents' => 4069000,
             'currency' => 'COP',
         ]);
         $this->assertDatabaseHas('subscriptions', [
@@ -367,7 +373,8 @@ class PaymentControllerTest extends TestAPI
         Http::assertSent(function ($request) use ($user): bool {
             return $request->url() === 'https://sandbox.wompi.co/v1/transactions'
                 && ($request->header('Authorization')[0] ?? null) === 'Bearer prv_test_key'
-                && $request['amount_in_cents'] === 5196000
+                && $request['amount_in_cents'] === 4069000
+                && $request['amount_in_cents'] % 100 === 0
                 && $request['currency'] === 'COP'
                 && $request['customer_email'] === $user->email
                 && $request['payment_source_id'] === 3891
@@ -626,6 +633,10 @@ class PaymentControllerTest extends TestAPI
 
     public function test_user_can_create_wompi_checkout_for_starter_plan(): void
     {
+        Config::set('payment.usd_cop_rate', 3132.42);
+        Config::set('payment.exchange_rates.usd_cop.driver', 'config');
+        Config::set('payment.usd_cop_rate_drivers.config.rate', 3132.42);
+
         $user = User::factory()->create();
         $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
 
@@ -637,9 +648,9 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
         $response->assertJsonPath('data.payment_order.amounts.display_amount_usd', 12.99);
-        $response->assertJsonPath('data.payment_order.amounts.exchange_rate', 4000);
-        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 51960);
-        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 5196000);
+        $response->assertJsonPath('data.payment_order.amounts.exchange_rate', 3132.42);
+        $response->assertJsonPath('data.payment_order.amounts.amount_cop', 40690);
+        $response->assertJsonPath('data.payment_order.amounts.amount_in_cents', 4069000);
         $response->assertJsonPath('data.payment_order.amounts.currency', 'COP');
         $response->assertJsonPath('data.payment_order.status', 'pending');
         $response->assertJsonPath('data.payment_order.recurring', true);
@@ -669,7 +680,8 @@ class PaymentControllerTest extends TestAPI
             'billing_reason' => 'subscription_initial',
             'customer_terms_version' => '2026-07-29',
             'accepted_plan_price_usd' => 12.99,
-            'amount_in_cents' => 5196000,
+            'amount_cop' => 40690,
+            'amount_in_cents' => 4069000,
             'currency' => 'COP',
         ]);
     }
