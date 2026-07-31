@@ -35,6 +35,7 @@ return [
             'subscription-plans:read',
             'payments:create',
             'payments:read',
+            'support:create',
             'admin.users.view',
             'admin.users.impersonate',
             'admin.users.subscriptions.manage',
@@ -62,6 +63,7 @@ return [
             'subscription-plans:read',
             'payments:create',
             'payments:read',
+            'support:create',
         ],
     ],
     'profile' => [
@@ -82,6 +84,7 @@ return [
             'products:write',
             'products:publish',
             'products:import',
+            'support:create',
         ],
     ],
     'api' => [
