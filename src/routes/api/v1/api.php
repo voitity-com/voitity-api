@@ -26,6 +26,7 @@ use App\Http\Controllers\api\v1\PublicProfileController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
+use App\Http\Controllers\api\v1\SupportRequestController;
 use App\Http\Controllers\api\v1\TestController;
 use App\Http\Controllers\api\v1\UsageAnalyticsController;
 use App\Http\Controllers\api\v1\UsdCopRateController;
@@ -65,6 +66,8 @@ Route::prefix('/public')->group(function () {
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);
+Route::post('/support-requests', [SupportRequestController::class, 'store'])
+    ->middleware(['auth:sanctum', 'abilities:support:create', 'throttle:support-requests']);
 Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
 Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::get('/notifications', [AppNotificationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);

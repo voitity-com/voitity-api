@@ -27,6 +27,15 @@ class AppServiceProvider extends ServiceProvider
                 ->by((string) $request->ip());
         });
 
+        RateLimiter::for('support-requests', function (Request $request) {
+            $userId = $request->user()?->id ?? 'guest';
+
+            return Limit::perMinute(max(
+                1,
+                (int) config('support.rate_limit_per_minute', 5)
+            ))->by($userId.':'.$request->ip());
+        });
+
         RateLimiter::for('profile-messages', function (Request $request) {
             $profile = $request->route('profile');
             $profileId = $profile instanceof \App\Models\Profile ? $profile->id : (string) $profile;

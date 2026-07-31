@@ -768,6 +768,61 @@
       ]
     },
     {
+      "name": "Support",
+      "item": [
+        {
+          "name": "Create Support Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Support request created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(json.data.id).to.exist;",
+                  "});",
+                  "if (json.data && json.data.id) {",
+                  "  pm.environment.set('support_request_id', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_id\": \"{{profile_id}}\",\n  \"description\": \"Necesito ayuda para publicar los cambios de mi perfil.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/support-requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "support-requests"
+              ]
+            },
+            "description": "Creates a support request for the authenticated user and queues an email to support@bigmelo.com. profile_id is optional, must belong to the user, and may reference an active or inactive profile. Clear profile_id or send null to create the request without a profile. The account email is derived from the bearer token; no captcha or email field is accepted. Requires token ability: support:create. Rate limited per authenticated user and IP."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Notifications",
       "item": [
         {
