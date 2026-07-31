@@ -37,6 +37,13 @@ class AppServiceProvider extends ServiceProvider
             ))->by($request->ip().':'.$profileId);
         });
 
+        RateLimiter::for('public-profile-reads', function (Request $request) {
+            return Limit::perMinute(max(
+                1,
+                (int) config('public-profiles.read_rate_limit_per_minute', 120)
+            ))->by((string) $request->ip());
+        });
+
         RateLimiter::for('payment-method-management', function (Request $request) {
             $userId = $request->user()?->id ?? 'guest';
 

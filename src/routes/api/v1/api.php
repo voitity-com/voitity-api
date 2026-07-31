@@ -22,6 +22,7 @@ use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
+use App\Http\Controllers\api\v1\PublicProfileController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
@@ -42,6 +43,25 @@ Route::get('health/payments', PaymentOperationsHealthController::class);
 Route::post('/contact-submissions', [ContactSubmissionController::class, 'store'])
     ->middleware('throttle:contact-submissions');
 Route::get('/subscription/public-plans', [SubscriptionPlansController::class, 'publicIndex']);
+
+Route::prefix('/public')->group(function () {
+    Route::get('/social-networks', [PublicProfileController::class, 'socialNetworks'])
+        ->middleware('throttle:public-profile-reads');
+    Route::get('/profiles/{alias}', [PublicProfileController::class, 'show'])
+        ->middleware('throttle:public-profile-reads');
+    Route::get('/profiles/{profile}/avatar', [PublicProfileController::class, 'avatar'])
+        ->whereNumber('profile')
+        ->middleware('throttle:public-profile-reads');
+    Route::get('/profiles/{profile}/messaging-capabilities', [PublicProfileController::class, 'messagingCapabilities'])
+        ->whereNumber('profile')
+        ->middleware('throttle:public-profile-reads');
+    Route::post('/profiles/{profile}/messages/audio', [MessageController::class, 'publicStoreAudio'])
+        ->whereNumber('profile')
+        ->middleware('throttle:profile-messages');
+    Route::post('/profiles/{profile}/messages', [MessageController::class, 'publicStore'])
+        ->whereNumber('profile')
+        ->middleware('throttle:profile-messages');
+});
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
 Route::get('/user', [UserController::class, 'show'])->middleware(['auth:sanctum', 'abilities:user:read']);

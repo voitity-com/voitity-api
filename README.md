@@ -9,6 +9,9 @@ capabilities, and production process requirements are documented in
 [`docs/subscriptions-and-usage.md`](docs/subscriptions-and-usage.md).
 Payment methods, checkout, renewals, credit charges, webhooks, and payment
 security are documented in [`docs/payments.md`](docs/payments.md).
+The unauthenticated published-profile surface, encrypted visitor chat sessions,
+rate limits, and deployment order are documented in
+[`docs/public-profile-api.md`](docs/public-profile-api.md).
 Use
 [`voitity-subscription-limit-testing`](.codex/skills/voitity-subscription-limit-testing/SKILL.md)
 when adding plans or changing prices and limits. The latest local validation is

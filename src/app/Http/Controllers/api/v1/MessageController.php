@@ -5,6 +5,8 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\ChatAIService\AudioMessageInspector;
 use App\Classes\ChatAIService\AudioTranscriptionService;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
+use App\Classes\PublicProfiles\PublicChatSession;
+use App\Classes\PublicProfiles\PublicProfileAccess;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\SubscriptionUsageType;
@@ -27,6 +29,13 @@ use RuntimeException;
 
 class MessageController extends Controller
 {
+    private const PUBLIC_REQUEST_ATTRIBUTE = 'public_profile_request';
+
+    public function __construct(
+        private readonly PublicChatSession $publicChatSessions,
+        private readonly PublicProfileAccess $publicProfiles,
+    ) {}
+
     /**
      * @OA\Post(
      *     path="/api/profile/{profile}/messages",
@@ -93,24 +102,38 @@ class MessageController extends Controller
         try {
             $payload = $request->validated();
             $user = $request->user();
+            $publicRequest = $this->isPublicRequest($request);
 
-            if (! $user instanceof User) {
+            if (! $publicRequest && ! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
             return $this->storeQuestionAndProcess(
                 profile: $profile,
-                user: $user,
+                actor: $user instanceof User ? $user : null,
                 text: $payload['message'],
                 chatId: isset($payload['chat_id']) ? (int) $payload['chat_id'] : null,
                 usage: $usage,
                 capabilities: $capabilities,
+                publicRequest: $publicRequest,
+                chatSessionToken: $request->header('X-Bigmelo-Chat-Token'),
             );
         } catch (SubscriptionEntitlementException $e) {
             return $this->entitlementErrorResponse($e, $profile, $capabilities);
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    public function publicStore(
+        StoreMessageRequest $request,
+        Profile $profile,
+        SubscriptionUsageRecorder $usage,
+        ProfileMessagingCapabilitiesService $capabilities,
+    ): JsonResponse {
+        $request->attributes->set(self::PUBLIC_REQUEST_ATTRIBUTE, true);
+
+        return $this->store($request, $profile, $usage, $capabilities);
     }
 
     /**
@@ -190,13 +213,20 @@ class MessageController extends Controller
         try {
             $payload = $request->validated();
             $user = $request->user();
+            $publicRequest = $this->isPublicRequest($request);
 
-            if (! $user instanceof User) {
+            if (! $publicRequest && ! $user instanceof User) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
             $chatId = isset($payload['chat_id']) ? (int) $payload['chat_id'] : null;
-            $targetError = $this->validateMessageTarget($user, $profile, $chatId);
+            $targetError = $this->validateMessageTarget(
+                $user instanceof User ? $user : null,
+                $profile,
+                $chatId,
+                $publicRequest,
+                $request->header('X-Bigmelo-Chat-Token'),
+            );
 
             if ($targetError instanceof JsonResponse) {
                 return $targetError;
@@ -303,7 +333,7 @@ class MessageController extends Controller
 
             return $this->storeQuestionAndProcess(
                 profile: $profile,
-                user: $user,
+                actor: $user instanceof User ? $user : null,
                 text: $text,
                 chatId: $chatId,
                 audioUrl: $audioUrl,
@@ -315,6 +345,8 @@ class MessageController extends Controller
                 usage: $usage,
                 capabilities: $capabilities,
                 usageReservationKey: $audioUsageKey,
+                publicRequest: $publicRequest,
+                chatSessionToken: $request->header('X-Bigmelo-Chat-Token'),
             );
         } catch (SubscriptionEntitlementException $e) {
             return $this->entitlementErrorResponse($e, $profile, $capabilities);
@@ -340,9 +372,29 @@ class MessageController extends Controller
         }
     }
 
+    public function publicStoreAudio(
+        StoreAudioMessageRequest $request,
+        Profile $profile,
+        AudioTranscriptionService $transcriptionService,
+        AudioMessageInspector $audioInspector,
+        SubscriptionUsageRecorder $usage,
+        ProfileMessagingCapabilitiesService $capabilities,
+    ): JsonResponse {
+        $request->attributes->set(self::PUBLIC_REQUEST_ATTRIBUTE, true);
+
+        return $this->storeAudio(
+            $request,
+            $profile,
+            $transcriptionService,
+            $audioInspector,
+            $usage,
+            $capabilities,
+        );
+    }
+
     private function storeQuestionAndProcess(
         Profile $profile,
-        User $user,
+        ?User $actor,
         string $text,
         SubscriptionUsageRecorder $usage,
         ProfileMessagingCapabilitiesService $capabilities,
@@ -351,8 +403,16 @@ class MessageController extends Controller
         bool $includeRequestMetadata = false,
         array $requestData = [],
         ?string $usageReservationKey = null,
+        bool $publicRequest = false,
+        ?string $chatSessionToken = null,
     ): JsonResponse {
-        $targetError = $this->validateMessageTarget($user, $profile, $chatId);
+        $targetError = $this->validateMessageTarget(
+            $actor,
+            $profile,
+            $chatId,
+            $publicRequest,
+            $chatSessionToken,
+        );
 
         if ($targetError instanceof JsonResponse) {
             return $targetError;
@@ -416,7 +476,11 @@ class MessageController extends Controller
             throw $exception;
         }
 
-        $this->notifyMessageReceived($profile, $user, $chat->id, $isNewChat);
+        $nextChatSessionToken = $publicRequest
+            ? $this->publicChatSessions->issue($profile, $chat)
+            : null;
+
+        $this->notifyMessageReceived($profile, $actor, $chat->id, $isNewChat);
 
         $event = new MessageStored($message);
         event($event);
@@ -432,6 +496,7 @@ class MessageController extends Controller
                     $failure = $this->appendRequestMetadata($failure, $message);
                 }
                 $failure['messaging_capabilities'] = $capabilities->forProfile($profile);
+                $failure = $this->withChatSessionToken($failure, $nextChatSessionToken);
 
                 return response()->json([
                     'message' => 'Message answer generation failed.',
@@ -450,6 +515,7 @@ class MessageController extends Controller
                 $data = $this->appendRequestMetadata($data, $message);
             }
             $data['messaging_capabilities'] = $capabilities->forProfile($profile);
+            $data = $this->withChatSessionToken($data, $nextChatSessionToken);
 
             return response()->json([
                 'message' => 'Message stored, processing pending.',
@@ -463,6 +529,7 @@ class MessageController extends Controller
             $data = $this->appendRequestMetadata($data, $message);
         }
         $data['messaging_capabilities'] = $capabilities->forProfile($profile);
+        $data = $this->withChatSessionToken($data, $nextChatSessionToken);
 
         return response()->json([
             'message' => 'Message processed successfully.',
@@ -520,9 +587,18 @@ class MessageController extends Controller
         ], $exception->statusCode());
     }
 
-    private function validateMessageTarget(User $user, Profile $profile, ?int $chatId): ?JsonResponse
-    {
-        if (! $this->userCanMessageProfile($user, $profile)) {
+    private function validateMessageTarget(
+        ?User $user,
+        Profile $profile,
+        ?int $chatId,
+        bool $publicRequest = false,
+        ?string $chatSessionToken = null,
+    ): ?JsonResponse {
+        if ($publicRequest) {
+            if (! $this->publicProfiles->isVisible($profile)) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+        } elseif (! $user instanceof User || ! $this->userCanMessageProfile($user, $profile)) {
             return response()->json(['message' => 'Profile not found.'], 404);
         }
 
@@ -530,7 +606,28 @@ class MessageController extends Controller
             $chatExists = $profile->chats()->whereKey($chatId)->exists();
 
             if (! $chatExists) {
-                return response()->json(['message' => 'Chat not found.'], 404);
+                if (! $publicRequest) {
+                    return response()->json(['message' => 'Chat not found.'], 404);
+                }
+
+                return response()->json([
+                    'message' => 'Chat not found.',
+                    'code' => 'CHAT_SESSION_INVALID',
+                ], 404);
+            }
+
+            if (
+                $publicRequest
+                && ! $this->publicChatSessions->isValid(
+                    $chatSessionToken,
+                    $profile,
+                    $chatId,
+                )
+            ) {
+                return response()->json([
+                    'message' => 'Chat not found.',
+                    'code' => 'CHAT_SESSION_INVALID',
+                ], 404);
             }
         }
 
@@ -595,7 +692,7 @@ class MessageController extends Controller
         return (string) config('chatai.audio_messages.visibility', 'public');
     }
 
-    private function notifyMessageReceived(Profile $profile, User $actor, int $chatId, bool $isNewChat): void
+    private function notifyMessageReceived(Profile $profile, ?User $actor, int $chatId, bool $isNewChat): void
     {
         $profile->loadMissing('user');
 
@@ -615,8 +712,30 @@ class MessageController extends Controller
             $dispatcher->sendInApp($profile->user, 'new_chat_received', $data);
         }
 
-        if ((int) $actor->id !== (int) $profile->user_id || $actor->role === 'api') {
+        if (
+            ! $actor instanceof User
+            || (int) $actor->id !== (int) $profile->user_id
+            || $actor->role === 'api'
+        ) {
             $dispatcher->sendInApp($profile->user, 'new_visitor_message_received', $data);
         }
+    }
+
+    private function isPublicRequest(StoreMessageRequest|StoreAudioMessageRequest $request): bool
+    {
+        return (bool) $request->attributes->get(self::PUBLIC_REQUEST_ATTRIBUTE, false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withChatSessionToken(array $data, ?string $token): array
+    {
+        if (filled($token)) {
+            $data['chat_token'] = $token;
+        }
+
+        return $data;
     }
 }

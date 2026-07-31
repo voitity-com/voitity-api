@@ -2387,6 +2387,325 @@
       ]
     },
     {
+      "name": "Public Profile",
+      "description": "Anonymous profile-page endpoints. These requests deliberately use no authentication; continuing a chat requires the encrypted, chat-scoped token returned when the chat is created.",
+      "item": [
+        {
+          "name": "Get Public Profile By Alias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Published profile is public', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Sensitive owner fields are omitted', function () {",
+                  "  pm.expect(json.data).not.to.have.property('user_id');",
+                  "  pm.expect(json.data).not.to.have.property('voice_id');",
+                  "});",
+                  "if (json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('public_profile_id', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{profile_alias}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{profile_alias}}"
+              ]
+            },
+            "description": "Returns only the data needed to render an active, published profile. Draft, hidden, inactive, and unknown profiles return 404."
+          },
+          "response": []
+        },
+        {
+          "name": "List Public Social Networks",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/social-networks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "social-networks"
+              ]
+            },
+            "description": "Returns the social-network catalog used by public profile pages."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Public Avatar",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/avatar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "avatar"
+              ]
+            },
+            "description": "Returns the active avatar file for a public profile without exposing generation metadata."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Public Messaging Capabilities",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/messaging-capabilities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "messaging-capabilities"
+              ]
+            },
+            "description": "Returns whether text and audio messages are currently available for a public profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Public Text Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Public chat is created', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Scoped chat token is returned', function () {",
+                  "  pm.expect(json.data.chat_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('public_chat_id', json.data.chat_id);",
+                  "pm.collectionVariables.set('public_chat_token', json.data.chat_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Hello from the public profile page\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "messages"
+              ]
+            },
+            "description": "Creates a visitor chat. The returned chat ID is not sufficient to continue it; clients must also retain the encrypted chat token."
+          },
+          "response": []
+        },
+        {
+          "name": "Continue Public Text Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Public chat continues', function () { pm.response.to.have.status(200); });",
+                  "if (json.data && json.data.chat_token) {",
+                  "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bigmelo-Chat-Token",
+                "value": "{{public_chat_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Continue the same public chat\",\n  \"chat_id\": {{public_chat_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "messages"
+              ]
+            },
+            "description": "Continues the chat created by the previous request. A missing, expired, tampered, or cross-profile token returns CHAT_SESSION_INVALID."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Public Audio Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Public audio message succeeds', function () { pm.response.to.have.status(200); });",
+                  "if (json.data && json.data.chat_token) {",
+                  "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bigmelo-Chat-Token",
+                "value": "{{public_chat_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": "{{public_audio_file_path}}"
+                },
+                {
+                  "key": "chat_id",
+                  "value": "{{public_chat_id}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/messages/audio",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "messages",
+                "audio"
+              ]
+            },
+            "description": "Sends an audio message of at most 30 seconds. Set public_audio_file_path to a local supported audio file."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Profile",
       "item": [
         {
@@ -6083,6 +6402,26 @@
     }
   ],
   "variable": [
+    {
+      "key": "public_profile_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "public_chat_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "public_chat_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "public_audio_file_path",
+      "value": "",
+      "type": "string"
+    },
     {
       "key": "profile_profession_key",
       "value": "developer",
