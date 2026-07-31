@@ -336,6 +336,9 @@ class OpenAIClient implements ChatAIClient
         $productsPrompt = $availableProducts !== []
             ? json_encode($availableProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : null;
+        $productRecommendationGuidance = is_string($productsPrompt)
+            ? $productService->recommendationGuidanceForPrompt($profile)
+            : null;
 
         if ($selectedMedia !== null) {
             $prompt .= ". Selected media available for visitor conversations before constraints: {$selectedMedia}";
@@ -345,6 +348,15 @@ class OpenAIClient implements ChatAIClient
         if (is_string($productsPrompt)) {
             $prompt .= ". Published products available for this conversation: {$productsPrompt}";
             $prompt .= '. Recommend products organically only when the visitor asks about products, purchasing, recommendations, or when a product is directly relevant to the requested professional guidance. Do not force a sale into unrelated conversation. Use only the exact product names and descriptions provided. Do not invent ingredients, prices, discounts, availability, dimensions, quantities, health outcomes, medical claims, or implied benefits such as improving performance, recovery, strength, sleep, or appearance unless that exact information is present in the product name or description. When the visitor asks to compare products, infer the comparison from explicit values and specifications already present in their names or descriptions, including prices, measurements, units, formats, and quantities. You may normalize compatible units to compare them. State which is cheaper, more expensive, larger, smaller, or otherwise preferable only when the supplied data supports that conclusion; otherwise say that the available descriptions do not establish it. For comparisons of three or more products, use one compact semicolon-separated sentence that includes every compared product and finishes completely within the 400-character product answer limit. Never return a comparison that ends mid-sentence or needs truncation. Phrase a product as an available option that may complement the visitor\'s plan, never as a guaranteed result or personalized medical recommendation. When one or more products are genuinely relevant, set product_request to true, product_action to "show", and product_ids to the relevant published product ids. Prefer the smallest useful set, normally one or two products, but attach every directly compared product when answering a comparison. The app attaches product cards, so do not include raw product URLs or Markdown links in the answer';
+
+            if ($productRecommendationGuidance !== null) {
+                $encodedGuidance = json_encode(
+                    $productRecommendationGuidance,
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                );
+                $prompt .= ". Profile-specific product recommendation guidance (routing only, not product facts): {$encodedGuidance}";
+                $prompt .= '. Use this guidance only to recognize indirect situations where offering product help is appropriate. It never overrides the published product names, descriptions, safety rules, or factual restrictions. If the visitor only mentions a broad interest or need covered by the guidance but has not asked to see, buy, compare, or receive a product recommendation, offer help naturally and keep product_action as "none" with an empty product_ids array. If the visitor accepts that offer or explicitly requests a recommendation, show the smallest relevant set of published products. Direct product mentions and explicit product requests keep the existing immediate recommendation behavior';
+            }
         }
 
         if ($recentMessages !== []) {

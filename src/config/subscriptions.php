@@ -197,7 +197,7 @@ return [
             ],
             'credits' => ['total' => 0],
             'capabilities' => [
-                'products_per_profile' => 2147483647,
+                'products_per_profile' => 15,
                 'social_links' => true,
                 'integrations' => [
                     'instagram' => ['selected_media' => 2147483647],

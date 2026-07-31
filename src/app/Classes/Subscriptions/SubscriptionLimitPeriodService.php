@@ -3,6 +3,8 @@
 namespace App\Classes\Subscriptions;
 
 use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionStatus;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUsagePeriod;
@@ -122,6 +124,14 @@ class SubscriptionLimitPeriodService
             $columns[$column] = $this->limitValue($limits[$metric] ?? null, $unlimited);
         }
 
+        if (! $unlimited) {
+            $profileLimit = max(0, (int) ($limits['profiles'] ?? 0));
+            $profileCount = Profile::query()
+                ->where('user_id', $subscription->user_id)
+                ->count();
+            $columns['profiles_remaining'] = max(0, $profileLimit - $profileCount);
+        }
+
         return $columns;
     }
 
@@ -194,7 +204,7 @@ class SubscriptionLimitPeriodService
      */
     private function usageConfig(Subscription $subscription, array $planConfig): array
     {
-        if ($subscription->status === \App\Enums\SubscriptionStatus::Trialing) {
+        if ($subscription->status === SubscriptionStatus::Trialing) {
             return array_replace_recursive($planConfig, [
                 'limits' => config('subscriptions.trial.limits', []),
                 'credits' => config('subscriptions.trial.credits', []),

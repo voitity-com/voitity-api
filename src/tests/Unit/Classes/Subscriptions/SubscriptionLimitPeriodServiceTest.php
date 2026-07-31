@@ -6,6 +6,7 @@ use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionPlanAssigner;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
@@ -52,6 +53,7 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
 
         $user = User::factory()->create();
         $subscription = $this->annualSubscription($user);
+        Profile::factory()->create(['user_id' => $user->id]);
         SubscriptionLimit::create([
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
@@ -73,7 +75,7 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
         $this->assertTrue($subscription->next_billing_at->isSameDay(Carbon::parse('2027-01-15')));
         $this->assertTrue($limit->period_started_at->isSameDay(Carbon::parse('2026-02-15')));
         $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
-        $this->assertSame(1, $limit->profiles_remaining);
+        $this->assertSame(0, $limit->profiles_remaining);
         $this->assertSame(0.0, $limit->credits_remaining);
     }
 

@@ -6,9 +6,11 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileProductStatus;
 use App\Enums\ProfileStatus;
+use App\Http\Responses\Products\ProfileProductResponse;
 use App\Models\Profile;
 use App\Models\ProfileProduct;
 use App\Models\User;
+use App\Services\Products\ProfileProductLinkService;
 use App\Services\Products\ProfileProductPromptService;
 use App\Services\Products\ProfileProductService;
 use Illuminate\Http\UploadedFile;
@@ -80,16 +82,61 @@ class ProfileProductControllerTest extends TestAPI
             $whatsAppQuery['text']
         );
 
+        $guidance = '  Si el visitante habla de fútbol, ofrécele ayudarle a elegir un balón.  ';
         $this->withToken($token)
-            ->patchJson("/api/profile/{$profile->id}/products/settings", ['enabled' => true])
+            ->patchJson("/api/profile/{$profile->id}/products/settings", [
+                'enabled' => true,
+                'recommendation_guidance' => $guidance,
+            ])
             ->assertOk()
-            ->assertJsonPath('data.products_enabled', true);
+            ->assertJsonPath('data.products_enabled', true)
+            ->assertJsonPath(
+                'data.recommendation_guidance',
+                'Si el visitante habla de fútbol, ofrécele ayudarle a elegir un balón.'
+            );
         $this->withToken($token)
             ->getJson("/api/profile/{$profile->id}/products")
             ->assertOk()
             ->assertJsonPath('data.products_enabled', true)
+            ->assertJsonPath(
+                'data.recommendation_guidance',
+                'Si el visitante habla de fútbol, ofrécele ayudarle a elegir un balón.'
+            )
             ->assertJsonPath('data.products.0.id', $product->id)
             ->assertJsonPath('data.available_slots', 14);
+    }
+
+    public function test_recommendation_guidance_is_optional_and_length_is_validated(): void
+    {
+        [$user, $profile, $token] = $this->ownerContext();
+        $profile->forceFill([
+            'products_enabled' => true,
+            'product_recommendation_guidance' => 'Guía anterior.',
+        ])->save();
+
+        $this->withToken($token)
+            ->patchJson("/api/profile/{$profile->id}/products/settings", ['enabled' => false])
+            ->assertOk()
+            ->assertJsonPath('data.products_enabled', false)
+            ->assertJsonPath('data.recommendation_guidance', 'Guía anterior.');
+
+        $this->withToken($token)
+            ->patchJson("/api/profile/{$profile->id}/products/settings", [
+                'enabled' => true,
+                'recommendation_guidance' => '',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.recommendation_guidance', null);
+
+        $this->withToken($token)
+            ->patchJson("/api/profile/{$profile->id}/products/settings", [
+                'enabled' => true,
+                'recommendation_guidance' => str_repeat('a', 1501),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('recommendation_guidance');
+
+        $this->assertSame($user->id, $profile->user_id);
     }
 
     public function test_telegram_product_uses_profile_language_and_encoded_public_url(): void
@@ -104,7 +151,7 @@ class ProfileProductControllerTest extends TestAPI
             'phone_number' => '(305) 555-0123',
             'status' => 'published',
         ]);
-        $payload = app(\App\Http\Responses\Products\ProfileProductResponse::class, ['product' => $product->load('profile')])
+        $payload = app(ProfileProductResponse::class, ['product' => $product->load('profile')])
             ->toArray();
 
         $this->assertStringStartsWith('https://t.me/+13055550123?text=', $payload['action_url']);
@@ -131,7 +178,7 @@ class ProfileProductControllerTest extends TestAPI
             ->assertSee('<meta property="og:image" content="https://images.example.com/omega.jpg">', false)
             ->assertSee(
                 '<meta property="og:url" content="'
-                .app(\App\Services\Products\ProfileProductLinkService::class)->publicUrl($product)
+                .app(ProfileProductLinkService::class)->publicUrl($product)
                 .'">',
                 false
             )
@@ -172,7 +219,7 @@ class ProfileProductControllerTest extends TestAPI
         $expectedImageUrl = 'https://media.bigmelo.com/'.$product->storage_path;
         $expectedSocialImageUrl = 'https://media.bigmelo.com/'.$product->social_storage_path;
 
-        $payload = (new \App\Http\Responses\Products\ProfileProductResponse($product->fresh('profile')))->toArray();
+        $payload = (new ProfileProductResponse($product->fresh('profile')))->toArray();
 
         $this->assertSame($expectedImageUrl, $payload['image_url']);
         $this->assertStringContainsString('?v='.$product->updated_at->getTimestamp(), $payload['public_url']);
@@ -516,12 +563,20 @@ class ProfileProductControllerTest extends TestAPI
         $this->createRemoteProduct($profile, $user, 'Borrador')->forceFill(['status' => ProfileProductStatus::Draft])->save();
         $service = app(ProfileProductPromptService::class);
 
+        $profile->forceFill([
+            'product_recommendation_guidance' => 'Ofrece suplementos cuando sean relevantes.',
+        ])->save();
         $this->assertSame([], $service->productsForPrompt($profile));
+        $this->assertNull($service->recommendationGuidanceForPrompt($profile));
         $profile->forceFill(['products_enabled' => true])->save();
         $products = $service->productsForPrompt($profile->fresh());
         $this->assertCount(1, $products);
         $this->assertSame($published->id, $products[0]['id']);
         $this->assertSame('Proteína', $products[0]['name']);
+        $this->assertSame(
+            'Ofrece suplementos cuando sean relevantes.',
+            $service->recommendationGuidanceForPrompt($profile->fresh())
+        );
     }
 
     /**

@@ -38,6 +38,29 @@ class ProfileProductPromptService
             ->all();
     }
 
+    public function recommendationGuidanceForPrompt(Profile $profile): ?string
+    {
+        if (! $this->features->isProfileFeatureEnabled($profile, FeatureService::PRODUCTS)) {
+            return null;
+        }
+
+        if (! $profile->products_enabled) {
+            return null;
+        }
+
+        $guidance = trim((string) $profile->product_recommendation_guidance);
+
+        if ($guidance === '') {
+            return null;
+        }
+
+        return mb_substr(
+            $guidance,
+            0,
+            max(1, (int) config('products.recommendation_guidance_max_length', 1500))
+        );
+    }
+
     /**
      * @param  array<int, mixed>  $ids
      * @param  array<int, array<string, mixed>>  $available

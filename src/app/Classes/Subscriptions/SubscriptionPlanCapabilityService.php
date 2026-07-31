@@ -29,11 +29,14 @@ class SubscriptionPlanCapabilityService
 
     public function productsPerProfile(Profile $profile): int
     {
-        return $this->integerCapability(
+        $planLimit = $this->integerCapability(
             $profile,
             'products_per_profile',
             (int) config('products.max_products', 15)
         );
+        $applicationLimit = max(0, (int) config('products.max_products', 15));
+
+        return min($planLimit, $applicationLimit);
     }
 
     public function selectedMediaPerProfile(Profile $profile, string $provider): int

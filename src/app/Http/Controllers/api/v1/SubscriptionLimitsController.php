@@ -108,6 +108,7 @@ class SubscriptionLimitsController extends Controller
                     $this->usageTotals($usageBreakdown),
                     $usageBreakdown,
                     $wallets->walletForUser($user),
+                    $user->profiles()->count(),
                 ))->toArray(),
             ], 200);
         } catch (\Throwable $e) {

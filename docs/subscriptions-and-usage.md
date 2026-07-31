@@ -15,11 +15,12 @@ admin reads `GET /api/subscription/plans`, `GET /api/subscription/limits`,
 
 ## Starter Plans
 
-Both Starter plans have the same capacity per monthly usage period:
+Both Starter plans have the same capacity. Provider-backed usage renews each
+month; profile capacity remains occupied while a profile exists:
 
 | Capability | Included |
 | --- | ---: |
-| Published profiles | 1 |
+| Profiles | 1 |
 | Avatar images | 1 |
 | Avatar video | 2 seconds |
 | Authorized voice clones | 1 |
@@ -34,7 +35,9 @@ Both Starter plans have the same capacity per monthly usage period:
 
 - Monthly Starter costs USD 12.99 per month.
 - Annual Starter costs USD 129 per year.
-- Annual billing renews once per year, but included usage resets monthly.
+- Annual billing renews once per year, but included provider usage resets monthly.
+- Profile capacity is persistent and is derived from existing, non-deleted
+  profiles. A monthly usage reset does not create another profile slot.
 - Unused included capacity does not roll over.
 - Starter and trial do not include a monthly purchased-credit balance.
 - The seven-day trial has reduced included limits and cannot buy or consume
@@ -140,8 +143,10 @@ allowance cannot cover the complete generation, purchased credits fund both
 components. Analytics still displays the image and video credit costs
 separately.
 
-The profile count remains a hard plan limit. Credits cannot activate a second
-profile on Starter.
+The profile count remains a hard plan limit. Credits cannot create another
+profile or activate a second profile on Starter. Historical `profile_created`
+usage rows remain available for audit, but current profile capacity is derived
+from the profiles table so imported or pre-existing profiles cannot bypass it.
 
 ## Wallet and Ledger
 
@@ -253,7 +258,9 @@ attempts. Permanent cleanup failure is logged and reported to administrators.
 ## Monthly Periods and Analytics
 
 `subscription_usage_periods` stores immutable monthly plan and limit snapshots.
-`subscription_limits` points to the active period and is reset monthly.
+`subscription_limits` points to the active period and provider usage is reset
+monthly. Profile capacity is reconciled against existing profiles instead of
+being replenished.
 `subscription_uses` points to the period in which the operation was reserved.
 
 `GET /api/usage` accepts:

@@ -7,6 +7,7 @@ use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Mail\PlatformNotificationMail;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
@@ -39,6 +40,7 @@ class SubscriptionEntitlementServiceTest extends TestCase
 
         $user = User::factory()->create();
         $this->createActiveSubscriptionFor($user, profilesRemaining: 0);
+        Profile::factory()->create(['user_id' => $user->id]);
 
         try {
             app(SubscriptionEntitlementService::class)->assertCanUse($user, ['profiles' => 1]);
@@ -57,6 +59,22 @@ class SubscriptionEntitlementServiceTest extends TestCase
             return $mail->hasTo($user->email)
                 && $mail->message->subject === 'A Bigmelo plan limit was reached';
         });
+    }
+
+    public function test_existing_profile_blocks_another_profile_when_stored_remaining_value_is_stale(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create();
+        $this->createActiveSubscriptionFor($user, profilesRemaining: 1);
+        Profile::factory()->create(['user_id' => $user->id]);
+
+        try {
+            app(SubscriptionEntitlementService::class)->assertCanUse($user, ['profiles' => 1]);
+            $this->fail('Expected subscription entitlement exception.');
+        } catch (SubscriptionEntitlementException $exception) {
+            $this->assertArrayHasKey('profiles', $exception->errors());
+        }
     }
 
     public function test_it_renews_expired_admin_plan_without_charge(): void

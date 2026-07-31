@@ -54,6 +54,7 @@ class SubscriptionLimitsResponse
         private readonly array $usageTotals,
         private readonly Collection $usageBreakdown,
         private readonly CreditWallet $wallet,
+        private readonly int $profileCount,
     ) {}
 
     public function toArray(): array
@@ -111,11 +112,21 @@ class SubscriptionLimitsResponse
 
         return collect(self::METRICS)
             ->mapWithKeys(function (array $columns, string $metric) use ($limit, $plan, $unlimited): array {
-                $remaining = $this->usageValue($metric, $limit?->{$columns['remaining']} ?? 0);
                 $included = $unlimited ? null : $this->includedValue($metric, $plan);
+                $remaining = $metric === 'profiles' && ! $unlimited
+                    ? max(0, (int) $included - $this->profileCount)
+                    : $this->usageValue($metric, $limit?->{$columns['remaining']} ?? 0);
                 $used = $unlimited
-                    ? $this->usageValue($metric, $this->usageTotals[$metric] ?? 0)
-                    : $this->usageValue($metric, max(0, (float) $included - (float) $remaining));
+                    ? $this->usageValue(
+                        $metric,
+                        $metric === 'profiles' ? $this->profileCount : ($this->usageTotals[$metric] ?? 0)
+                    )
+                    : $this->usageValue(
+                        $metric,
+                        $metric === 'profiles'
+                            ? $this->profileCount
+                            : max(0, (float) $included - (float) $remaining)
+                    );
 
                 return [
                     $metric => [
@@ -123,7 +134,10 @@ class SubscriptionLimitsResponse
                         'remaining' => $unlimited ? null : $remaining,
                         'unlimited' => $unlimited,
                         'used' => $used,
-                        'total_used' => $this->usageValue($metric, $this->usageTotals[$metric] ?? 0),
+                        'total_used' => $this->usageValue(
+                            $metric,
+                            $metric === 'profiles' ? $this->profileCount : ($this->usageTotals[$metric] ?? 0)
+                        ),
                     ],
                 ];
             })

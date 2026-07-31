@@ -7,6 +7,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUse;
@@ -49,6 +50,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
     {
         $user = User::factory()->create();
         $subscription = $this->createActiveStarterSubscriptionFor($user);
+        Profile::factory()->create(['user_id' => $user->id]);
 
         SubscriptionUse::create([
             'subscription_id' => $subscription->id,
@@ -126,6 +128,28 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $this->assertSame(1000, $usageByType['voice_tts_characters']['used']['tts_characters']);
     }
 
+    public function test_profile_capacity_uses_existing_profiles_even_without_a_usage_record(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->createActiveStarterSubscriptionFor($user);
+        $subscription->limit()->update(['profiles_remaining' => 1]);
+        Profile::factory()->create(['user_id' => $user->id]);
+        $token = $user->createToken('test-token', ['subscription-limits:read'])->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonPath('data.limits.profiles.included', 1)
+            ->assertJsonPath('data.limits.profiles.used', 1)
+            ->assertJsonPath('data.limits.profiles.remaining', 0)
+            ->assertJsonPath('data.limits.profiles.total_used', 1);
+
+        $this->assertDatabaseMissing('subscription_uses', [
+            'user_id' => $user->id,
+            'usage_type' => SubscriptionUsageType::ProfileCreated->value,
+        ]);
+    }
+
     public function test_user_without_active_subscription_gets_not_found(): void
     {
         $user = User::factory()->create();
@@ -183,6 +207,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'chat_messages_remaining' => 2147483647,
             'credits_remaining' => 99999999.99,
         ]);
+        Profile::factory()->create(['user_id' => $user->id]);
 
         SubscriptionUse::create([
             'subscription_id' => $subscription->id,

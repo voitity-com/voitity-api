@@ -62,6 +62,7 @@ class ProfileProductController extends Controller
             'message' => 'Profile products retrieved successfully.',
             'data' => [
                 'products_enabled' => (bool) $profile->products_enabled,
+                'recommendation_guidance' => $profile->product_recommendation_guidance,
                 'max_products' => $service->maxProducts($profile),
                 'available_slots' => max(0, $service->maxProducts($profile) - $profile->products()->count()),
                 'products' => collect($products->items())
@@ -164,11 +165,14 @@ class ProfileProductController extends Controller
             return $response;
         }
 
-        $profile = $service->setEnabled($profile, $request->boolean('enabled'));
+        $profile = $service->updateSettings($profile, $request->validated());
 
         return response()->json([
             'message' => 'Profile product conversation setting updated successfully.',
-            'data' => ['products_enabled' => (bool) $profile->products_enabled],
+            'data' => [
+                'products_enabled' => (bool) $profile->products_enabled,
+                'recommendation_guidance' => $profile->product_recommendation_guidance,
+            ],
         ]);
     }
 

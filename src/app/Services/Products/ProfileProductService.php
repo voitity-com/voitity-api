@@ -175,7 +175,22 @@ class ProfileProductService
 
     public function setEnabled(Profile $profile, bool $enabled): Profile
     {
-        $profile->forceFill(['products_enabled' => $enabled])->save();
+        return $this->updateSettings($profile, ['enabled' => $enabled]);
+    }
+
+    /**
+     * @param  array{enabled: bool, recommendation_guidance?: string|null}  $settings
+     */
+    public function updateSettings(Profile $profile, array $settings): Profile
+    {
+        $attributes = ['products_enabled' => (bool) $settings['enabled']];
+
+        if (array_key_exists('recommendation_guidance', $settings)) {
+            $guidance = trim((string) ($settings['recommendation_guidance'] ?? ''));
+            $attributes['product_recommendation_guidance'] = $guidance === '' ? null : $guidance;
+        }
+
+        $profile->forceFill($attributes)->save();
 
         return $profile->fresh();
     }

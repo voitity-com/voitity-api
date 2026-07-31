@@ -15,6 +15,12 @@ class UpdateProfileProductsSettingRequest extends FormRequest
     {
         return [
             'enabled' => ['required', 'boolean'],
+            'recommendation_guidance' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:'.max(1, (int) config('products.recommendation_guidance_max_length', 1500)),
+            ],
         ];
     }
 }

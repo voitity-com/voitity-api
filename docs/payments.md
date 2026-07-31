@@ -293,6 +293,13 @@ available. `PENDING` returns
 `CREDIT_PURCHASE_PENDING`; provider errors return `CREDIT_PAYMENT_FAILED`.
 Neither status grants credits or rejects the saved method.
 
+The administrator applies the wallet returned by an approved purchase
+immediately. When a purchase remains `PENDING`, it polls the existing
+`GET /api/payments/{paymentOrder}` endpoint until the webhook changes the order
+to an approved or terminal status, then refreshes the wallet, purchase history,
+and saved-method state. This avoids requiring a manual page refresh after an
+asynchronous approval.
+
 Purchased credit details and consumption rules are documented in
 [`subscriptions-and-usage.md`](subscriptions-and-usage.md).
 
