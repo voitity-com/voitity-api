@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\PaymentService\PaymentManager;
+use App\Classes\Subscriptions\CreditAmount;
 use App\Enums\PaymentOrderStatus;
+use App\Enums\PaymentProductType;
 use App\Enums\PaymentProvider;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
+use App\Models\PaymentSource;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
@@ -53,7 +57,7 @@ class PaymentControllerTest extends TestAPI
         Config::set('subscriptions.trial.setup_amount_usd', 0);
         Config::set('subscriptions.trial.requires_payment_source', true);
 
-        app(\App\Classes\PaymentService\PaymentManager::class)->forgetDrivers();
+        app(PaymentManager::class)->forgetDrivers();
     }
 
     public function test_user_can_list_subscription_plans(): void
@@ -85,7 +89,7 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame(129, $plans->get('starter_annual')['price_usd']);
         $this->assertSame('annual', $plans->get('starter_annual')['interval']);
         $this->assertSame(1, $plans->get('starter_annual')['limits']['profiles']);
-        $this->assertSame(1000, $plans->get('starter_annual')['credits']['total']);
+        $this->assertSame(0, $plans->get('starter_annual')['credits']['total']);
         $this->assertTrue($plans->get('starter_annual')['purchasable']);
     }
 
@@ -194,7 +198,7 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Subscription trial started successfully.');
         $response->assertJsonPath('data.subscription.plan', 'starter');
         $response->assertJsonPath('data.subscription.status', 'trialing');
-        $response->assertJsonPath('data.payment_source.provider_source_id', '3891');
+        $response->assertJsonMissingPath('data.payment_source.provider_source_id');
         $response->assertJsonPath('data.payment_source.status', 'active');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
@@ -225,11 +229,12 @@ class PaymentControllerTest extends TestAPI
         $this->assertDatabaseHas('payment_sources', [
             'user_id' => $user->id,
             'provider' => 'wompi',
-            'provider_source_id' => '3891',
+            'provider_source_id' => null,
             'type' => 'CARD',
             'status' => 'active',
             'reusable' => true,
         ]);
+        $this->assertSame('3891', PaymentSource::query()->firstOrFail()->provider_source_id);
         $this->assertDatabaseHas('subscriptions', [
             'user_id' => $user->id,
             'plan' => 'starter',
@@ -331,7 +336,7 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('message', 'Subscription payment source checkout processed successfully.');
         $response->assertJsonPath('data.subscription.plan', 'starter');
         $response->assertJsonPath('data.subscription.status', 'first');
-        $response->assertJsonPath('data.payment_source.provider_source_id', '3891');
+        $response->assertJsonMissingPath('data.payment_source.provider_source_id');
         $response->assertJsonPath('data.payment_source.status', 'active');
         $response->assertJsonPath('data.payment_order.user_id', $user->id);
         $response->assertJsonPath('data.payment_order.plan', 'starter');
@@ -369,6 +374,77 @@ class PaymentControllerTest extends TestAPI
                 && $request['recurrent'] === true
                 && str_starts_with((string) $request['reference'], 'VOI-SUB-'.$user->id.'-');
         });
+    }
+
+    public function test_user_can_start_paid_subscription_with_saved_payment_method(): void
+    {
+        Http::fake([
+            'https://sandbox.wompi.co/v1/transactions' => Http::response([
+                'data' => [
+                    'id' => 'trx_saved_source',
+                    'status' => 'APPROVED',
+                    'amount_in_cents' => 5196000,
+                    'currency' => 'COP',
+                ],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create();
+        $source = PaymentSource::query()->create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => '3891',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+            'verified_at' => now(),
+        ]);
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson(self::SUBSCRIPTION_PAYMENT_SOURCE_ENDPOINT, [
+                'plan' => 'starter',
+                'terms_accepted' => true,
+                'payment_source_id' => $source->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.payment_source.id', $source->id)
+            ->assertJsonPath('data.payment_source.is_default', true)
+            ->assertJsonPath('data.payment_order.status', 'approved');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://sandbox.wompi.co/v1/transactions'
+            && $request['payment_source_id'] === 3891);
+    }
+
+    public function test_user_can_start_trial_with_saved_payment_method(): void
+    {
+        Http::fake();
+
+        $user = User::factory()->create();
+        $source = PaymentSource::query()->create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => '3891',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+            'verified_at' => now(),
+        ]);
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson(self::TRIAL_ENDPOINT, [
+                'plan' => 'starter',
+                'terms_accepted' => true,
+                'payment_source_id' => $source->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.subscription.status', 'trialing')
+            ->assertJsonPath('data.payment_source.id', $source->id)
+            ->assertJsonPath('data.payment_source.is_default', true);
+
+        Http::assertNothingSent();
     }
 
     public function test_paid_subscription_started_with_payment_source_can_be_renewed_by_job(): void
@@ -497,8 +573,15 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription', null);
         $response->assertJsonPath('data.payment_order.status', 'declined');
         $response->assertJsonPath('data.payment_order.billing_reason', 'subscription_initial');
+        $response->assertJsonPath('data.payment_source.requires_attention', true);
+        $response->assertJsonPath('data.payment_source.is_chargeable', false);
 
         $this->assertSame(0, Subscription::where('user_id', $user->id)->count());
+        $source = PaymentSource::query()->where('user_id', $user->id)->firstOrFail();
+        $order = PaymentOrder::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertTrue($source->requires_attention);
+        $this->assertSame('payment_declined', $source->last_payment_failure_code);
+        $this->assertSame($order->id, $source->last_failed_payment_order_id);
         $this->assertDatabaseHas('payment_orders', [
             'user_id' => $user->id,
             'status' => 'declined',
@@ -534,7 +617,7 @@ class PaymentControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(422);
-        $response->assertJsonPath('message', 'Wompi did not confirm an active reusable payment source.');
+        $response->assertJsonPath('message', 'Wompi did not confirm an active reusable payment method.');
 
         $this->assertDatabaseCount('payment_sources', 0);
         $this->assertDatabaseCount('payment_orders', 0);
@@ -750,14 +833,19 @@ class PaymentControllerTest extends TestAPI
             'id' => $paymentOrder->payment_source_id,
             'user_id' => $user->id,
             'provider' => 'wompi',
-            'provider_source_id' => 'ps_'.$paymentOrder->reference,
+            'provider_source_id' => null,
             'status' => 'active',
         ]);
+        $this->assertNotNull($paymentOrder->paymentSource?->provider_source_ciphertext);
+        $this->assertSame(
+            'ps_'.$paymentOrder->reference,
+            $paymentOrder->paymentSource?->provider_source_id
+        );
 
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $paymentOrder->subscription_id,
             'user_id' => $user->id,
-            'credits_remaining' => 1000,
+            'credits_remaining' => 0,
             'profiles_remaining' => 1,
         ]);
 
@@ -797,9 +885,47 @@ class PaymentControllerTest extends TestAPI
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
-            'credits_remaining' => 1000,
+            'credits_remaining' => 0,
             'profiles_remaining' => 1,
         ]);
+    }
+
+    public function test_credit_purchase_webhook_grants_once_and_reversal_creates_wallet_debt(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingCreditOrder($user);
+        $approved = $this->wompiPayload($paymentOrder, false);
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $approved, [
+            'X-Event-Checksum' => $this->eventChecksum($approved),
+        ])->assertOk();
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $approved, [
+            'X-Event-Checksum' => $this->eventChecksum($approved),
+        ])->assertOk()->assertJsonPath('message', 'Wompi event already processed.');
+
+        $this->assertSame(
+            CreditAmount::creditsToUnits(1000),
+            $user->creditWallet()->firstOrFail()->available_units
+        );
+
+        $user->creditWallet()->firstOrFail()->update([
+            'available_units' => CreditAmount::creditsToUnits(400),
+            'lifetime_consumed_units' => CreditAmount::creditsToUnits(600),
+        ]);
+        $voided = $this->wompiPayload($paymentOrder->fresh(), false);
+        $voided['id'] = 'evt-voided-'.$paymentOrder->id;
+        $voided['data']['transaction']['status'] = 'VOIDED';
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $voided, [
+            'X-Event-Checksum' => $this->eventChecksum($voided),
+        ])->assertOk();
+
+        $wallet = $user->creditWallet()->firstOrFail()->fresh();
+        $this->assertSame(0, $wallet->available_units);
+        $this->assertSame(CreditAmount::creditsToUnits(600), $wallet->debt_units);
+        $this->assertDatabaseCount('credit_ledger_entries', 2);
+        $this->assertSame(PaymentOrderStatus::Voided, $paymentOrder->fresh()->status);
+        $this->assertDatabaseMissing('subscriptions', ['user_id' => $user->id]);
     }
 
     public function test_valid_wompi_approved_event_starts_trial_subscription(): void
@@ -831,7 +957,7 @@ class PaymentControllerTest extends TestAPI
         $this->assertDatabaseHas('subscription_limits', [
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
-            'credits_remaining' => 100,
+            'credits_remaining' => 0,
             'profiles_remaining' => 1,
         ]);
     }
@@ -876,6 +1002,89 @@ class PaymentControllerTest extends TestAPI
         $this->assertSame(1, PaymentEvent::where('provider_event_id', 'evt_'.$paymentOrder->reference)->count());
     }
 
+    public function test_declined_wompi_event_marks_payment_method_as_requiring_attention(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingCreditOrder($user);
+        $payload = $this->wompiPayload($paymentOrder);
+        $payload['id'] = 'evt_declined_'.$paymentOrder->reference;
+        $payload['data']['transaction']['status'] = 'DECLINED';
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $payload, [
+            'X-Event-Checksum' => $this->eventChecksum($payload),
+        ])->assertOk();
+
+        $paymentOrder->refresh();
+        $source = PaymentSource::query()->where('user_id', $user->id)->firstOrFail();
+
+        $this->assertSame(PaymentOrderStatus::Declined, $paymentOrder->status);
+        $this->assertTrue($source->requires_attention);
+        $this->assertFalse($source->isChargeable());
+        $this->assertSame($paymentOrder->id, $source->last_failed_payment_order_id);
+        $this->assertDatabaseCount('credit_ledger_entries', 0);
+    }
+
+    public function test_stale_declined_event_does_not_downgrade_an_approved_payment(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingCreditOrder($user);
+        $approved = $this->wompiPayload($paymentOrder);
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $approved, [
+            'X-Event-Checksum' => $this->eventChecksum($approved),
+        ])->assertOk();
+
+        $staleDeclined = $this->wompiPayload($paymentOrder->fresh());
+        $staleDeclined['id'] = 'evt_stale_declined_'.$paymentOrder->reference;
+        $staleDeclined['data']['transaction']['status'] = 'DECLINED';
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $staleDeclined, [
+            'X-Event-Checksum' => $this->eventChecksum($staleDeclined),
+        ])->assertOk();
+
+        $source = PaymentSource::query()->where('user_id', $user->id)->firstOrFail();
+        $wallet = $user->creditWallet()->firstOrFail();
+
+        $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->fresh()->status);
+        $this->assertFalse($source->requires_attention);
+        $this->assertTrue($source->isChargeable());
+        $this->assertSame(CreditAmount::creditsToUnits(1000), $wallet->available_units);
+        $this->assertSame(0, $wallet->debt_units);
+        $this->assertDatabaseCount('credit_ledger_entries', 1);
+    }
+
+    public function test_late_approved_event_recovers_a_declined_payment_once(): void
+    {
+        $user = User::factory()->create();
+        $paymentOrder = $this->createPendingCreditOrder($user);
+        $declined = $this->wompiPayload($paymentOrder);
+        $declined['id'] = 'evt_declined_then_approved_'.$paymentOrder->reference;
+        $declined['data']['transaction']['status'] = 'DECLINED';
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $declined, [
+            'X-Event-Checksum' => $this->eventChecksum($declined),
+        ])->assertOk();
+
+        $source = PaymentSource::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertTrue($source->requires_attention);
+
+        $approved = $this->wompiPayload($paymentOrder->fresh());
+        $approved['id'] = 'evt_approved_after_decline_'.$paymentOrder->reference;
+
+        $this->postJson(self::WOMPI_EVENTS_ENDPOINT, $approved, [
+            'X-Event-Checksum' => $this->eventChecksum($approved),
+        ])->assertOk();
+
+        $source->refresh();
+        $wallet = $user->creditWallet()->firstOrFail();
+
+        $this->assertSame(PaymentOrderStatus::Approved, $paymentOrder->fresh()->status);
+        $this->assertFalse($source->requires_attention);
+        $this->assertTrue($source->isChargeable());
+        $this->assertSame(CreditAmount::creditsToUnits(1000), $wallet->available_units);
+        $this->assertDatabaseCount('credit_ledger_entries', 1);
+    }
+
     public function test_invalid_wompi_checksum_does_not_approve_order(): void
     {
         $user = User::factory()->create();
@@ -914,6 +1123,29 @@ class PaymentControllerTest extends TestAPI
             'exchange_rate' => 4000,
             'amount_cop' => round($amountInCents / 100, 2),
             'amount_in_cents' => $amountInCents,
+            'currency' => 'COP',
+            'status' => PaymentOrderStatus::Pending,
+        ]);
+    }
+
+    private function createPendingCreditOrder(User $user): PaymentOrder
+    {
+        return PaymentOrder::create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'reference' => 'VOI-CRD-'.$user->id.'-'.$this->faker->unique()->bothify('????####'),
+            'product_type' => PaymentProductType::CreditPack,
+            'product_code' => 'credits-1000',
+            'credit_units' => CreditAmount::creditsToUnits(1000),
+            'purchase_idempotency_key' => 'credit-webhook-'.$user->id,
+            'plan' => null,
+            'recurring' => false,
+            'billing_reason' => 'credit_purchase',
+            'display_amount_usd' => 10,
+            'display_currency' => 'USD',
+            'exchange_rate' => 4000,
+            'amount_cop' => 40000,
+            'amount_in_cents' => 4000000,
             'currency' => 'COP',
             'status' => PaymentOrderStatus::Pending,
         ]);

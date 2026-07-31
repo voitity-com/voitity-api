@@ -7,6 +7,8 @@ This README covers the local Docker workflow for running the API, database, migr
 Application behavior, plan limits, quota reservations, public messaging
 capabilities, and production process requirements are documented in
 [`docs/subscriptions-and-usage.md`](docs/subscriptions-and-usage.md).
+Payment methods, checkout, renewals, credit charges, webhooks, and payment
+security are documented in [`docs/payments.md`](docs/payments.md).
 Use
 [`voitity-subscription-limit-testing`](.codex/skills/voitity-subscription-limit-testing/SKILL.md)
 when adding plans or changing prices and limits. The latest local validation is
@@ -170,7 +172,7 @@ Inspect background process logs:
 docker compose logs -f queue scheduler
 ```
 
-Production must run exactly one scheduler process and at least one queue worker. The scheduler executes subscription expiration every minute, releases stale usage reservations every ten minutes, bills recurring subscriptions hourly, and resets due usage periods daily. The queue worker processes AI, voice, contact, notification, and recurring-billing jobs.
+Production must run exactly one scheduler process and at least one queue worker. The scheduler executes subscription expiration every minute, scans due recurring billing and durable payment retries every five minutes, releases stale usage reservations every ten minutes, and resets due usage periods daily. The queue worker processes AI, voice, contact, notification, and recurring-billing jobs.
 
 Use the same immutable application image for these three production process types:
 

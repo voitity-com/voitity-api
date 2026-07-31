@@ -2,11 +2,11 @@
 
 namespace App\Classes\Subscriptions;
 
+use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCharge;
 use App\Classes\PaymentService\PaymentSourceChargeRequest;
 use App\Classes\PaymentService\PaymentSourceCreateRequest;
-use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -17,6 +17,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -25,10 +26,12 @@ class SubscriptionPaymentSourceService
     public function __construct(
         private readonly SubscriptionPlanCatalog $planCatalog,
         private readonly SubscriptionPlanActivator $subscriptionPlanActivator,
+        private readonly PaymentMethodService $paymentMethods,
+        private readonly PaymentPayloadSanitizer $payloadSanitizer,
     ) {}
 
     /**
-     * @return array{subscription:?Subscription,payment_source:PaymentSource,payment_order:PaymentOrder,provider_source:PaymentSourceCreateResult,charge:PaymentSourceCharge}
+     * @return array{subscription:?Subscription,payment_source:PaymentSource,payment_order:PaymentOrder,charge:PaymentSourceCharge}
      */
     public function startSubscriptionWithPaymentSource(
         User $user,
@@ -38,21 +41,39 @@ class SubscriptionPaymentSourceService
         CustomerTermsAcceptance $termsAcceptance,
     ): array {
         $this->ensureSubscriptionCanStart($user, $plan);
+        $paymentSource = $this->paymentMethods->create($user, $paymentSourceRequest);
 
-        $providerSource = $paymentService->createPaymentSource($paymentSourceRequest);
+        return $this->startSubscriptionWithExistingPaymentSource(
+            $user,
+            $plan,
+            $paymentService,
+            $paymentSource,
+            $termsAcceptance,
+        );
+    }
 
-        if (! $providerSource->isActive()) {
-            throw new RuntimeException('Wompi did not confirm an active reusable payment source.');
+    /**
+     * @return array{subscription:?Subscription,payment_source:PaymentSource,payment_order:PaymentOrder,charge:PaymentSourceCharge}
+     */
+    public function startSubscriptionWithExistingPaymentSource(
+        User $user,
+        SubscriptionPlan $plan,
+        PaymentService $paymentService,
+        PaymentSource $paymentSource,
+        CustomerTermsAcceptance $termsAcceptance,
+    ): array {
+        $this->ensureSubscriptionCanStart($user, $plan);
+
+        if ((int) $paymentSource->user_id !== (int) $user->id || ! $paymentSource->isChargeable()) {
+            throw new RuntimeException('The selected payment method is not available for recurring charges.');
         }
 
-        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource, $termsAcceptance): array {
+        $paymentOrder = DB::transaction(function () use ($user, $plan, $paymentSource, $termsAcceptance): PaymentOrder {
             /** @var User $lockedUser */
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->ensureSubscriptionCanStart($lockedUser, $plan);
-            $paymentSource = $this->localPaymentSourceFor($lockedUser, $providerSource, $paymentSourceRequest->metadata);
-            $paymentOrder = $this->createInitialOrder($lockedUser, $plan, $paymentSource, $termsAcceptance);
 
-            return [$paymentSource, $paymentOrder];
+            return $this->createInitialOrder($lockedUser, $plan, $paymentSource, $termsAcceptance);
         });
 
         $charge = $paymentService->chargePaymentSource(new PaymentSourceChargeRequest(
@@ -73,7 +94,7 @@ class SubscriptionPaymentSourceService
 
         $paymentOrder->provider_transaction_id = $charge->providerTransactionId;
         $paymentOrder->wompi_status = $charge->providerStatus;
-        $paymentOrder->raw_provider_payload = $charge->toArray();
+        $paymentOrder->raw_provider_payload = $this->payloadSanitizer->paymentResult($charge->toArray());
         $paymentOrder->status = PaymentOrderStatus::from($charge->status);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
@@ -83,19 +104,33 @@ class SubscriptionPaymentSourceService
         $paymentOrder->save();
         $paymentSource->forceFill(['last_used_at' => $chargedAt])->save();
 
+        if ($paymentOrder->status === PaymentOrderStatus::Declined) {
+            $this->paymentMethods->markRejectedAfterDeclinedPayment($paymentOrder);
+        } elseif ($paymentOrder->status === PaymentOrderStatus::Approved) {
+            $this->paymentMethods->clearFailureAfterApprovedPayment($paymentOrder);
+        }
+
         $subscription = null;
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
             $subscription = $this->subscriptionPlanActivator->activateForPaymentOrder($paymentOrder);
+            $paymentSource->refresh();
         }
 
         $this->dispatchPaymentNotification($paymentOrder->fresh(['user']));
+
+        Log::info('Initial subscription payment processed.', [
+            'payment_order_id' => $paymentOrder->id,
+            'payment_source_id' => $paymentSource->id,
+            'plan' => $plan->value,
+            'status' => $paymentOrder->status->value,
+            'user_id' => $user->id,
+        ]);
 
         return [
             'subscription' => $subscription,
             'payment_source' => $paymentSource->fresh(),
             'payment_order' => $paymentOrder->fresh(),
-            'provider_source' => $providerSource,
             'charge' => $charge,
         ];
     }
@@ -112,44 +147,6 @@ class SubscriptionPaymentSourceService
         if ($user->subscriptions()->where('active', true)->exists()) {
             throw new RuntimeException('An active subscription already exists.');
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $metadata
-     */
-    private function localPaymentSourceFor(User $user, PaymentSourceCreateResult $providerSource, array $metadata = []): PaymentSource
-    {
-        $existingSource = PaymentSource::query()
-            ->where('provider', PaymentProvider::Wompi)
-            ->where('provider_source_id', $providerSource->providerSourceId)
-            ->first();
-
-        if ($existingSource instanceof PaymentSource && $existingSource->user_id !== $user->id) {
-            throw new RuntimeException('The payment source belongs to another account.');
-        }
-
-        $attributes = [
-            'user_id' => $user->id,
-            'provider' => PaymentProvider::Wompi,
-            'provider_source_id' => $providerSource->providerSourceId,
-            'type' => $providerSource->type,
-            'status' => $providerSource->status,
-            'reusable' => $providerSource->reusable,
-            'metadata' => $this->paymentSourceMetadata($providerSource, $metadata),
-            'verified_at' => $providerSource->isActive() ? now() : null,
-        ];
-
-        if ($existingSource instanceof PaymentSource) {
-            $existingSource->fill($attributes);
-            $existingSource->save();
-
-            return $existingSource;
-        }
-
-        /** @var PaymentSource $paymentSource */
-        $paymentSource = PaymentSource::query()->create($attributes);
-
-        return $paymentSource;
     }
 
     private function createInitialOrder(
@@ -233,19 +230,6 @@ class SubscriptionPaymentSourceService
             'amount_cop' => round($amountInCents / 100, 2),
             'amount_in_cents' => $amountInCents,
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function paymentSourceMetadata(PaymentSourceCreateResult $providerSource, array $metadata = []): array
-    {
-        return array_filter([
-            'provider_status' => $providerSource->providerStatus,
-            'public_data' => $providerSource->publicData,
-            'metadata' => $metadata,
-            'http_status' => $providerSource->httpStatus,
-        ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
     private function uniqueReference(int $userId): string

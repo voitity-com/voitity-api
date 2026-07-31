@@ -681,7 +681,7 @@ class MessageControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(402);
-        $response->assertJsonPath('code', 'AUDIO_MESSAGE_LIMIT_REACHED');
+        $response->assertJsonPath('code', 'PURCHASED_CREDITS_REQUIRED');
         $this->assertDatabaseCount('subscription_uses', 0);
     }
 

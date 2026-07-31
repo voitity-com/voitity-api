@@ -3,6 +3,7 @@
 namespace App\Classes\Subscriptions;
 
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionStatus;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
@@ -13,6 +14,7 @@ class ProfileMessagingCapabilitiesService
     public function __construct(
         private readonly SubscriptionLimitPeriodService $limitPeriods,
         private readonly SubscriptionPlanCatalog $plans,
+        private readonly CreditWalletService $wallets,
     ) {}
 
     /**
@@ -59,22 +61,56 @@ class ProfileMessagingCapabilitiesService
             return $this->disabledCapabilities('limits_unavailable');
         }
 
-        if (! $limit instanceof SubscriptionLimit || (int) $limit->chat_messages_remaining <= 0) {
+        if (! $limit instanceof SubscriptionLimit) {
+            return $this->disabledCapabilities('limits_unavailable');
+        }
+
+        $wallet = $this->wallets->walletForUser((int) $subscription->user_id);
+        $availableUnits = $wallet->debt_units > 0 || $subscription->status === SubscriptionStatus::Trialing
+            ? 0
+            : (int) $wallet->available_units;
+        $rates = config('subscriptions.credit_store.rates_in_units', []);
+        $chatCreditUnits = (int) $limit->chat_messages_remaining > 0
+            ? 0
+            : max(0, (int) ($rates['chat_messages'] ?? 0));
+        $textEnabled = (int) $limit->chat_messages_remaining > 0
+            || ($chatCreditUnits > 0 && $availableUnits >= $chatCreditUnits);
+
+        if (! $textEnabled) {
             return $this->disabledCapabilities('chat_message_limit_reached');
         }
 
-        $audioEnabled = (int) $limit->incoming_audio_messages_remaining > 0
+        $configuredMaxDuration = max(
+            1,
+            (int) config('subscriptions.audio_message_max_duration_seconds', 30)
+        );
+        $planAudioAvailable = (int) $limit->incoming_audio_messages_remaining > 0
             && (int) $limit->incoming_audio_seconds_remaining > 0;
+        $audioMaxDuration = $planAudioAvailable
+            ? min($configuredMaxDuration, (int) $limit->incoming_audio_seconds_remaining)
+            : $this->affordableAudioSeconds($availableUnits - $chatCreditUnits, $configuredMaxDuration, $rates);
+        $audioEnabled = $audioMaxDuration > 0;
 
         return [
-            'text_messages_enabled' => true,
+            'text_messages_enabled' => $textEnabled,
             'audio_messages_enabled' => $audioEnabled,
-            'audio_max_duration_seconds' => max(
-                1,
-                (int) config('subscriptions.audio_message_max_duration_seconds', 30)
-            ),
+            'audio_max_duration_seconds' => $audioEnabled ? $audioMaxDuration : $configuredMaxDuration,
             'reason' => $audioEnabled ? null : 'audio_message_limit_reached',
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $rates
+     */
+    private function affordableAudioSeconds(int $availableUnits, int $configuredMaxDuration, array $rates): int
+    {
+        $ratePerSecond = max(0, (int) ($rates['incoming_audio_seconds'] ?? 0));
+
+        if ($availableUnits <= 0 || $ratePerSecond <= 0) {
+            return 0;
+        }
+
+        return min($configuredMaxDuration, intdiv($availableUnits, $ratePerSecond));
     }
 
     private function enabledCapabilities(): array

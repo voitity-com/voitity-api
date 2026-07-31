@@ -4,6 +4,7 @@ namespace Tests\Unit\Classes\Subscriptions;
 
 use App\Classes\PaymentService\PaymentClient;
 use App\Classes\PaymentService\PaymentIntent;
+use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCharge;
@@ -12,6 +13,7 @@ use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Classes\PaymentService\PaymentSourceSetup;
 use App\Classes\PaymentService\PaymentWebhook;
+use App\Classes\Subscriptions\PaymentMethodService;
 use App\Classes\Subscriptions\SubscriptionBillingService;
 use App\Classes\Subscriptions\SubscriptionPlanActivator;
 use App\Classes\Subscriptions\SubscriptionPlanAssigner;
@@ -19,10 +21,13 @@ use App\Classes\Subscriptions\SubscriptionPlanCatalog;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
+use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
+use App\Exceptions\Subscriptions\SubscriptionPaymentRecoveryException;
 use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -97,7 +102,7 @@ class SubscriptionBillingServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_skips_due_subscription_without_chargeable_payment_source(): void
+    public function it_suspends_due_subscription_without_chargeable_payment_source(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
 
@@ -111,11 +116,17 @@ class SubscriptionBillingServiceTest extends TestCase
             'processed' => 1,
             'approved' => 0,
             'pending' => 0,
-            'failed' => 0,
-            'skipped' => 1,
+            'failed' => 1,
+            'skipped' => 0,
         ], $summary);
         $this->assertCount(0, $paymentClient->charges);
         $this->assertDatabaseCount('payment_orders', 0);
+        $subscription = Subscription::query()->firstOrFail();
+        $this->assertFalse($subscription->active);
+        $this->assertSame(SubscriptionStatus::PastDue, $subscription->status);
+        $this->assertSame('payment_method_required', $subscription->payment_failure_code);
+        $this->assertSame(1, $subscription->payment_retry_count);
+        $this->assertTrue($subscription->next_payment_retry_at->equalTo(now()->addHours(6)));
     }
 
     #[Test]
@@ -134,9 +145,9 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertSame([
             'processed' => 1,
             'approved' => 0,
-            'pending' => 0,
+            'pending' => 1,
             'failed' => 0,
-            'skipped' => 1,
+            'skipped' => 0,
         ], $summary);
         $this->assertCount(0, $paymentClient->charges);
         $this->assertDatabaseCount('payment_orders', 1);
@@ -344,15 +355,220 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertDatabaseCount('payment_orders', 0);
     }
 
+    #[Test]
+    public function it_retries_failed_payment_on_schedule_and_restores_suspended_profile(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config([
+            'payment.usd_cop_rate' => 4000,
+            'subscriptions.payment_retry_hours' => [6, 24, 72],
+        ]);
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $subscription = $this->dueSubscription($user, $paymentSource);
+        $profile = Profile::factory()->create([
+            'user_id' => $user->id,
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+
+        $firstSummary = $this->billingService(new FakeRecurringPaymentClient('DECLINED'))
+            ->billDueRecurringSubscriptions();
+
+        $this->assertSame(1, $firstSummary['failed']);
+        $subscription->refresh();
+        $profile->refresh();
+        $this->assertFalse($subscription->active);
+        $this->assertSame(1, $subscription->payment_retry_count);
+        $this->assertFalse($profile->active);
+        $this->assertSame($subscription->id, $profile->suspended_by_subscription_id);
+        $this->assertSame(ProfileStatus::Published->value, $profile->subscription_suspension_previous_status);
+        $paymentSource->refresh();
+        $this->assertTrue($paymentSource->requires_attention);
+        $this->assertFalse($paymentSource->isChargeable());
+        $this->assertTrue($paymentSource->canAttemptCharge());
+
+        Carbon::setTestNow('2026-07-09 05:59:00');
+        $earlySummary = $this->billingService(new FakeRecurringPaymentClient('APPROVED'))
+            ->billDueRecurringSubscriptions();
+        $this->assertSame(0, $earlySummary['processed']);
+
+        Carbon::setTestNow('2026-07-09 06:00:00');
+        $retrySummary = $this->billingService(new FakeRecurringPaymentClient('APPROVED'))
+            ->billDueRecurringSubscriptions();
+
+        $this->assertSame(1, $retrySummary['approved']);
+        $profile->refresh();
+        $this->assertTrue($profile->active);
+        $this->assertSame(ProfileStatus::Published, $profile->status);
+        $this->assertNull($profile->subscription_suspended_at);
+        $this->assertNull($profile->suspended_by_subscription_id);
+        $paymentSource->refresh();
+        $this->assertFalse($paymentSource->requires_attention);
+        $this->assertTrue($paymentSource->isChargeable());
+        $this->assertDatabaseHas('payment_orders', [
+            'source_subscription_id' => $subscription->id,
+            'attempt_number' => 2,
+            'status' => PaymentOrderStatus::Approved->value,
+        ]);
+    }
+
+    #[Test]
+    public function it_stops_automatic_retries_after_configured_attempts(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config(['subscriptions.payment_retry_hours' => [6, 24, 72]]);
+
+        $user = User::factory()->create();
+        $paymentSource = $this->activePaymentSource($user);
+        $subscription = $this->dueSubscription($user, $paymentSource);
+
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $summary = $this->billingService(new FakeRecurringPaymentClient('DECLINED'))
+                ->billDueRecurringSubscriptions();
+            $this->assertSame(1, $summary['failed']);
+            $subscription->refresh();
+            $this->assertSame($attempt, $subscription->payment_retry_count);
+
+            if ($subscription->next_payment_retry_at) {
+                Carbon::setTestNow($subscription->next_payment_retry_at);
+            }
+        }
+
+        $this->assertNull($subscription->fresh()->next_payment_retry_at);
+        Carbon::setTestNow(now()->addWeek());
+        $summary = $this->billingService(new FakeRecurringPaymentClient('APPROVED'))
+            ->billDueRecurringSubscriptions();
+        $this->assertSame(0, $summary['processed']);
+        $this->assertDatabaseCount('payment_orders', 4);
+    }
+
+    #[Test]
+    public function it_allows_immediate_manual_retry_and_blocks_a_new_card_while_old_order_is_pending(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+
+        $user = User::factory()->create();
+        $oldSource = $this->activePaymentSource($user);
+        $subscription = $this->dueSubscription($user, $oldSource);
+        $pendingOrder = $this->pendingRenewalOrder($user, $subscription, $oldSource);
+        $subscription->forceFill([
+            'active' => false,
+            'status' => SubscriptionStatus::PastDue,
+            'payment_failure_code' => 'payment_declined',
+            'payment_failed_at' => now(),
+            'payment_retry_count' => 1,
+            'next_payment_retry_at' => now()->addHours(6),
+            'access_ended_reason' => 'payment_failure',
+        ])->save();
+        $newSource = PaymentSource::query()->create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => 'new-source-5000',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+            'verified_at' => now(),
+        ]);
+        $oldSource->forceFill(['is_default' => false])->save();
+        $newSource->forceFill(['is_default' => true])->save();
+        $client = new FakeRecurringPaymentClient('APPROVED');
+
+        $result = $this->billingService($client)->retryFailedRenewal($user);
+
+        $this->assertSame('pending', $result['outcome']);
+        $this->assertSame($pendingOrder->id, $result['order']?->id);
+        $this->assertCount(0, $client->charges);
+        $this->assertDatabaseCount('payment_orders', 1);
+    }
+
+    #[Test]
+    public function it_requires_a_replacement_after_a_decline_and_renews_immediately_with_the_new_default_card(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
+        config(['payment.usd_cop_rate' => 4000]);
+
+        $user = User::factory()->create();
+        $rejectedSource = $this->activePaymentSource($user);
+        $subscription = $this->dueSubscription($user, $rejectedSource);
+        $profile = Profile::factory()->create([
+            'user_id' => $user->id,
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+
+        $declined = $this->billingService(new FakeRecurringPaymentClient('DECLINED'))
+            ->billDueRecurringSubscriptions();
+
+        $this->assertSame(1, $declined['failed']);
+        $rejectedSource->refresh();
+        $profile->refresh();
+        $this->assertTrue($rejectedSource->requires_attention);
+        $this->assertFalse($rejectedSource->isChargeable());
+        $this->assertFalse($profile->active);
+
+        try {
+            $this->billingService(new FakeRecurringPaymentClient('APPROVED'))
+                ->retryFailedRenewal($user);
+            $this->fail('The rejected default source should not support a manual renewal.');
+        } catch (SubscriptionPaymentRecoveryException $exception) {
+            $this->assertSame('PAYMENT_METHOD_REQUIRED', $exception->errorCode());
+        }
+
+        $replacementSource = PaymentSource::query()->create([
+            'user_id' => $user->id,
+            'provider' => PaymentProvider::Wompi,
+            'provider_source_id' => 'replacement-source-5001',
+            'type' => 'CARD',
+            'status' => 'active',
+            'reusable' => true,
+            'verified_at' => now(),
+        ]);
+        $rejectedSource->forceFill(['is_default' => false])->save();
+        $replacementSource->forceFill(['is_default' => true])->save();
+
+        $approvedClient = new FakeRecurringPaymentClient('APPROVED');
+        $result = $this->billingService($approvedClient)->retryFailedRenewal($user);
+
+        $this->assertSame('approved', $result['outcome']);
+        $this->assertCount(1, $approvedClient->charges);
+        $this->assertSame(
+            $replacementSource->provider_source_id,
+            $approvedClient->charges[0]->paymentSourceProviderId,
+        );
+        $this->assertSame($replacementSource->id, $result['subscription']?->payment_source_id);
+
+        $rejectedSource->refresh();
+        $replacementSource->refresh();
+        $profile->refresh();
+        $subscription->refresh();
+
+        $this->assertTrue($rejectedSource->requires_attention);
+        $this->assertFalse($rejectedSource->is_default);
+        $this->assertFalse($replacementSource->requires_attention);
+        $this->assertTrue($replacementSource->is_default);
+        $this->assertTrue($profile->active);
+        $this->assertSame(ProfileStatus::Published, $profile->status);
+        $this->assertNull($profile->suspended_by_subscription_id);
+        $this->assertFalse($subscription->active);
+        $this->assertSame(SubscriptionStatus::Expired, $subscription->status);
+    }
+
     private function billingService(FakeRecurringPaymentClient $paymentClient): SubscriptionBillingService
     {
         $planCatalog = new SubscriptionPlanCatalog;
         $planAssigner = new SubscriptionPlanAssigner;
+        $paymentService = new PaymentService($paymentClient);
+        $payloadSanitizer = new PaymentPayloadSanitizer;
+        $paymentMethods = new PaymentMethodService($paymentService, $payloadSanitizer);
 
         return new SubscriptionBillingService(
-            new PaymentService($paymentClient),
+            $paymentService,
             $planCatalog,
-            new SubscriptionPlanActivator($planAssigner),
+            new SubscriptionPlanActivator($planAssigner, $paymentMethods),
+            $paymentMethods,
+            $payloadSanitizer,
         );
     }
 
@@ -411,6 +627,7 @@ class SubscriptionBillingServiceTest extends TestCase
     {
         return PaymentOrder::query()->create([
             'user_id' => $user->id,
+            'source_subscription_id' => $subscription->id,
             'payment_source_id' => $paymentSource->id,
             'provider' => PaymentProvider::Wompi,
             'reference' => 'VOI-REN-EXISTING',

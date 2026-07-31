@@ -1,198 +1,200 @@
 ---
 name: voitity-subscription-limit-testing
-description: Use when adding a Bigmelo subscription plan, changing prices or limits, or validating quota enforcement across the Laravel API, public web, admin, queues, billing periods, and profile access.
+description: Use when adding a Bigmelo plan, changing prices, limits, or credit tariffs, or validating quota and purchased-credit enforcement across API, billing, providers, queues, analytics, and responsive UI.
 ---
 
-# Voitity Subscription Limit Testing
+# Voitity Subscription and Credit Testing
 
-Validate subscription changes in five test-and-adjust cycles. Treat
-`src/config/subscriptions.php` as the canonical contract and do not copy limit
-numbers into new tests unless the number itself is the behavior under test.
+Validate changes in ten focused test-and-adjust cycles. Treat
+`src/config/subscriptions.php` as the canonical plan, package, and tariff
+contract. A cycle is complete only after its focused checks pass again after
+the adjustment.
 
 ## Safety
 
 - Run automated API tests only with `APP_ENV=testing` and SQLite in memory.
-- Stop if the test output does not say `Database safety verified: Using SQLite
+- Stop if output does not confirm `Database safety verified: Using SQLite
   in-memory database`.
-- Never call OpenAI, ElevenLabs, Runway, Wompi, Instagram, TikTok, or OnlyFans
-  in these tests. Fake clients, HTTP, storage, mail, and notifications.
-- Use only disposable local users for browser and PostgreSQL checks.
-- Record every local database value before changing it and restore it in a
-  `finally` step or immediately after the browser assertion.
-- Do not deploy as part of this workflow.
+- Fake OpenAI, ElevenLabs, Runway, Wompi, social networks, storage, mail, and
+  notifications in automated tests.
+- Use a disposable local user for PostgreSQL and browser checks.
+- Snapshot every local database value before a temporary change and restore it.
+- Do not perform a production deployment.
 
-## Discover The Contract
+## Discover the Contract
 
-Before editing, inspect:
+Inspect:
 
 - `src/config/subscriptions.php`
-- `src/app/Enums/SubscriptionPlan.php`
-- `src/app/Classes/Subscriptions/SubscriptionLimitPeriodService.php`
-- `src/app/Classes/Subscriptions/SubscriptionUsageRecorder.php`
-- `src/app/Classes/Subscriptions/SubscriptionPlanCapabilityService.php`
-- `src/app/Classes/Subscriptions/SubscriptionProfileAccessService.php`
-- public and authenticated subscription-plan response tests
-- web and admin plan translations and rendering
+- `SubscriptionLimitPeriodService`
+- `SubscriptionUsageFundingService`
+- `SubscriptionUsageRecorder`
+- `CreditWalletService`
+- `CreditPurchaseService`
+- `SubscriptionPlanCapabilityService`
+- `SubscriptionProfileAccessService`
+- `ProfileMessagingCapabilitiesService`
+- payment and Wompi webhook handlers
+- public/admin plan responses and ES/EN copy
 
-Use `Tests\Support\CreatesSubscriptionScenarios` to create subscriptions and
-limits from configuration. Extend that helper when a new billing interval or
-status is introduced.
+Use `Tests\Support\CreatesSubscriptionScenarios`. Never hand-build limit rows
+when the configured contract is what the test intends to validate.
 
-## Cycle 1: Contract And Boundaries
+## Cycle 1: Contract and Pricing
 
-1. Compare public plans, authenticated plans, created limit rows, and UI copy
-   with the canonical configuration.
-2. For every finite metric, test zero, exactly the remaining amount, and one
-   unit over the remaining amount.
-3. Test incoming audio at the configured maximum duration and one second over.
-4. Verify rejected requests create no message, usage row, or provider call.
-5. Change product and selected-media capabilities temporarily in test config
-   and prove enforcement follows the plan rather than legacy global settings.
-6. Verify capability value `0` is valid and disables the feature.
+1. Compare public plans, authenticated plans, initialized limits, admin copy,
+   public copy, Terms, Privacy, and Data Deletion.
+2. Verify Starter monthly and annual prices.
+3. Verify included monthly limits contain no purchased-credit allowance.
+4. Verify package minimum, maximum, step, presets, USD price, and tariff
+   version.
+5. Recalculate provider-cost share for every tariff and keep it at or below the
+   configured target.
+6. Recheck official provider pricing before changing a tariff.
 
-Run:
+## Cycle 2: Plan-First Boundaries
+
+For every finite metric, test:
+
+1. Zero remaining with no wallet.
+2. Exactly enough included capacity.
+3. One unit crossing from plan into wallet.
+4. Completely exhausted plan with enough wallet.
+5. Wallet one internal unit short.
+6. Included capacity is always consumed before purchased credits.
+7. A metric does not spend credits because a different metric is exhausted.
+8. Profile and capability hard limits do not consume credits.
+
+## Cycle 3: Wallet Atomicity
+
+1. Reserve the last wallet units and reject a competing reservation.
+2. Finalize twice and verify one consumption.
+3. Release twice and verify one restoration.
+4. Repeat the smallest fractional tariff and prove no rounding drift.
+5. Verify integer internal units and displayed decimal conversion.
+6. Verify debt blocks reservations.
+7. Verify a released reservation pays reversal debt before becoming available.
+
+## Cycle 4: Purchase and Webhook Lifecycle
+
+1. Reject trial, inactive subscription, missing reusable source, invalid step,
+   below minimum, and above maximum.
+2. Test approved, pending, declined, and provider error.
+3. Repeat the API idempotency key and prove one charge and one grant.
+4. Reuse the key with different data and expect validation failure.
+5. Repeat the Wompi event and prove one ledger purchase.
+6. Change approved to voided and verify balance removal or debt.
+7. Prove a credit pack never activates or renews a subscription.
+
+## Cycle 5: Public Text and Audio
+
+1. Test text with plan, wallet, and no funding.
+2. Test incoming audio at 1 second, 30 seconds, and 31 seconds.
+3. Exhaust audio count while seconds remain, then the inverse.
+4. Verify the full transcription duration uses credits when either audio metric
+   is exhausted.
+5. Verify failed validation creates no message, use, or provider call.
+6. Verify messaging capabilities and microphone state reflect affordable
+   duration.
+7. Test simultaneous requests for the last message and audio units.
+
+## Cycle 6: Paid Provider Jobs
+
+1. TTS: included, split, wallet-only, insufficient, provider success, provider
+   exception, and text fallback.
+2. Avatar image/video: reserve, success, failure, retries, and stale release.
+3. Voice: first clone, re-clone with credits, unique provider-request keys,
+   success finalization, failure release, and replaced-provider cleanup.
+4. Verify no provider starts before a successful reservation.
+5. Verify a provider-consumed operation is not refunded merely because a later
+   local step failed.
+
+## Cycle 7: Periods, Renewal, and Access
+
+1. Verify monthly and annual billing dates independently from monthly usage
+   periods.
+2. Exhaust each included metric and consume wallet credits.
+3. Move to the next monthly period.
+4. Verify plan limits are restored and wallet balance is unchanged.
+5. Verify new operations use renewed plan capacity before wallet.
+6. Test trial conversion, renewal, decline, cancellation, expiration, and
+   replacement subscription.
+7. Verify expired access deactivates profiles and leaves wallet dormant.
+8. Verify a replacement one-profile plan requires explicit active-profile
+   selection.
+
+## Cycle 8: Analytics and Audit
+
+1. Compare current limits, usage rows, wallet, ledger, and `/api/usage`.
+2. Verify plan-covered and credit-covered metrics are separate.
+3. Verify reserved and consumed credits are separate.
+4. Verify released usage is excluded.
+5. Filter by day, month, one month, multiple months, and the 24-month boundary.
+6. Test usage immediately before and after UTC midnight with a non-UTC IANA
+   timezone; verify both range inclusion and bucket labels.
+7. Verify history remains visible without an active subscription.
+8. Reconcile purchase, reversal, available, reserved, debt, and lifetime
+   counters.
+
+## Cycle 9: Browser and Responsive UI
+
+Use a disposable signed-in local user.
+
+1. Public site: prices, limits, additional-credit copy, legal pages, and
+   `Ingresar`/`Sign in`.
+2. Billing: wallet totals, packages, custom amount validation, tariffs, Wompi
+   link, terms acceptance, purchase result, history, and inactive/trial state.
+3. Usage: current plan limits, wallet summary, date filters, grouping, chart,
+   and period table.
+4. Public profile: text input, microphone, affordable duration, and TTS
+   fallback.
+5. Validate Spanish and English at 1440x900 and 390x844.
+6. Check horizontal overflow, clipping, overlap, keyboard focus, dialog scroll,
+   browser console, and failed network requests.
+
+## Cycle 10: Runtime and Full Regression
+
+1. Run stale-reservation release twice and verify idempotency.
+2. Inspect `php artisan schedule:list`.
+3. Verify `withoutOverlapping`, `onOneServer`, shared cache locks, queue
+   `after_commit`, `retry_after`, and worker timeout.
+4. Inspect queue, scheduler, and failed-job state.
+5. Run the PostgreSQL migration and smoke test actual tables and constraints.
+6. Run Unit and Feature suites separately.
+7. Run Pint on changed PHP files, Swagger generation, admin build, and web
+   build.
+8. Re-run the browser smoke path after all fixes.
+
+## Commands
 
 ```sh
 docker compose exec -T app php artisan test \
-  tests/Unit/Classes/Subscriptions/SubscriptionPlanCapabilityServiceTest.php \
-  tests/Unit/Classes/Subscriptions/SubscriptionPlanLimitContractTest.php \
-  tests/Feature/Http/Controllers/api/v1/PublicSubscriptionPlansControllerTest.php \
-  tests/Feature/Http/Controllers/api/v1/ProfileProductControllerTest.php \
-  tests/Feature/Http/Controllers/api/v1/ProfileIntegrationControllerTest.php \
-  tests/Feature/Http/Controllers/api/v1/MessageControllerTest.php
-```
+  tests/Unit/Classes/Subscriptions/SubscriptionPurchasedCreditsTest.php \
+  tests/Unit/Classes/Subscriptions/CreditWalletServiceTest.php \
+  tests/Feature/Http/Controllers/api/v1/CreditControllerTest.php \
+  tests/Feature/Http/Controllers/api/v1/UsageAnalyticsControllerTest.php
 
-## Cycle 2: Atomic Accounting
-
-1. Reserve the last available unit and verify a competing reservation fails
-   before a provider call.
-2. Repeat the same idempotency key and verify no double charge.
-3. Reuse a non-released key with different user, profile, type, or amounts and
-   verify rejection plus a warning log.
-4. Release a reservation and verify metrics and credits are restored once.
-5. Finalize a reservation twice and verify the second call is a no-op.
-6. Repeat the smallest fractional charge enough times to reach a whole credit.
-   Assert both the remaining balance and the sum of usage rows within
-   `0.000001`.
-7. Confirm PostgreSQL credit columns retain `NUMERIC(14,6)`.
-
-Run:
-
-```sh
-docker compose exec -T app php artisan test \
-  tests/Unit/Classes/Subscriptions/SubscriptionUsageRecorderTest.php \
-  tests/Unit/Classes/Subscriptions/SubscriptionEntitlementServiceTest.php \
-  tests/Unit/Listeners/Subscriptions/RecordSubscriptionUsageTest.php
-```
-
-## Cycle 3: Periods And Profile Access
-
-1. Iterate every active plan and compare initialized metrics and credits with
-   configuration.
-2. Verify monthly, annual, and trial billing dates independently from monthly
-   usage-period reset dates.
-3. Verify a period reset does not move the paid renewal date.
-4. Test trial conversion, paid renewal, declined renewal, cancellation at
-   period end, and an active replacement subscription.
-5. Verify profiles remain active until access ends.
-6. Verify expiration deactivates profiles and prevents activation without an
-   active subscription.
-7. When a replacement plan allows fewer active profiles, verify all conflicting
-   profiles are hidden for explicit reselection and only the allowed count can
-   be activated.
-
-Run:
-
-```sh
-docker compose exec -T app php artisan test \
-  tests/Unit/Classes/Subscriptions/SubscriptionPlanLimitContractTest.php \
-  tests/Unit/Classes/Subscriptions/SubscriptionLimitPeriodServiceTest.php \
-  tests/Unit/Classes/Subscriptions/SubscriptionProfileAccessServiceTest.php \
-  tests/Feature/Console/RecurringBillingCommandTest.php \
-  tests/Feature/Console/SubscriptionExpirationCommandTest.php \
-  tests/Feature/Http/Controllers/api/v1/PaymentControllerTest.php \
-  tests/Feature/Http/Controllers/api/v1/ProfileControllerTest.php
-```
-
-## Cycle 4: Scheduler, Queue, And Recovery
-
-1. Create stale, current, finalized, and released reservations.
-2. Run `subscriptions:release-stale-usage-reservations` twice. Verify only the
-   stale reservation is released and the second run reports zero.
-3. Run `php artisan schedule:list` and verify billing, expiration, renewal,
-   reset, and stale-reservation commands.
-4. Verify critical schedules use both `withoutOverlapping` and `onOneServer`.
-5. Verify the shared cache supports distributed locks.
-6. Verify queue `retry_after` is greater than the worker `--timeout` and
-   database dispatch uses `after_commit`.
-7. Confirm worker and scheduler containers use restart policies and the same
-   release, database, cache, queue, and application key.
-8. Inspect failed jobs, queue lag, scheduler logs, stale-reservation logs, and
-   the composite stale-reservation index.
-
-Run:
-
-```sh
-docker compose exec -T app php artisan test \
-  tests/Feature/Console/SubscriptionUsageReservationCommandTest.php \
-  tests/Feature/Console/SubscriptionScheduleConfigurationTest.php
-docker compose exec -T app php artisan schedule:list
-docker compose exec -T queue php artisan tinker --execute="dump(config('queue.connections.database'));"
-```
-
-## Cycle 5: Browser And Responsive UI
-
-Test with an isolated local subscribed user.
-
-1. Public site at `http://localhost:3001/`: monthly and annual prices, limits,
-   ES/EN copy, checkout URLs, and the `Ingresar`/`Sign in` locale.
-2. Admin billing at
-   `http://localhost:3000/dashboard/settings/billing`: active plan, cycle,
-   renewal date, prices, features, and cancellation confirmation.
-3. Admin usage at
-   `http://localhost:3000/dashboard/settings/usage`: every metric, remaining
-   value, percentage, and ES/EN labels.
-4. Public profile: enabled microphone, 30-second help text, exhausted incoming
-   audio message count, exhausted incoming audio seconds, and restored state.
-5. Validate at 1440x900 and 390x844. Check screenshots, horizontal overflow,
-   clipped text, overlapping controls, and console errors.
-6. After each language change, assert translated content and
-   `document.documentElement.lang`.
-7. Restore temporary quota changes before ending the cycle.
-
-## Full Regression
-
-Run Unit and Feature separately because the combined Laravel process may exceed
-the local 128 MB PHP memory limit:
-
-```sh
 docker compose exec -T app php artisan test --testsuite=Unit
 docker compose exec -T app php artisan test --testsuite=Feature
-docker compose exec -T app vendor/bin/pint --test <changed-php-files>
-docker exec voitity-admin-app npm run build
-docker exec voitity-web-app npm run build
+docker compose exec -T app php artisan schedule:list
+docker compose exec -T app php artisan l5-swagger:generate
+(cd ../voitity-admin/src && npm run lint && npm run build)
+(cd ../voitity-web/src && npm run build)
 ```
 
-Pass every changed or newly created PHP file to Pint. Do not run Pint in
-write mode across an existing dirty worktree because it can reformat unrelated
-work.
+Pass only changed PHP files to `vendor/bin/pint --test`. Do not run Pint in
+write mode across an unrelated dirty worktree.
 
-Update Swagger and Postman only when an endpoint, request, response, error code,
-or authentication contract changes.
+## Report Each Cycle
 
-## Report Results
-
-For each cycle, record:
+Record:
 
 | Field | Required content |
 | --- | --- |
-| Scope | Tests and environments used |
+| Scope | Tests, user, and environment |
 | Expected | Boundary or invariant |
-| Observed | Exact result before adjustment |
+| Observed | Exact pre-adjustment result |
 | Finding | Root cause and impact |
 | Adjustment | Files and behavior changed |
-| Verification | Passing tests, assertions, screenshots, and restored data |
-| Residual risk | Anything not simulated, especially real providers |
-
-Do not report a cycle as complete until its focused tests pass after the
-adjustment.
+| Verification | Tests, assertions, screenshots, and restored data |
+| Residual risk | Especially unsimulated provider behavior |

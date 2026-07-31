@@ -116,7 +116,7 @@ class VoiceServiceTest extends TestCase
             (new VoiceService($voice, $client))->generateAudio('Hola');
             $this->fail('Expected TTS quota enforcement to reject the request.');
         } catch (SubscriptionEntitlementException $exception) {
-            $this->assertSame('TTS_CHARACTER_LIMIT_REACHED', $exception->errorCode());
+            $this->assertSame('PURCHASED_CREDITS_REQUIRED', $exception->errorCode());
         }
 
         $this->assertSame(0, $client->calls);

@@ -147,6 +147,21 @@ class User extends Authenticatable
         return $this->hasMany(SubscriptionUse::class);
     }
 
+    public function subscriptionUsagePeriods()
+    {
+        return $this->hasMany(SubscriptionUsagePeriod::class);
+    }
+
+    public function creditWallet()
+    {
+        return $this->hasOne(CreditWallet::class);
+    }
+
+    public function creditLedgerEntries()
+    {
+        return $this->hasMany(CreditLedgerEntry::class);
+    }
+
     public function paymentOrders()
     {
         return $this->hasMany(PaymentOrder::class);

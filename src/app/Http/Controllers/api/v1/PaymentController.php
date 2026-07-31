@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentRequest;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\Subscriptions\CustomerTermsAcceptance;
@@ -18,6 +19,7 @@ use App\Models\PaymentOrder;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -36,7 +38,8 @@ class PaymentController extends Controller
     public function createWompiCheckout(
         CreateWompiCheckoutRequest $request,
         PaymentService $paymentService,
-        SubscriptionPlanCatalog $planCatalog
+        SubscriptionPlanCatalog $planCatalog,
+        PaymentPayloadSanitizer $payloadSanitizer,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -94,10 +97,17 @@ class PaymentController extends Controller
         ));
 
         $paymentOrder->checkout_url = $intent->checkoutUrl;
-        $paymentOrder->raw_provider_payload = $intent->toArray();
+        $paymentOrder->raw_provider_payload = $payloadSanitizer->paymentResult($intent->toArray());
         $paymentOrder->save();
 
         app(NotificationDispatcher::class)->sendInApp($user, 'payment_pending', $this->notificationDataForOrder($paymentOrder));
+
+        Log::info('Wompi checkout created.', [
+            'payment_order_id' => $paymentOrder->id,
+            'plan' => $plan->value,
+            'reference' => $paymentOrder->reference,
+            'user_id' => $user->id,
+        ]);
 
         return response()->json([
             'message' => 'Wompi checkout created successfully.',
@@ -162,7 +172,7 @@ class PaymentController extends Controller
     private function notificationDataForOrder(PaymentOrder $paymentOrder): array
     {
         return [
-            'plan' => $paymentOrder->plan->value,
+            'plan' => $paymentOrder->plan?->value ?? 'credits',
             'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
             'payment_order_id' => $paymentOrder->id,
             'reference' => $paymentOrder->reference,

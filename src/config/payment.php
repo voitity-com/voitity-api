@@ -11,6 +11,15 @@ return [
     'checkout_expires_in_minutes' => (int) env('PAYMENTS_CHECKOUT_EXPIRES_IN_MINUTES', 60),
     'pending_charge_poll_attempts' => (int) env('PAYMENTS_PENDING_CHARGE_POLL_ATTEMPTS', 3),
     'pending_charge_poll_delay_ms' => (int) env('PAYMENTS_PENDING_CHARGE_POLL_DELAY_MS', 500),
+    'maximum_payment_methods_per_user' => (int) env('PAYMENTS_MAXIMUM_METHODS_PER_USER', 5),
+    'management_rate_limit_per_minute' => (int) env('PAYMENTS_MANAGEMENT_RATE_LIMIT_PER_MINUTE', 10),
+
+    'operations' => [
+        'cache_key_prefix' => env('PAYMENTS_OPERATIONS_CACHE_KEY_PREFIX', 'payments:operations'),
+        'heartbeat_retention_seconds' => (int) env('PAYMENTS_HEARTBEAT_RETENTION_SECONDS', 86400),
+        'scheduler_stale_after_seconds' => (int) env('PAYMENTS_SCHEDULER_STALE_AFTER_SECONDS', 180),
+        'queue_stale_after_seconds' => (int) env('PAYMENTS_QUEUE_STALE_AFTER_SECONDS', 300),
+    ],
 
     'exchange_rates' => [
         'usd_cop' => [

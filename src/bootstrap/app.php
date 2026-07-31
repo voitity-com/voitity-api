@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
         ]);
         $middleware->appendToGroup('api', 'force.json');
+        $middleware->appendToGroup('api', App\Http\Middleware\SecurityHeaders::class);
         $middleware->redirectGuestsTo(fn (Request $request): ?string => $request->is('api/*') ? null : '/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {

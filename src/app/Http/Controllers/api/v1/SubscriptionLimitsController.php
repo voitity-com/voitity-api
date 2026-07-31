@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\CreditWalletService;
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
-use App\Classes\Subscriptions\SubscriptionProfileAccessService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
-use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Subscription\SubscriptionLimitsResponse;
 use App\Models\Subscription;
@@ -66,7 +65,7 @@ class SubscriptionLimitsController extends Controller
         Request $request,
         SubscriptionRenewalService $renewalService,
         SubscriptionLimitPeriodService $limitPeriods,
-        SubscriptionProfileAccessService $profileAccess,
+        CreditWalletService $wallets,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -88,19 +87,7 @@ class SubscriptionLimitsController extends Controller
             $subscription = $renewalService->renewIfFree($subscription)->load('limit');
 
             if ($subscription->renews_at->isPast()) {
-                $subscription->status = $subscription->cancel_at_period_end
-                    ? SubscriptionStatus::Cancelled
-                    : SubscriptionStatus::Expired;
-                $subscription->active = false;
-                $subscription->save();
-                $deactivatedProfiles = $profileAccess->deactivateProfilesIfAccessEnded(
-                    $user,
-                    'subscription_expired_during_limits_request',
-                    $subscription->id
-                );
-
-                Log::warning('Expired subscription rejected while retrieving limits.', [
-                    'deactivated_profile_count' => $deactivatedProfiles,
+                Log::warning('Expired subscription limits request rejected without mutating billing state.', [
                     'subscription_id' => $subscription->id,
                     'user_id' => $user->id,
                 ]);
@@ -117,7 +104,8 @@ class SubscriptionLimitsController extends Controller
                 'data' => (new SubscriptionLimitsResponse(
                     $subscription,
                     $this->usageTotals($usageBreakdown),
-                    $usageBreakdown
+                    $usageBreakdown,
+                    $wallets->walletForUser($user),
                 ))->toArray(),
             ], 200);
         } catch (\Throwable $e) {
@@ -136,7 +124,7 @@ class SubscriptionLimitsController extends Controller
     private function usageTotals(Collection $usageBreakdown): array
     {
         return [
-            'credits' => round((float) $usageBreakdown->sum('credits_used'), 2),
+            'purchased_credits' => round((float) $usageBreakdown->sum('credits_used'), 3),
             'profiles' => (int) $usageBreakdown->sum('profiles_used'),
             'avatar_images' => (int) $usageBreakdown->sum('avatar_images_used'),
             'avatar_video_seconds' => (int) $usageBreakdown->sum('avatar_video_seconds_used'),

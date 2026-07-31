@@ -10,6 +10,7 @@ class SubscriptionLimit extends Model
     protected $fillable = [
         'subscription_id',
         'user_id',
+        'usage_period_id',
         'period_started_at',
         'period_renews_at',
         'profiles_remaining',
@@ -37,5 +38,10 @@ class SubscriptionLimit extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function usagePeriod(): BelongsTo
+    {
+        return $this->belongsTo(SubscriptionUsagePeriod::class, 'usage_period_id');
     }
 }

@@ -95,6 +95,92 @@ class SubscriptionActionsControllerTest extends TestAPI
         $this->assertNull($subscription->cancelled_at);
     }
 
+    public function test_billing_state_exposes_only_payment_failure_recovery_actions(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-13 10:00:00'));
+
+        $user = User::factory()->create();
+        $subscription = $this->paidSubscription($user, [
+            'active' => false,
+            'status' => SubscriptionStatus::PastDue,
+            'payment_failure_code' => 'payment_declined',
+            'payment_failed_at' => now()->subHour(),
+            'payment_retry_count' => 1,
+            'next_payment_retry_at' => now()->addHours(5),
+            'access_ended_reason' => 'payment_failure',
+        ]);
+        $token = $user->createToken('test-token', ['payments:read'])->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/subscription/billing-state')
+            ->assertOk()
+            ->assertJsonPath('data.subscription.id', $subscription->id)
+            ->assertJsonPath('data.subscription.status', 'past_due')
+            ->assertJsonPath('data.payment_recovery.required', true)
+            ->assertJsonPath('data.payment_recovery.reason_code', 'payment_declined')
+            ->assertJsonPath('data.payment_recovery.retry_count', 1)
+            ->assertJsonPath('data.payment_recovery.automatic_retries_remaining', 3)
+            ->assertJsonPath('data.payment_recovery.can_retry_now', true)
+            ->assertJsonPath('data.payment_method.is_chargeable', true);
+    }
+
+    public function test_manual_retry_requires_a_chargeable_default_payment_method(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->paidSubscription($user, [
+            'active' => false,
+            'status' => SubscriptionStatus::PastDue,
+            'payment_failure_code' => 'payment_method_required',
+            'payment_failed_at' => now()->subHour(),
+            'payment_retry_count' => 1,
+            'next_payment_retry_at' => now()->addHours(5),
+            'access_ended_reason' => 'payment_failure',
+        ]);
+        $subscription->paymentSource->forceFill([
+            'disabled_at' => now(),
+            'is_default' => false,
+            'reusable' => false,
+            'status' => 'disabled',
+        ])->save();
+        $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson('/api/subscription/renewal/retry')
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'PAYMENT_METHOD_REQUIRED');
+    }
+
+    public function test_billing_state_blocks_manual_retry_when_the_default_card_was_declined(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-13 10:00:00'));
+
+        $user = User::factory()->create();
+        $subscription = $this->paidSubscription($user, [
+            'active' => false,
+            'status' => SubscriptionStatus::PastDue,
+            'payment_failure_code' => 'payment_declined',
+            'payment_failed_at' => now()->subHour(),
+            'payment_retry_count' => 1,
+            'next_payment_retry_at' => now()->addHours(5),
+            'access_ended_reason' => 'payment_failure',
+        ]);
+        $subscription->paymentSource->forceFill([
+            'requires_attention' => true,
+            'last_payment_failure_code' => 'payment_declined',
+            'last_payment_failed_at' => now()->subHour(),
+        ])->save();
+        $token = $user->createToken('test-token', ['payments:read'])->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/subscription/billing-state')
+            ->assertOk()
+            ->assertJsonPath('data.payment_recovery.required', true)
+            ->assertJsonPath('data.payment_recovery.can_retry_now', false)
+            ->assertJsonPath('data.payment_method.requires_attention', true)
+            ->assertJsonPath('data.payment_method.is_chargeable', false)
+            ->assertJsonPath('data.payment_method.last_failure.code', 'payment_declined');
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */

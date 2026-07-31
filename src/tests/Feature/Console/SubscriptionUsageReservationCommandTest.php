@@ -61,11 +61,7 @@ class SubscriptionUsageReservationCommandTest extends TestCase
             'status' => SubscriptionUse::STATUS_FINALIZED,
         ]);
         $this->assertSame(19980, (int) $subscription->limit->fresh()->tts_characters_remaining);
-        $this->assertEqualsWithDelta(
-            999.5,
-            (float) $subscription->limit->fresh()->credits_remaining,
-            0.000001
-        );
+        $this->assertSame(0.0, (float) $subscription->limit->fresh()->credits_remaining);
         Log::shouldHaveReceived('warning')
             ->withArgs(fn (string $message, array $context): bool => $message === 'Stale subscription usage reservations released.'
                 && $context['released_count'] === 1)

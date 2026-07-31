@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
+use App\Enums\PaymentProductType;
 use App\Enums\PaymentProvider;
 use App\Enums\SubscriptionPlan;
 use Illuminate\Database\Eloquent\Model;
@@ -12,16 +13,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentOrder extends Model
 {
+    protected $attributes = [
+        'product_type' => 'subscription',
+        'credit_units' => 0,
+    ];
+
     protected $fillable = [
         'user_id',
         'subscription_id',
+        'source_subscription_id',
         'payment_source_id',
         'provider',
         'reference',
         'provider_transaction_id',
+        'product_type',
+        'product_code',
+        'credit_units',
+        'purchase_idempotency_key',
         'plan',
         'recurring',
         'billing_reason',
+        'billing_cycle_at',
+        'attempt_number',
         'customer_terms_version',
         'customer_terms_accepted_at',
         'accepted_plan_price_usd',
@@ -41,8 +54,12 @@ class PaymentOrder extends Model
 
     protected $casts = [
         'provider' => PaymentProvider::class,
+        'product_type' => PaymentProductType::class,
+        'credit_units' => 'integer',
         'plan' => SubscriptionPlan::class,
         'recurring' => 'boolean',
+        'billing_cycle_at' => 'datetime',
+        'attempt_number' => 'integer',
         'customer_terms_accepted_at' => 'datetime',
         'accepted_plan_price_usd' => 'float',
         'display_amount_usd' => 'float',
@@ -65,6 +82,11 @@ class PaymentOrder extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function sourceSubscription(): BelongsTo
+    {
+        return $this->belongsTo(Subscription::class, 'source_subscription_id');
     }
 
     public function paymentSource(): BelongsTo

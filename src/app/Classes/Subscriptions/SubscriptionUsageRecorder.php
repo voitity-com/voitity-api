@@ -2,7 +2,6 @@
 
 namespace App\Classes\Subscriptions;
 
-use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
@@ -17,8 +16,6 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionUsageRecorder
 {
-    private const CREDIT_PRECISION = 6;
-
     /**
      * @var array<string, array{limit: string, use: string}>
      */
@@ -60,6 +57,8 @@ class SubscriptionUsageRecorder
     public function __construct(
         private readonly ?SubscriptionLimitPeriodService $limitPeriods = null,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+        private readonly ?SubscriptionUsageFundingService $funding = null,
+        private readonly ?CreditWalletService $wallets = null,
     ) {}
 
     /**
@@ -153,16 +152,41 @@ class SubscriptionUsageRecorder
                 $subscription = $this->currentSubscriptionFor($user);
                 $limit = $this->currentLimitFor($subscription);
                 $normalizedAmounts = $this->normalizeAmounts($amounts);
-                $creditsUsed = $this->creditsUsedForPlan($subscription->plan, $normalizedAmounts);
                 $unlimited = (bool) config("subscriptions.plans.{$subscription->plan->value}.unlimited", false);
+                $allocation = $this->funding()->allocate(
+                    $subscription,
+                    $limit,
+                    $usageType,
+                    $normalizedAmounts,
+                );
 
-                if (! $unlimited) {
-                    $this->assertLimitCanRecord($limit, $normalizedAmounts, $creditsUsed);
+                if ($allocation->errors !== []) {
+                    $this->notifyLimitReached($limit, $allocation->errors);
+
+                    throw new SubscriptionEntitlementException('Subscription limit exceeded.', $allocation->errors);
                 }
 
+                $wallet = null;
+
+                if ($allocation->creditUnits > 0) {
+                    $wallet = $this->wallets()->lockedWalletForUser($user);
+
+                    try {
+                        $this->wallets()->assertCanReserve($wallet, $allocation->creditUnits);
+                    } catch (SubscriptionEntitlementException $exception) {
+                        $this->notifyLimitReached($limit, $exception->errors());
+
+                        throw $exception;
+                    }
+                }
+
+                $reservationSequence = $existingUse
+                    ? max(1, (int) $existingUse->reservation_sequence + 1)
+                    : 1;
                 $attributes = array_merge([
                     'subscription_id' => $subscription->id,
                     'user_id' => $user->id,
+                    'usage_period_id' => $limit->usage_period_id,
                     'profile_id' => $profileId,
                     'usage_type' => $usageType,
                     'source_type' => $sourceType,
@@ -174,7 +198,12 @@ class SubscriptionUsageRecorder
                     'reserved_at' => now(),
                     'finalized_at' => null,
                     'released_at' => null,
-                ], $this->usageColumns($normalizedAmounts, $creditsUsed));
+                    'plan_covered' => $allocation->planCovered,
+                    'credit_covered' => $allocation->creditCovered,
+                    'purchased_credit_units' => $allocation->creditUnits,
+                    'credit_tariff_version' => config('subscriptions.credit_store.tariff_version'),
+                    'reservation_sequence' => $reservationSequence,
+                ], $this->usageColumns($normalizedAmounts, $allocation->creditUnits));
 
                 if ($existingUse) {
                     $existingUse->fill($attributes);
@@ -185,16 +214,21 @@ class SubscriptionUsageRecorder
                 }
 
                 if (! $unlimited) {
-                    foreach ($normalizedAmounts as $metric => $amount) {
+                    foreach ($allocation->planCovered as $metric => $amount) {
                         $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
                         $limit->{$limitColumn} = max(0, ((int) $limit->{$limitColumn}) - $amount);
                     }
 
-                    $limit->credits_remaining = round(
-                        max(0, ((float) $limit->credits_remaining) - $creditsUsed),
-                        self::CREDIT_PRECISION
-                    );
                     $limit->save();
+                }
+
+                if ($wallet && $allocation->creditUnits > 0) {
+                    $this->wallets()->reserveLocked(
+                        $wallet,
+                        $use,
+                        $allocation->creditUnits,
+                        $reservationSequence,
+                    );
                 }
 
                 return $use;
@@ -247,6 +281,16 @@ class SubscriptionUsageRecorder
                 return $use;
             }
 
+            if ((int) $use->purchased_credit_units > 0) {
+                $wallet = $this->wallets()->lockedWalletForUser((int) $use->user_id);
+                $this->wallets()->consumeLocked(
+                    $wallet,
+                    $use,
+                    (int) $use->purchased_credit_units,
+                    max(1, (int) $use->reservation_sequence),
+                );
+            }
+
             $use->status = SubscriptionUse::STATUS_FINALIZED;
             $use->finalized_at = now();
             $use->metadata = array_replace($use->metadata ?? [], $metadata);
@@ -295,27 +339,36 @@ class SubscriptionUsageRecorder
                 : false;
 
             if ($subscription && $limit && ! $unlimited && $this->useBelongsToLimitPeriod($use, $limit)) {
-                foreach (self::METRIC_COLUMNS as $metric => $columns) {
-                    $used = max(0, (int) $use->{$columns['use']});
-
-                    if ($used <= 0) {
+                foreach ($this->planCoveredForRelease($use) as $metric => $used) {
+                    if (! isset(self::METRIC_COLUMNS[$metric])) {
                         continue;
                     }
 
-                    $limit->{$columns['limit']} = min(
+                    $used = max(0, (int) $used);
+
+                    if ($used === 0) {
+                        continue;
+                    }
+
+                    $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
+                    $limit->{$limitColumn} = min(
                         $this->includedLimitFor($subscription, $metric),
-                        ((int) $limit->{$columns['limit']}) + $used
+                        ((int) $limit->{$limitColumn}) + $used
                     );
                 }
 
-                $limit->credits_remaining = min(
-                    $this->includedCreditsFor($subscription),
-                    round(
-                        ((float) $limit->credits_remaining) + ((float) $use->credits_used),
-                        self::CREDIT_PRECISION
-                    )
-                );
                 $limit->save();
+            }
+
+            if ((int) $use->purchased_credit_units > 0) {
+                $wallet = $this->wallets()->lockedWalletForUser((int) $use->user_id);
+                $this->wallets()->releaseLocked(
+                    $wallet,
+                    $use,
+                    (int) $use->purchased_credit_units,
+                    max(1, (int) $use->reservation_sequence),
+                    $use->status === SubscriptionUse::STATUS_FINALIZED,
+                );
             }
 
             $use->status = SubscriptionUse::STATUS_RELEASED;
@@ -448,36 +501,6 @@ class SubscriptionUsageRecorder
     }
 
     /**
-     * @param  array<string, int>  $amounts
-     */
-    private function assertLimitCanRecord(SubscriptionLimit $limit, array $amounts, float $creditsUsed): void
-    {
-        $errors = [];
-
-        foreach ($amounts as $metric => $amount) {
-            if ($amount <= 0) {
-                continue;
-            }
-
-            $limitColumn = self::METRIC_COLUMNS[$metric]['limit'];
-
-            if ((int) $limit->{$limitColumn} < $amount) {
-                $errors[$metric] = ["Insufficient {$metric} quota."];
-            }
-        }
-
-        if ($creditsUsed > 0 && (float) $limit->credits_remaining < $creditsUsed) {
-            $errors['credits'] = ['Insufficient credits quota.'];
-        }
-
-        if ($errors !== []) {
-            $this->notifyLimitReached($limit, $errors);
-
-            throw new SubscriptionEntitlementException('Subscription limit exceeded.', $errors);
-        }
-    }
-
-    /**
      * @return array<string, int>
      */
     private function normalizeAmounts(array $amounts): array
@@ -495,7 +518,7 @@ class SubscriptionUsageRecorder
      * @param  array<string, int>  $amounts
      * @return array<string, int|float>
      */
-    private function usageColumns(array $amounts, float $creditsUsed): array
+    private function usageColumns(array $amounts, int $creditUnits): array
     {
         $columns = [];
 
@@ -503,35 +526,9 @@ class SubscriptionUsageRecorder
             $columns[self::METRIC_COLUMNS[$metric]['use']] = $amount;
         }
 
-        $columns['credits_used'] = $creditsUsed;
+        $columns['credits_used'] = CreditAmount::unitsToCredits($creditUnits);
 
         return $columns;
-    }
-
-    /**
-     * @param  array<string, int>  $amounts
-     */
-    private function creditsUsedForPlan(SubscriptionPlan $plan, array $amounts): float
-    {
-        $allocations = config("subscriptions.plans.{$plan->value}.credits.allocations", []);
-        $creditsUsed = 0.0;
-
-        foreach ($amounts as $metric => $amount) {
-            if ($amount <= 0 || ! isset($allocations[$metric])) {
-                continue;
-            }
-
-            $credits = (float) ($allocations[$metric]['credits'] ?? 0);
-            $units = (float) ($allocations[$metric]['units'] ?? 0);
-
-            if ($credits <= 0 || $units <= 0) {
-                continue;
-            }
-
-            $creditsUsed += $amount * ($credits / $units);
-        }
-
-        return round($creditsUsed, self::CREDIT_PRECISION);
     }
 
     /**
@@ -573,6 +570,24 @@ class SubscriptionUsageRecorder
             && $usedAt->lessThan($limit->period_renews_at);
     }
 
+    /**
+     * @return array<string, int>
+     */
+    private function planCoveredForRelease(SubscriptionUse $use): array
+    {
+        if (is_array($use->plan_covered)) {
+            return $use->plan_covered;
+        }
+
+        $covered = [];
+
+        foreach (self::METRIC_COLUMNS as $metric => $columns) {
+            $covered[$metric] = max(0, (int) $use->{$columns['use']});
+        }
+
+        return $covered;
+    }
+
     private function includedLimitFor(Subscription $subscription, string $metric): int
     {
         if ($subscription->status === SubscriptionStatus::Trialing) {
@@ -582,24 +597,19 @@ class SubscriptionUsageRecorder
         return max(0, (int) config("subscriptions.plans.{$subscription->plan->value}.limits.{$metric}", 0));
     }
 
-    private function includedCreditsFor(Subscription $subscription): float
-    {
-        if ($subscription->status === SubscriptionStatus::Trialing) {
-            return round(
-                max(0, (float) config('subscriptions.trial.credits.total', 0)),
-                self::CREDIT_PRECISION
-            );
-        }
-
-        return round(
-            max(0, (float) config("subscriptions.plans.{$subscription->plan->value}.credits.total", 0)),
-            self::CREDIT_PRECISION
-        );
-    }
-
     private function limitPeriods(): SubscriptionLimitPeriodService
     {
         return $this->limitPeriods ?? app(SubscriptionLimitPeriodService::class);
+    }
+
+    private function funding(): SubscriptionUsageFundingService
+    {
+        return $this->funding ?? app(SubscriptionUsageFundingService::class);
+    }
+
+    private function wallets(): CreditWalletService
+    {
+        return $this->wallets ?? app(CreditWalletService::class);
     }
 
     private function notifyUsageUpdated(SubscriptionUse $use): void

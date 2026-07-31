@@ -32,6 +32,14 @@ class SubscriptionEntitlementException extends RuntimeException
 
     public function errorCode(): string
     {
+        if (isset($this->errors['payment_source'])) {
+            return 'PAYMENT_METHOD_REQUIRED';
+        }
+
+        if (isset($this->errors['purchased_credits'])) {
+            return 'PURCHASED_CREDITS_REQUIRED';
+        }
+
         if (isset($this->errors['incoming_audio_messages']) || isset($this->errors['incoming_audio_seconds'])) {
             return 'AUDIO_MESSAGE_LIMIT_REACHED';
         }

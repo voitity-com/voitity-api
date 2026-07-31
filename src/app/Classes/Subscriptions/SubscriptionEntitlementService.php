@@ -2,7 +2,7 @@
 
 namespace App\Classes\Subscriptions;
 
-use App\Enums\SubscriptionPlan;
+use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionEntitlementService
 {
-    private const CREDIT_PRECISION = 6;
-
     /**
      * @var array<string, string>
      */
@@ -33,6 +31,8 @@ class SubscriptionEntitlementService
         private readonly SubscriptionRenewalService $renewalService,
         private readonly SubscriptionLimitPeriodService $limitPeriods,
         private readonly SubscriptionProfileAccessService $profileAccess,
+        private readonly SubscriptionUsageFundingService $funding,
+        private readonly CreditWalletService $wallets,
     ) {}
 
     /**
@@ -56,7 +56,7 @@ class SubscriptionEntitlementService
         }
 
         $normalizedAmounts = $this->normalizeAmounts($amounts);
-        $errors = $this->capacityErrors($subscription->plan, $limit, $normalizedAmounts);
+        $errors = $this->capacityErrors($subscription, $limit, $normalizedAmounts);
 
         if ($errors !== []) {
             $this->notifyLimitReached($subscription, $errors);
@@ -154,23 +154,24 @@ class SubscriptionEntitlementService
      * @param  array<string, int>  $amounts
      * @return array<string, list<string>>
      */
-    private function capacityErrors(SubscriptionPlan $plan, SubscriptionLimit $limit, array $amounts): array
+    private function capacityErrors(Subscription $subscription, SubscriptionLimit $limit, array $amounts): array
     {
-        $errors = [];
+        $allocation = $this->funding->allocate(
+            $subscription,
+            $limit,
+            $this->usageTypeFor($amounts),
+            $amounts,
+        );
+        $errors = $allocation->errors;
 
-        foreach ($amounts as $metric => $amount) {
-            $column = self::METRIC_COLUMNS[$metric];
-            $remaining = (int) $limit->{$column};
+        if ($allocation->creditUnits > 0) {
+            $wallet = $this->wallets->walletForUser((int) $subscription->user_id);
 
-            if ($remaining < $amount) {
-                $errors[$metric] = ["Insufficient {$metric} quota."];
+            if ($wallet->debt_units > 0) {
+                $errors['purchased_credits'] = ['Purchased credits are unavailable because a payment was reversed.'];
+            } elseif ($wallet->available_units < $allocation->creditUnits) {
+                $errors['purchased_credits'] = ['Insufficient purchased credits.'];
             }
-        }
-
-        $creditsUsed = $this->creditsUsedForPlan($plan, $amounts);
-
-        if ($creditsUsed > 0 && (float) $limit->credits_remaining < $creditsUsed) {
-            $errors['credits'] = ['Insufficient credits quota.'];
         }
 
         return $errors;
@@ -179,27 +180,33 @@ class SubscriptionEntitlementService
     /**
      * @param  array<string, int>  $amounts
      */
-    private function creditsUsedForPlan(SubscriptionPlan $plan, array $amounts): float
+    private function usageTypeFor(array $amounts): SubscriptionUsageType
     {
-        $allocations = config("subscriptions.plans.{$plan->value}.credits.allocations", []);
-        $creditsUsed = 0.0;
-
-        foreach ($amounts as $metric => $amount) {
-            if ($amount <= 0 || ! isset($allocations[$metric])) {
-                continue;
-            }
-
-            $credits = (float) ($allocations[$metric]['credits'] ?? 0);
-            $units = (float) ($allocations[$metric]['units'] ?? 0);
-
-            if ($credits <= 0 || $units <= 0) {
-                continue;
-            }
-
-            $creditsUsed += $amount * ($credits / $units);
+        if (($amounts['incoming_audio_messages'] ?? 0) > 0 || ($amounts['incoming_audio_seconds'] ?? 0) > 0) {
+            return SubscriptionUsageType::IncomingAudioMessage;
         }
 
-        return round($creditsUsed, self::CREDIT_PRECISION);
+        if (($amounts['avatar_images'] ?? 0) > 0) {
+            return SubscriptionUsageType::AvatarImageCreated;
+        }
+
+        if (($amounts['avatar_video_seconds'] ?? 0) > 0) {
+            return SubscriptionUsageType::AvatarVideoCreated;
+        }
+
+        if (($amounts['voice_clones'] ?? 0) > 0) {
+            return SubscriptionUsageType::VoiceCloned;
+        }
+
+        if (($amounts['tts_characters'] ?? 0) > 0) {
+            return SubscriptionUsageType::VoiceTtsCharacters;
+        }
+
+        if (($amounts['chat_messages'] ?? 0) > 0) {
+            return SubscriptionUsageType::ChatMessageReceived;
+        }
+
+        return SubscriptionUsageType::ProfileCreated;
     }
 
     /**

@@ -7,6 +7,26 @@ return [
     'message_rate_limit_per_minute' => (int) env('SUBSCRIPTION_MESSAGE_RATE_LIMIT_PER_MINUTE', 20),
     'audio_message_max_duration_seconds' => (int) env('SUBSCRIPTION_AUDIO_MESSAGE_MAX_DURATION_SECONDS', 30),
     'audio_message_max_size_kb' => (int) env('SUBSCRIPTION_AUDIO_MESSAGE_MAX_SIZE_KB', 10240),
+    'payment_retry_hours' => [6, 24, 72],
+    'credit_store' => [
+        'enabled' => env('SUBSCRIPTION_CREDIT_STORE_ENABLED', true),
+        'units_per_credit' => 1000,
+        'price_per_1000_usd' => 10.00,
+        'minimum_purchase_credits' => 1000,
+        'maximum_purchase_credits' => 100000,
+        'purchase_step_credits' => 1000,
+        'preset_packages' => [1000, 2000, 5000],
+        'tariff_version' => '2026-07-29-v1',
+        'rates_in_units' => [
+            'chat_messages' => 170,
+            'incoming_audio_messages' => 0,
+            'incoming_audio_seconds' => 25,
+            'tts_characters' => 25,
+            'avatar_images' => 12500,
+            'avatar_video_seconds' => 30000,
+            'voice_clones' => 100000,
+        ],
+    ],
 
     'trial' => [
         'enabled' => env('SUBSCRIPTION_FREE_TRIAL_ENABLED', true),
@@ -23,9 +43,7 @@ return [
             'incoming_audio_messages' => 25,
             'incoming_audio_seconds' => 750,
         ],
-        'credits' => [
-            'total' => 100,
-        ],
+        'credits' => ['total' => 0],
     ],
 
     'plans' => [
@@ -49,23 +67,7 @@ return [
                 'incoming_audio_messages' => 500,
                 'incoming_audio_seconds' => 15000,
             ],
-            'credits' => [
-                'total' => 1000,
-                'allocations' => [
-                    'chat_messages' => [
-                        'credits' => 500,
-                        'units' => 1000,
-                        'unit' => 'messages',
-                        'units_per_credit' => 2,
-                    ],
-                    'tts_characters' => [
-                        'credits' => 500,
-                        'units' => 20000,
-                        'unit' => 'characters',
-                        'units_per_credit' => 40,
-                    ],
-                ],
-            ],
+            'credits' => ['total' => 0],
             'capabilities' => [
                 'products_per_profile' => 15,
                 'social_links' => true,
@@ -111,10 +113,10 @@ return [
                     'service' => 'eleven_multilingual_v2',
                     'unit' => '20,000 caracteres',
                     'volume' => 20000,
-                    'base' => '1 credito por caracter; equivalente segun plan',
+                    'base' => 'USD 0.10 por 1.000 caracteres de Multilingual v2/v3',
                     'calculated_base' => 20000,
-                    'cost_usd' => 4.00,
-                    'notes' => 'Costo imputado Starter: USD 6 / 30k creditos = USD 4.00.',
+                    'cost_usd' => 2.00,
+                    'notes' => 'Tarifa publica de ElevenAPI consultada el 29 de julio de 2026.',
                 ],
                 'chat_messages' => [
                     'provider' => 'OpenAI',
@@ -137,7 +139,7 @@ return [
                     'notes' => 'Escenario maximo: 500 audios x 30 segundos = 250 minutos.',
                 ],
             ],
-            'estimated_total_cost_usd' => 6.83,
+            'estimated_total_cost_usd' => 4.83,
         ],
         'starter_annual' => [
             'name' => 'Starter',
@@ -159,23 +161,7 @@ return [
                 'incoming_audio_messages' => 500,
                 'incoming_audio_seconds' => 15000,
             ],
-            'credits' => [
-                'total' => 1000,
-                'allocations' => [
-                    'chat_messages' => [
-                        'credits' => 500,
-                        'units' => 1000,
-                        'unit' => 'messages',
-                        'units_per_credit' => 2,
-                    ],
-                    'tts_characters' => [
-                        'credits' => 500,
-                        'units' => 20000,
-                        'unit' => 'characters',
-                        'units_per_credit' => 40,
-                    ],
-                ],
-            ],
+            'credits' => ['total' => 0],
             'capabilities' => [
                 'products_per_profile' => 15,
                 'social_links' => true,
@@ -185,7 +171,7 @@ return [
                     'onlyfans' => ['selected_media' => 10],
                 ],
             ],
-            'estimated_total_cost_usd' => 81.96,
+            'estimated_total_cost_usd' => 57.96,
         ],
         'admin' => [
             'name' => 'Admin',
@@ -208,10 +194,7 @@ return [
                 'incoming_audio_messages' => 2147483647,
                 'incoming_audio_seconds' => 2147483647,
             ],
-            'credits' => [
-                'total' => 99999999.99,
-                'allocations' => [],
-            ],
+            'credits' => ['total' => 0],
             'capabilities' => [
                 'products_per_profile' => 2147483647,
                 'social_links' => true,

@@ -27,6 +27,9 @@ class Profile extends Model
         'data',
         'networks',
         'products_enabled',
+        'subscription_suspended_at',
+        'suspended_by_subscription_id',
+        'subscription_suspension_previous_status',
     ];
 
     protected $attributes = [
@@ -40,10 +43,12 @@ class Profile extends Model
     ];
 
     protected $casts = [
+        'active' => 'boolean',
         'data' => 'array',
         'networks' => 'array',
         'products_enabled' => 'boolean',
         'status' => ProfileStatus::class,
+        'subscription_suspended_at' => 'datetime',
     ];
 
     public function user()

@@ -17,9 +17,12 @@ class PaymentCheckoutResponse
      */
     public function toArray(): array
     {
+        $checkout = $this->paymentIntent->toArray();
+        unset($checkout['raw_response']);
+
         return [
             'payment_order' => (new PaymentOrderResponse($this->paymentOrder))->toArray(),
-            'checkout' => $this->paymentIntent->toArray(),
+            'checkout' => $checkout,
         ];
     }
 }

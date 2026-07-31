@@ -1,10 +1,12 @@
 <?php
 
+use App\Classes\PaymentService\PaymentOperationsMonitor;
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\UsdCopRateService\UsdCopRateService;
+use App\Jobs\Payments\RecordPaymentQueueHeartbeat;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
 use App\Models\ProfileProduct;
@@ -246,7 +248,17 @@ Artisan::command('notifications:service-notice {message}', function (
     return Command::SUCCESS;
 })->purpose('Send a service maintenance or degradation notice to users');
 
-Schedule::command('subscriptions:bill-recurring')->hourly()->withoutOverlapping(60)->onOneServer();
+Artisan::command('payments:heartbeat', function (PaymentOperationsMonitor $monitor): int {
+    $monitor->recordSchedulerHeartbeat();
+    RecordPaymentQueueHeartbeat::dispatch();
+
+    $this->info('Payment scheduler heartbeat recorded and queue heartbeat dispatched.');
+
+    return Command::SUCCESS;
+})->purpose('Record payment scheduler activity and verify the payment queue worker');
+
+Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
+Schedule::command('subscriptions:bill-recurring')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05')->withoutOverlapping(60)->onOneServer();
 Schedule::command('subscriptions:reset-usage-limits')->dailyAt('00:10')->withoutOverlapping(60)->onOneServer();

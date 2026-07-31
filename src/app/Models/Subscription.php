@@ -29,6 +29,12 @@ class Subscription extends Model
         'cancelled_at',
         'last_billed_at',
         'next_billing_at',
+        'payment_failure_code',
+        'payment_failed_at',
+        'payment_retry_count',
+        'next_payment_retry_at',
+        'last_failed_payment_order_id',
+        'access_ended_reason',
     ];
 
     protected $casts = [
@@ -45,6 +51,9 @@ class Subscription extends Model
         'cancelled_at' => 'datetime',
         'last_billed_at' => 'datetime',
         'next_billing_at' => 'datetime',
+        'payment_failed_at' => 'datetime',
+        'payment_retry_count' => 'integer',
+        'next_payment_retry_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -65,5 +74,20 @@ class Subscription extends Model
     public function uses(): HasMany
     {
         return $this->hasMany(SubscriptionUse::class);
+    }
+
+    public function usagePeriods(): HasMany
+    {
+        return $this->hasMany(SubscriptionUsagePeriod::class);
+    }
+
+    public function sourcePaymentOrders(): HasMany
+    {
+        return $this->hasMany(PaymentOrder::class, 'source_subscription_id');
+    }
+
+    public function lastFailedPaymentOrder(): BelongsTo
+    {
+        return $this->belongsTo(PaymentOrder::class, 'last_failed_payment_order_id');
     }
 }
