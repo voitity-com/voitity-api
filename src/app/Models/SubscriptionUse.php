@@ -19,6 +19,7 @@ class SubscriptionUse extends Model
     protected $fillable = [
         'subscription_id',
         'user_id',
+        'usage_period_id',
         'profile_id',
         'usage_type',
         'source_type',
@@ -33,6 +34,11 @@ class SubscriptionUse extends Model
         'incoming_audio_messages_used',
         'incoming_audio_seconds_used',
         'credits_used',
+        'plan_covered',
+        'credit_covered',
+        'purchased_credit_units',
+        'credit_tariff_version',
+        'reservation_sequence',
         'status',
         'metadata',
         'used_at',
@@ -49,6 +55,10 @@ class SubscriptionUse extends Model
         'finalized_at' => 'datetime',
         'released_at' => 'datetime',
         'credits_used' => 'float',
+        'plan_covered' => 'array',
+        'credit_covered' => 'array',
+        'purchased_credit_units' => 'integer',
+        'reservation_sequence' => 'integer',
     ];
 
     public function subscription(): BelongsTo
@@ -64,5 +74,10 @@ class SubscriptionUse extends Model
     public function profile(): BelongsTo
     {
         return $this->belongsTo(Profile::class);
+    }
+
+    public function usagePeriod(): BelongsTo
+    {
+        return $this->belongsTo(SubscriptionUsagePeriod::class, 'usage_period_id');
     }
 }

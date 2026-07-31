@@ -288,11 +288,11 @@ class VoiceSampleController extends Controller
                     'status' => VoiceProviderRequest::STATUS_PENDING,
                 ]);
 
-                $usageRecorder->record(
+                $usageRecorder->reserve(
                     userId: $ownerId,
                     usageType: SubscriptionUsageType::VoiceCloned,
                     amounts: ['voice_clones' => 1],
-                    idempotencyKey: "voice-clone:{$voice->id}",
+                    idempotencyKey: "voice-clone:provider-request:{$voiceProviderRequest->id}",
                     profileId: $voice->profile_id,
                     sourceType: Voice::class,
                     sourceId: (string) $voice->id,

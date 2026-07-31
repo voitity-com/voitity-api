@@ -43,7 +43,7 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
         $this->assertSame(1000, $limit->chat_messages_remaining);
         $this->assertSame(500, $limit->incoming_audio_messages_remaining);
         $this->assertSame(15000, $limit->incoming_audio_seconds_remaining);
-        $this->assertSame(1000.0, $limit->credits_remaining);
+        $this->assertSame(0.0, $limit->credits_remaining);
     }
 
     public function test_it_resets_due_annual_usage_period_without_changing_billing_dates(): void
@@ -74,7 +74,7 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
         $this->assertTrue($limit->period_started_at->isSameDay(Carbon::parse('2026-02-15')));
         $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
         $this->assertSame(1, $limit->profiles_remaining);
-        $this->assertSame(1000.0, $limit->credits_remaining);
+        $this->assertSame(0.0, $limit->credits_remaining);
     }
 
     public function test_it_resets_due_limit_periods_for_active_subscriptions_only(): void

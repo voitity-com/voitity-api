@@ -563,6 +563,152 @@
                 ]
             }
         },
+        "/api/credits/catalog": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Get purchased-credit packages and usage tariffs",
+                "operationId": "3fc6973fc4ef818dc3543dfb5172df6c",
+                "responses": {
+                    "200": {
+                        "description": "Credit catalog retrieved successfully"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/credits/wallet": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Get the authenticated user's purchased-credit wallet",
+                "operationId": "61f29f06383073817d299b7b0896915a",
+                "responses": {
+                    "200": {
+                        "description": "Credit wallet retrieved successfully"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/credits/purchases": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "List purchased-credit payment orders",
+                "operationId": "fa3d48cfb96c20d1fc16adf577c551ea",
+                "responses": {
+                    "200": {
+                        "description": "Credit purchases retrieved successfully"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Purchase persistent credits with the subscription payment source",
+                "operationId": "7e75d37713d0a7eb0d82ef2f7a6977d4",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "credits",
+                                    "idempotency_key",
+                                    "terms_accepted"
+                                ],
+                                "properties": {
+                                    "credits": {
+                                        "type": "integer",
+                                        "maximum": 100000,
+                                        "minimum": 1000,
+                                        "example": 1000
+                                    },
+                                    "idempotency_key": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "credit-purchase-uuid"
+                                    },
+                                    "payment_source_id": {
+                                        "type": "integer",
+                                        "example": 42,
+                                        "nullable": true
+                                    },
+                                    "terms_accepted": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Credits purchased and granted"
+                    },
+                    "202": {
+                        "description": "Credit purchase pending provider confirmation"
+                    },
+                    "402": {
+                        "description": "Payment declined or subscription is not eligible"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/profile/{profile}/messages": {
             "post": {
                 "tags": [
@@ -857,6 +1003,202 @@
                         ]
                     }
                 ]
+            }
+        },
+        "/api/payment-methods": {
+            "get": {
+                "tags": [
+                    "Payment Methods"
+                ],
+                "summary": "List the authenticated user's enabled payment methods",
+                "operationId": "8d685c9cea7629dd6a638fe486f63217",
+                "responses": {
+                    "200": {
+                        "description": "Sanitized payment methods retrieved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing token ability"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Payment Methods"
+                ],
+                "summary": "Register a reusable Wompi payment method",
+                "operationId": "ad53fa92d0cd44ccd92b3a495958c4b1",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "type",
+                                    "token",
+                                    "acceptance_token",
+                                    "accept_personal_auth"
+                                ],
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "example": "CARD"
+                                    },
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "acceptance_token": {
+                                        "type": "string"
+                                    },
+                                    "accept_personal_auth": {
+                                        "type": "string"
+                                    },
+                                    "make_default": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Payment method added"
+                    },
+                    "422": {
+                        "description": "Validation or provider rejection"
+                    },
+                    "500": {
+                        "description": "Payment method registration failed"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/payment-methods/setup": {
+            "get": {
+                "tags": [
+                    "Payment Methods"
+                ],
+                "summary": "Get public Wompi card tokenization setup",
+                "operationId": "278967b14492c2a2f2abddb370f7f70a",
+                "responses": {
+                    "200": {
+                        "description": "Public tokenization setup retrieved"
+                    },
+                    "502": {
+                        "description": "Provider setup unavailable"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/payment-methods/{paymentSource}/default": {
+            "patch": {
+                "tags": [
+                    "Payment Methods"
+                ],
+                "summary": "Select the account default payment method",
+                "operationId": "2e442a92ed439ded1c45206aa69b14ec",
+                "parameters": [
+                    {
+                        "name": "paymentSource",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default payment method updated"
+                    },
+                    "422": {
+                        "description": "Payment method cannot be selected"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/payment-methods/{paymentSource}": {
+            "delete": {
+                "tags": [
+                    "Payment Methods"
+                ],
+                "summary": "Soft-disable a secondary payment method",
+                "operationId": "0fd5204c305618fc4ba028e7b7a45b28",
+                "parameters": [
+                    {
+                        "name": "paymentSource",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment method removed"
+                    },
+                    "422": {
+                        "description": "Default or pending payment method cannot be removed"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/health/payments": {
+            "get": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Check payment scheduler and queue operations",
+                "operationId": "3a206b7b6737568f884b1f4fec527666",
+                "responses": {
+                    "200": {
+                        "description": "Payment operations are healthy"
+                    },
+                    "503": {
+                        "description": "Payment scheduler or queue heartbeat is stale"
+                    }
+                }
             }
         },
         "/api/profile/chats": {
@@ -2004,6 +2346,63 @@
                 ]
             }
         },
+        "/api/subscription/billing-state": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get active or recoverable subscription billing state",
+                "operationId": "f171694b29674a0f8bcfcd70b90cfa94",
+                "responses": {
+                    "200": {
+                        "description": "Billing state retrieved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing token ability"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/subscription/renewal/retry": {
+            "post": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Immediately retry a failed subscription renewal",
+                "operationId": "cd7a208ffc3074b5a77b360ad2913487",
+                "responses": {
+                    "200": {
+                        "description": "Subscription renewed"
+                    },
+                    "202": {
+                        "description": "Renewal payment pending"
+                    },
+                    "402": {
+                        "description": "Renewal payment declined"
+                    },
+                    "422": {
+                        "description": "Payment recovery is unavailable or a payment method is required"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "payments:create"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/subscription/limits": {
             "get": {
                 "tags": [
@@ -2144,6 +2543,76 @@
                         "description": "Public subscription plans retrieved successfully"
                     }
                 }
+            }
+        },
+        "/api/usage": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get plan and purchased-credit usage analytics",
+                "operationId": "21847e82a80d256b5908f8ad24a3f753",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-01-01"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-07-29"
+                        }
+                    },
+                    {
+                        "name": "group_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "month",
+                            "enum": [
+                                "day",
+                                "month"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "America/Bogota"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Usage analytics retrieved successfully"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "422": {
+                        "description": "Invalid or greater-than-24-month range"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "subscription-limits:read"
+                        ]
+                    }
+                ]
             }
         },
         "/api/payments/usd-cop-rate": {
@@ -2768,12 +3237,20 @@
             "description": "Avatar"
         },
         {
+            "name": "Credits",
+            "description": "Credits"
+        },
+        {
             "name": "Messages",
             "description": "Messages"
         },
         {
             "name": "Payments",
             "description": "Payments"
+        },
+        {
+            "name": "Payment Methods",
+            "description": "Payment Methods"
         },
         {
             "name": "Profile",

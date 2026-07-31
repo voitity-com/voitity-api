@@ -2,6 +2,7 @@
 
 namespace App\Classes\VoiceService\ElevenLabs;
 
+use App\Classes\VoiceService\DeletesProviderVoices;
 use App\Classes\VoiceService\VoiceClient;
 use App\Classes\VoiceService\VoiceClientAddedSample;
 use App\Classes\VoiceService\VoiceClientClonedVoice;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class ElevenLabsVoiceClient implements VoiceClient
+class ElevenLabsVoiceClient implements DeletesProviderVoices, VoiceClient
 {
     /**
      * ElevenLabs API base URL.
@@ -127,6 +128,33 @@ class ElevenLabsVoiceClient implements VoiceClient
 
             throw new ElevenLabsVoiceClientCouldNotCloneVoice('ElevenLabs: Voice cloning failed: '.$e->getMessage());
         }
+    }
+
+    public function deleteProviderVoice(Voice $voice, string $providerVoiceId): bool
+    {
+        $encodedProviderVoiceId = rawurlencode($providerVoiceId);
+        $response = Http::withHeaders([
+            'xi-api-key' => $this->apiKey,
+        ])->delete("{$this->baseUrl}/v1/voices/{$encodedProviderVoiceId}");
+
+        if (! $response->successful()) {
+            Log::error('ElevenLabs: Failed to delete replaced voice.', [
+                'provider_voice_id' => $providerVoiceId,
+                'response' => $response->body(),
+                'voice_id' => $voice->id,
+            ]);
+
+            throw new ElevenLabsVoiceClientCouldNotCloneVoice(
+                'ElevenLabs: Replaced voice cleanup failed: '.$response->body()
+            );
+        }
+
+        Log::info('ElevenLabs: Replaced voice deleted.', [
+            'provider_voice_id' => $providerVoiceId,
+            'voice_id' => $voice->id,
+        ]);
+
+        return true;
     }
 
     /**

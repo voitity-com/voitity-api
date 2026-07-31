@@ -179,6 +179,48 @@ return [
                 ],
             ],
         ],
+        'credits_purchased' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'Your Bigmelo credits are available',
+                    'title' => 'Credits purchased',
+                    'body' => ':credits credits were added to your account for :amount.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'Tus créditos de Bigmelo están disponibles',
+                    'title' => 'Créditos comprados',
+                    'body' => 'Se agregaron :credits créditos a tu cuenta por :amount.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
+        'credits_reversed' => [
+            'email' => true,
+            'app' => true,
+            'mandatory' => true,
+            'category' => 'billing',
+            'action_url' => '/dashboard/settings/billing',
+            'copy' => [
+                'en' => [
+                    'subject' => 'A Bigmelo credit payment was reversed',
+                    'title' => 'Credit payment reversed',
+                    'body' => 'The payment for :credits credits was reversed. Unused credits were removed and your billing balance was updated.',
+                    'action' => 'View billing',
+                ],
+                'es' => [
+                    'subject' => 'Un pago de créditos Bigmelo fue reversado',
+                    'title' => 'Pago de créditos reversado',
+                    'body' => 'El pago de :credits créditos fue reversado. Se retiraron los créditos no utilizados y se actualizó tu saldo de facturación.',
+                    'action' => 'Ver facturación',
+                ],
+            ],
+        ],
         'failed_payment' => [
             'email' => true,
             'app' => true,

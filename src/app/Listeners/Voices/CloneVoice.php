@@ -5,9 +5,8 @@ namespace App\Listeners\Voices;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
-use App\Enums\SubscriptionUsageType;
-use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
+use App\Jobs\Voices\DeleteReplacedProviderVoice;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
@@ -56,18 +55,25 @@ class CloneVoice implements ShouldQueue
         $voice = $event->voice;
         $voiceSample = $event->voiceSample;
 
-        if (! empty($voice->source_voice_id)) {
-            Log::info('Voice already cloned, skipping CloneVoice listener', [
+        $providerRequest = VoiceProviderRequest::query()
+            ->where('voice_id', $voice->id)
+            ->where('voice_sample_id', $voiceSample->id)
+            ->where('status', VoiceProviderRequest::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+
+        if (! $providerRequest instanceof VoiceProviderRequest) {
+            Log::warning('Voice cloning skipped because no pending provider request exists.', [
                 'voice_id' => $voice->id,
-                'voice_name' => $voice->name,
-                'user_id' => $voice->user_id,
                 'voice_sample_id' => $voiceSample->id,
-                'file' => $voiceSample->file,
-                'duration' => $voiceSample->duration,
             ]);
 
             return;
         }
+
+        $usageKey = "voice-clone:provider-request:{$providerRequest->id}";
+        $replacedProviderVoiceId = $voice->source_voice_id;
+        $replacedProvider = $voice->source;
 
         Log::info('CloneVoice listener triggered', [
             'voice_id' => $voice->id,
@@ -93,20 +99,28 @@ class CloneVoice implements ShouldQueue
             ]);
 
             if ($clonedVoice->isSuccessful()) {
-                event(new SubscriptionUsageRequested(
-                    userId: $voice->user_id,
-                    usageType: SubscriptionUsageType::VoiceCloned,
-                    amounts: ['voice_clones' => 1],
-                    profileId: $voice->profile_id,
-                    sourceType: Voice::class,
-                    sourceId: (string) $voice->id,
-                    idempotencyKey: "voice-clone:{$voice->id}",
-                    metadata: [
+                app(SubscriptionUsageRecorder::class)->finalize(
+                    $usageKey,
+                    [
                         'provider' => $clonedVoice->source,
                         'provider_voice_id' => $clonedVoice->getProviderVoiceId(),
                         'voice_sample_id' => $voiceSample->id,
-                    ]
-                ));
+                    ],
+                    Voice::class,
+                    (string) $voice->id,
+                );
+
+                if (
+                    filled($replacedProviderVoiceId)
+                    && filled($replacedProvider)
+                    && $replacedProviderVoiceId !== $clonedVoice->getProviderVoiceId()
+                ) {
+                    DeleteReplacedProviderVoice::dispatch(
+                        $voice->id,
+                        (string) $replacedProvider,
+                        (string) $replacedProviderVoiceId,
+                    );
+                }
 
                 $this->notifyVoiceOwner($voice, 'voice_cloned_successfully', [
                     'provider' => $clonedVoice->source,
@@ -156,15 +170,6 @@ class CloneVoice implements ShouldQueue
             'attempts' => $this->attempts(),
         ]);
 
-        app(SubscriptionUsageRecorder::class)->release("voice-clone:{$voice->id}");
-        $this->notifyVoiceOwner($voice, 'voice_cloning_failed', [
-            'reason' => $exception->getMessage(),
-        ]);
-        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
-            'service' => 'Voice provider',
-            'message' => $exception->getMessage(),
-        ]);
-
         $providerRequest = VoiceProviderRequest::query()
             ->where('voice_id', $voice->id)
             ->where('voice_sample_id', $voiceSample->id)
@@ -172,6 +177,9 @@ class CloneVoice implements ShouldQueue
             ->first();
 
         if ($providerRequest) {
+            app(SubscriptionUsageRecorder::class)->release(
+                "voice-clone:provider-request:{$providerRequest->id}"
+            );
             $providerRequest->forceFill([
                 'status' => VoiceProviderRequest::STATUS_FAILED,
                 'response' => json_encode([
@@ -182,6 +190,14 @@ class CloneVoice implements ShouldQueue
             ])
                 ->save();
         }
+
+        $this->notifyVoiceOwner($voice, 'voice_cloning_failed', [
+            'reason' => $exception->getMessage(),
+        ]);
+        app(NotificationDispatcher::class)->sendToAdmins('external_integration_error', [
+            'service' => 'Voice provider',
+            'message' => $exception->getMessage(),
+        ]);
     }
 
     /**

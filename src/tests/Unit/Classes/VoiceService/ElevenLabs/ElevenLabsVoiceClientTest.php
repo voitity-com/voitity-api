@@ -8,6 +8,7 @@ use App\Classes\VoiceService\VoiceClientClonedVoice;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAddSample;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotAuthenticate;
 use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
+use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
 use Illuminate\Support\Facades\Config;
@@ -117,6 +118,22 @@ class ElevenLabsVoiceClientTest extends TestCase
             return $request->url() === 'https://api.elevenlabs.io/v1/voices/add' &&
                    $request->hasHeader('xi-api-key', 'test-api-key');
         });
+    }
+
+    #[Test]
+    public function it_can_delete_a_replaced_provider_voice(): void
+    {
+        $user = User::factory()->create();
+        $voice = Voice::factory()->create(['user_id' => $user->id]);
+        Http::fake([
+            'api.elevenlabs.io/v1/voices/old-voice-id' => Http::response([], 204),
+        ]);
+
+        $this->assertTrue((new ElevenLabsVoiceClient)->deleteProviderVoice($voice, 'old-voice-id'));
+
+        Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+            && $request->url() === 'https://api.elevenlabs.io/v1/voices/old-voice-id'
+            && $request->hasHeader('xi-api-key', 'test-api-key'));
     }
 
     #[Test]

@@ -68,7 +68,7 @@ return [
             'reference_image_tag' => env('RUNWAY_REFERENCE_IMAGE_TAG', 'base_image'),
             'default_image_ratio' => env('RUNWAY_DEFAULT_IMAGE_RATIO', '1024:1024'),
             'default_video_ratio' => env('RUNWAY_DEFAULT_VIDEO_RATIO', '960:960'),
-            'default_duration' => (int) env('RUNWAY_DEFAULT_DURATION', 2),
+            'default_duration' => (int) env('RUNWAY_DEFAULT_DURATION', 5),
         ],
 
         // Additional drivers may be configured here.

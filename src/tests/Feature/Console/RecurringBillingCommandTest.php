@@ -205,7 +205,7 @@ class RecurringBillingCommandTest extends TestCase
         $this->assertSame(SubscriptionStatus::Expired, $trial->status);
         $this->assertNotNull($trial->trial_converted_at);
         $this->assertSame($paymentOrder->id, $activeSubscription->source_payment_order_id);
-        $this->assertSame(1000.0, (float) $activeLimit->credits_remaining);
+        $this->assertSame(0.0, (float) $activeLimit->credits_remaining);
         $this->assertSame(1, $activeLimit->profiles_remaining);
     }
 }

@@ -36,5 +36,14 @@ class AppServiceProvider extends ServiceProvider
                 (int) config('subscriptions.message_rate_limit_per_minute', 20)
             ))->by($request->ip().':'.$profileId);
         });
+
+        RateLimiter::for('payment-method-management', function (Request $request) {
+            $userId = $request->user()?->id ?? 'guest';
+
+            return Limit::perMinute(max(
+                1,
+                (int) config('payment.management_rate_limit_per_minute', 10)
+            ))->by($userId.':'.$request->ip());
+        });
     }
 }

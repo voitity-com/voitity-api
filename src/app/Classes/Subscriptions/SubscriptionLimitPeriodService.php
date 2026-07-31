@@ -5,16 +5,13 @@ namespace App\Classes\Subscriptions;
 use App\Enums\SubscriptionPlan;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUsagePeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class SubscriptionLimitPeriodService
 {
-    private const CREDIT_PRECISION = 6;
-
     private const UNLIMITED_INTEGER = 2147483647;
-
-    private const UNLIMITED_CREDITS = 99999999.99;
 
     /**
      * @var array<string, string>
@@ -90,12 +87,17 @@ class SubscriptionLimitPeriodService
 
     private function createLimitForPeriod(Subscription $subscription, Carbon $periodStartedAt): SubscriptionLimit
     {
-        return SubscriptionLimit::create($this->limitAttributes($subscription, $periodStartedAt));
+        $attributes = $this->limitAttributes($subscription, $periodStartedAt);
+        $attributes['usage_period_id'] = $this->usagePeriodFor($subscription, $attributes)->id;
+
+        return SubscriptionLimit::create($attributes);
     }
 
     private function resetLimitForPeriod(SubscriptionLimit $limit, Subscription $subscription, Carbon $periodStartedAt): void
     {
-        $limit->fill($this->limitAttributes($subscription, $periodStartedAt));
+        $attributes = $this->limitAttributes($subscription, $periodStartedAt);
+        $attributes['usage_period_id'] = $this->usagePeriodFor($subscription, $attributes)->id;
+        $limit->fill($attributes);
         $limit->save();
     }
 
@@ -113,7 +115,7 @@ class SubscriptionLimitPeriodService
             'user_id' => $subscription->user_id,
             'period_started_at' => $periodStartedAt,
             'period_renews_at' => $this->periodEnd($subscription, $periodStartedAt),
-            'credits_remaining' => $this->creditTotal($usageConfig, $unlimited),
+            'credits_remaining' => 0,
         ];
 
         foreach (self::METRIC_COLUMNS as $metric => $column) {
@@ -121,6 +123,28 @@ class SubscriptionLimitPeriodService
         }
 
         return $columns;
+    }
+
+    /**
+     * @param  array<string, mixed>  $limitAttributes
+     */
+    private function usagePeriodFor(Subscription $subscription, array $limitAttributes): SubscriptionUsagePeriod
+    {
+        $limitsSnapshot = [];
+
+        foreach (self::METRIC_COLUMNS as $metric => $column) {
+            $limitsSnapshot[$metric] = (int) ($limitAttributes[$column] ?? 0);
+        }
+
+        return SubscriptionUsagePeriod::firstOrCreate([
+            'subscription_id' => $subscription->id,
+            'period_started_at' => $limitAttributes['period_started_at'],
+        ], [
+            'user_id' => $subscription->user_id,
+            'plan' => $subscription->plan,
+            'period_renews_at' => $limitAttributes['period_renews_at'],
+            'limits_snapshot' => $limitsSnapshot,
+        ]);
     }
 
     private function currentPeriodStart(Subscription $subscription, Carbon $now): Carbon
@@ -153,20 +177,6 @@ class SubscriptionLimitPeriodService
     private function usageInterval(SubscriptionPlan $plan): string
     {
         return (string) config("subscriptions.plans.{$plan->value}.usage_interval", 'monthly');
-    }
-
-    /**
-     * @param  array<string, mixed>  $planConfig
-     */
-    private function creditTotal(array $planConfig, bool $unlimited): float
-    {
-        $total = $planConfig['credits']['total'] ?? null;
-
-        if ($total === null && $unlimited) {
-            return self::UNLIMITED_CREDITS;
-        }
-
-        return round(max(0, (float) ($total ?? 0)), self::CREDIT_PRECISION);
     }
 
     private function limitValue(mixed $value, bool $unlimited): int

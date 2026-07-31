@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses\Payments;
 
+use App\Enums\PaymentProductType;
 use App\Models\PaymentOrder;
 
 class PaymentOrderResponse
@@ -23,7 +24,10 @@ class PaymentOrderResponse
             'provider' => $order->provider->value,
             'reference' => $order->reference,
             'provider_transaction_id' => $order->provider_transaction_id,
-            'plan' => $order->plan->value,
+            'product_type' => ($order->product_type ?? PaymentProductType::Subscription)->value,
+            'product_code' => $order->product_code,
+            'credits' => \App\Classes\Subscriptions\CreditAmount::unitsToCredits((int) $order->credit_units),
+            'plan' => $order->plan?->value,
             'recurring' => (bool) $order->recurring,
             'billing_reason' => $order->billing_reason,
             'customer_terms' => [

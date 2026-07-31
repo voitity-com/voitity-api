@@ -274,12 +274,14 @@ class VoiceSampleControllerTest extends TestAPI
         Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voice, $voiceSample) {
             return $event->voice->id === $voice->id && $event->voiceSample->id === $voiceSample->id;
         });
+        $providerRequestId = (int) $response->json('data.id');
         $this->assertDatabaseHas('subscription_uses', [
             'user_id' => $voiceUser->id,
             'profile_id' => $profile->id,
             'usage_type' => SubscriptionUsageType::VoiceCloned->value,
             'voice_clones_used' => 1,
-            'idempotency_key' => "voice-clone:{$voice->id}",
+            'idempotency_key' => "voice-clone:provider-request:{$providerRequestId}",
+            'status' => \App\Models\SubscriptionUse::STATUS_RESERVED,
         ]);
         $this->assertSame(0, (int) $voiceUser->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
     }
@@ -346,9 +348,7 @@ class VoiceSampleControllerTest extends TestAPI
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,
         ]);
-        $this->assertDatabaseMissing('subscription_uses', [
-            'idempotency_key' => "voice-clone:{$voice->id}",
-        ]);
+        $this->assertDatabaseCount('subscription_uses', 0);
         $this->assertSame(1, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
     }
 
@@ -461,7 +461,8 @@ class VoiceSampleControllerTest extends TestAPI
             'user_id' => $user->id,
             'usage_type' => SubscriptionUsageType::VoiceCloned->value,
             'voice_clones_used' => 1,
-            'idempotency_key' => "voice-clone:{$voice->id}",
+            'idempotency_key' => "voice-clone:provider-request:{$new_voice_provider_request->id}",
+            'status' => \App\Models\SubscriptionUse::STATUS_RESERVED,
         ]);
         $this->assertSame(0, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
     }

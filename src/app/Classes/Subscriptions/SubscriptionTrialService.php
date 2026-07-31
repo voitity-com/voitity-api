@@ -2,9 +2,9 @@
 
 namespace App\Classes\Subscriptions;
 
+use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCreateRequest;
-use App\Classes\PaymentService\PaymentSourceCreateResult;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -26,11 +26,13 @@ class SubscriptionTrialService
     public function __construct(
         private readonly SubscriptionPlanCatalog $planCatalog,
         private readonly SubscriptionLimitPeriodService $limitPeriods,
+        private readonly PaymentMethodService $paymentMethods,
+        private readonly PaymentPayloadSanitizer $payloadSanitizer,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
     ) {}
 
     /**
-     * @return array{subscription:Subscription,payment_source:PaymentSource,payment_order:PaymentOrder,provider_source:PaymentSourceCreateResult}
+     * @return array{subscription:Subscription,payment_source:PaymentSource,payment_order:PaymentOrder}
      */
     public function startTrialWithPaymentSource(
         User $user,
@@ -40,37 +42,62 @@ class SubscriptionTrialService
         CustomerTermsAcceptance $termsAcceptance,
     ): array {
         $this->ensureTrialCanStart($user, $plan);
+        $paymentSource = $this->paymentMethods->create($user, $paymentSourceRequest);
 
-        $providerSource = $paymentService->createPaymentSource($paymentSourceRequest);
+        return $this->startTrialWithExistingPaymentSource(
+            $user,
+            $plan,
+            $paymentSource,
+            $termsAcceptance,
+        );
+    }
 
-        if (! $providerSource->isActive()) {
-            throw new RuntimeException('Wompi did not confirm an active reusable payment source.');
+    /**
+     * @return array{subscription:Subscription,payment_source:PaymentSource,payment_order:PaymentOrder}
+     */
+    public function startTrialWithExistingPaymentSource(
+        User $user,
+        SubscriptionPlan $plan,
+        PaymentSource $paymentSource,
+        CustomerTermsAcceptance $termsAcceptance,
+    ): array {
+        $this->ensureTrialCanStart($user, $plan);
+
+        if ((int) $paymentSource->user_id !== (int) $user->id || ! $paymentSource->isChargeable()) {
+            throw new RuntimeException('The selected payment method is not available for recurring charges.');
         }
 
-        [$paymentSource, $paymentOrder] = DB::transaction(function () use ($user, $plan, $paymentSourceRequest, $providerSource, $termsAcceptance): array {
+        $paymentSource = $this->paymentMethods->setDefault($user, $paymentSource);
+
+        $paymentOrder = DB::transaction(function () use ($user, $plan, $paymentSource, $termsAcceptance): PaymentOrder {
             /** @var User $lockedUser */
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->ensureTrialCanStart($lockedUser, $plan);
-            $paymentSource = $this->localPaymentSourceFor($lockedUser, $providerSource, $paymentSourceRequest->metadata);
-            $paymentOrder = $this->createTrialSetupOrder(
+
+            return $this->createTrialSetupOrder(
                 $lockedUser,
                 $plan,
                 $paymentSource,
-                $providerSource,
                 $termsAcceptance,
             );
-
-            return [$paymentSource, $paymentOrder];
         });
 
         $subscription = $this->activateTrialFromPaymentOrder($paymentOrder);
         $this->dispatchSubscriptionNotification($user, 'trial_started', $subscription);
 
+        Log::info('Subscription trial started with payment method.', [
+            'payment_order_id' => $paymentOrder->id,
+            'payment_source_id' => $paymentSource->id,
+            'plan' => $plan->value,
+            'subscription_id' => $subscription->id,
+            'trial_ends_at' => $subscription->trial_ends_at?->toJSON(),
+            'user_id' => $user->id,
+        ]);
+
         return [
             'subscription' => $subscription,
             'payment_source' => $paymentSource,
             'payment_order' => $paymentOrder,
-            'provider_source' => $providerSource,
         ];
     }
 
@@ -356,49 +383,10 @@ class SubscriptionTrialService
         return $reference;
     }
 
-    /**
-     * @param  array<string, mixed>  $metadata
-     */
-    private function localPaymentSourceFor(User $user, PaymentSourceCreateResult $providerSource, array $metadata = []): PaymentSource
-    {
-        $existingSource = PaymentSource::query()
-            ->where('provider', PaymentProvider::Wompi)
-            ->where('provider_source_id', $providerSource->providerSourceId)
-            ->first();
-
-        if ($existingSource instanceof PaymentSource && $existingSource->user_id !== $user->id) {
-            throw new RuntimeException('The payment source belongs to another account.');
-        }
-
-        $attributes = [
-            'user_id' => $user->id,
-            'provider' => PaymentProvider::Wompi,
-            'provider_source_id' => $providerSource->providerSourceId,
-            'type' => $providerSource->type,
-            'status' => $providerSource->status,
-            'reusable' => $providerSource->reusable,
-            'metadata' => $this->paymentSourceMetadata($providerSource, $metadata),
-            'verified_at' => $providerSource->isActive() ? now() : null,
-        ];
-
-        if ($existingSource instanceof PaymentSource) {
-            $existingSource->fill($attributes);
-            $existingSource->save();
-
-            return $existingSource;
-        }
-
-        /** @var PaymentSource $paymentSource */
-        $paymentSource = PaymentSource::query()->create($attributes);
-
-        return $paymentSource;
-    }
-
     private function createTrialSetupOrder(
         User $user,
         SubscriptionPlan $plan,
         PaymentSource $paymentSource,
-        PaymentSourceCreateResult $providerSource,
         CustomerTermsAcceptance $termsAcceptance,
     ): PaymentOrder {
         $exchangeRate = (float) config('payment.usd_cop_rate', 4000);
@@ -424,24 +412,17 @@ class SubscriptionTrialService
             'amount_in_cents' => 0,
             'currency' => PaymentCurrency::Cop,
             'status' => PaymentOrderStatus::Approved,
-            'wompi_status' => $providerSource->providerStatus,
-            'raw_provider_payload' => $providerSource->toArray(),
+            'wompi_status' => is_scalar(data_get($paymentSource->metadata, 'provider_status'))
+                ? (string) data_get($paymentSource->metadata, 'provider_status')
+                : null,
+            'raw_provider_payload' => $this->payloadSanitizer->paymentResult([
+                'source' => $paymentSource->provider->value,
+                'provider_status' => data_get($paymentSource->metadata, 'provider_status'),
+                'status' => $paymentSource->status,
+            ]),
         ]);
 
         return $paymentOrder;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function paymentSourceMetadata(PaymentSourceCreateResult $providerSource, array $metadata = []): array
-    {
-        return array_filter([
-            'provider_status' => $providerSource->providerStatus,
-            'public_data' => $providerSource->publicData,
-            'metadata' => $metadata,
-            'http_status' => $providerSource->httpStatus,
-        ], fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
     private function dispatchSubscriptionNotification(User $user, string $type, Subscription $subscription): void

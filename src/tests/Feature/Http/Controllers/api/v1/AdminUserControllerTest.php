@@ -171,7 +171,7 @@ class AdminUserControllerTest extends TestAPI
             'user_id' => $user->id,
             'profiles_remaining' => 2147483647,
             'avatar_images_remaining' => 2147483647,
-            'credits_remaining' => 99999999.99,
+            'credits_remaining' => 0,
         ]);
     }
 

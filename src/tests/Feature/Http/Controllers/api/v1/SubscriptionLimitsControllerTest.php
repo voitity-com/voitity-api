@@ -99,9 +99,8 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.subscription.interval', 'monthly');
         $response->assertJsonPath('data.subscription.status', 'first');
         $response->assertJsonPath('data.subscription.active', true);
-        $response->assertJsonPath('data.limits.credits.included', 1000);
-        $response->assertJsonPath('data.limits.credits.remaining', 950);
-        $response->assertJsonPath('data.limits.credits.used', 50);
+        $response->assertJsonMissingPath('data.limits.credits');
+        $response->assertJsonPath('data.credit_wallet.available', 0);
         $response->assertJsonPath('data.limits.profiles.included', 1);
         $response->assertJsonPath('data.limits.profiles.remaining', 0);
         $response->assertJsonPath('data.limits.profiles.used', 1);
@@ -111,7 +110,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.tts_characters.included', 20000);
         $response->assertJsonPath('data.limits.tts_characters.remaining', 9000);
         $response->assertJsonPath('data.limits.tts_characters.used', 1000);
-        $response->assertJsonPath('data.usage.totals.credits', 50);
+        $response->assertJsonPath('data.usage.totals.purchased_credits', 50);
         $response->assertJsonPath('data.usage.totals.profiles', 1);
         $response->assertJsonPath('data.usage.totals.avatar_video_seconds', 2);
         $response->assertJsonPath('data.usage.totals.tts_characters', 1000);
@@ -123,7 +122,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $this->assertSame(1, $usageByType['avatar_video_created']['records_count']);
         $this->assertSame(2, $usageByType['avatar_video_created']['used']['avatar_video_seconds']);
         $this->assertSame(1, $usageByType['voice_tts_characters']['records_count']);
-        $this->assertSame(50, $usageByType['voice_tts_characters']['used']['credits']);
+        $this->assertSame(50, $usageByType['voice_tts_characters']['purchased_credits']);
         $this->assertSame(1000, $usageByType['voice_tts_characters']['used']['tts_characters']);
     }
 
@@ -208,7 +207,8 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.profiles.included', null);
         $response->assertJsonPath('data.limits.profiles.remaining', null);
         $response->assertJsonPath('data.limits.profiles.used', 1);
-        $response->assertJsonPath('data.limits.credits.unlimited', true);
+        $response->assertJsonMissingPath('data.limits.credits');
+        $response->assertJsonPath('data.credit_wallet.available', 0);
     }
 
     public function test_included_limits_come_from_plan_configuration_not_usage_plus_remaining(): void

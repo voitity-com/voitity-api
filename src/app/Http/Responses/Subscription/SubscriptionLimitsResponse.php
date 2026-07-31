@@ -2,6 +2,8 @@
 
 namespace App\Http\Responses\Subscription;
 
+use App\Http\Responses\Credits\CreditWalletResponse;
+use App\Models\CreditWallet;
 use App\Models\Subscription;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -9,11 +11,6 @@ use Illuminate\Support\Collection;
 class SubscriptionLimitsResponse
 {
     private const METRICS = [
-        'credits' => [
-            'remaining' => 'credits_remaining',
-            'used' => 'credits_used',
-            'decimal' => true,
-        ],
         'profiles' => [
             'remaining' => 'profiles_remaining',
             'used' => 'profiles_used',
@@ -55,7 +52,8 @@ class SubscriptionLimitsResponse
     public function __construct(
         private readonly Subscription $subscription,
         private readonly array $usageTotals,
-        private readonly Collection $usageBreakdown
+        private readonly Collection $usageBreakdown,
+        private readonly CreditWallet $wallet,
     ) {}
 
     public function toArray(): array
@@ -63,8 +61,12 @@ class SubscriptionLimitsResponse
         return [
             'subscription' => $this->subscriptionData(),
             'limits' => $this->limitsData(),
+            'credit_wallet' => (new CreditWalletResponse($this->wallet))->toArray(),
             'usage' => [
-                'totals' => $this->usageData($this->usageTotals),
+                'totals' => [
+                    ...$this->usageData($this->usageTotals),
+                    'purchased_credits' => round((float) ($this->usageTotals['purchased_credits'] ?? 0), 3),
+                ],
                 'by_type' => $this->usageBreakdownData(),
             ],
         ];
@@ -142,8 +144,8 @@ class SubscriptionLimitsResponse
             ->map(fn (object $row): array => [
                 'usage_type' => $this->enumValue($row->usage_type),
                 'records_count' => (int) $row->records_count,
+                'purchased_credits' => round((float) $row->credits_used, 3),
                 'used' => $this->usageData([
-                    'credits' => (float) $row->credits_used,
                     'profiles' => (int) $row->profiles_used,
                     'avatar_images' => (int) $row->avatar_images_used,
                     'avatar_video_seconds' => (int) $row->avatar_video_seconds_used,
@@ -191,14 +193,6 @@ class SubscriptionLimitsResponse
     private function includedValue(string $metric, ?string $plan): int|float
     {
         $trialing = $this->enumValue($this->subscription->status) === 'trialing';
-
-        if ($metric === 'credits') {
-            if ($trialing) {
-                return $this->usageValue($metric, config('subscriptions.trial.credits.total', 0));
-            }
-
-            return $this->usageValue($metric, config("subscriptions.plans.{$plan}.credits.total", 0));
-        }
 
         if ($trialing) {
             return $this->usageValue($metric, config("subscriptions.trial.limits.{$metric}", 0));

@@ -47,6 +47,51 @@
           "response": []
         },
         {
+          "name": "Payment Operations Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('reports payment scheduler and queue health', function () {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "  pm.expect(json.data.scheduler).to.have.property('healthy');",
+                  "  pm.expect(json.data.queue).to.have.property('healthy');",
+                  "  pm.expect(json.data.webhook).to.have.property('last_valid_at');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/health/payments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "payments"
+              ]
+            },
+            "description": "Public operational health check for the Laravel payment scheduler and queue worker. HTTP 503 means one heartbeat is missing or stale. The last valid webhook timestamp is informational and does not affect health."
+          },
+          "response": []
+        },
+        {
           "name": "Laravel Health",
           "request": {
             "auth": {
@@ -1203,7 +1248,7 @@
                 "public-plans"
               ]
             },
-            "description": "Public catalog used by the website. Returns USD 12.99 monthly and USD 129 annual Starter prices plus monthly limits, credits, product capacity, social links, and Instagram/TikTok/OnlyFans selection limits. No authentication is required."
+            "description": "Public catalog used by the website. Returns USD 12.99 monthly and USD 129 annual Starter prices, monthly included limits, product capacity, social links, and Instagram and TikTok selection limits. Purchased credits are separate and require authentication."
           },
           "response": []
         },
@@ -1248,7 +1293,7 @@
                 "plans"
               ]
             },
-            "description": "Lists active visible plans with current prices, monthly usage limits, capabilities, purchasable status, currencies, and USD/COP exchange rate. Starter is USD 12.99 monthly or USD 129 annually. The admin plan remains hidden. Requires subscription-plans:read."
+            "description": "Lists active visible plans with prices, monthly included limits, capabilities, purchasable status, currencies, and USD/COP exchange rate. Starter is USD 12.99 monthly or USD 129 annually. Purchased credits are not monthly plan capacity. Requires subscription-plans:read."
           },
           "response": []
         },
@@ -1273,81 +1318,12 @@
                 "limits"
               ]
             },
-            "description": "Gets the active subscription, current monthly period, remaining limits, and finalized/reserved usage grouped by usage_type. Includes incoming_audio_messages and incoming_audio_seconds. Released reservations are excluded. Requires subscription-limits:read."
+            "description": "Gets the active subscription, current monthly period, remaining included limits, purchased-credit wallet, and finalized/reserved usage grouped by usage_type. Released reservations are excluded. Requires subscription-limits:read."
           },
-          "response": [
-            {
-              "name": "Starter Annual - Monthly Usage Period",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/subscription/limits",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "subscription",
-                    "limits"
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 15,\n      \"user_id\": 7,\n      \"plan\": \"starter_annual\",\n      \"plan_name\": \"Starter\",\n      \"unlimited\": false,\n      \"price_usd\": 129,\n      \"currency\": \"USD\",\n      \"interval\": \"annual\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"recurring\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2027-07-09T00:00:00.000000Z\",\n      \"next_billing_at\": \"2027-07-09T00:00:00.000000Z\"\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": 1000,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 500\n      },\n      \"profiles\": {\n        \"included\": 1,\n        \"remaining\": 0,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"avatar_images\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": 5,\n        \"remaining\": 5,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": 1,\n        \"remaining\": 1,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": 20000,\n        \"remaining\": 20000,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": 1000,\n        \"remaining\": 999,\n        \"unlimited\": false,\n        \"used\": 1\n      },\n      \"incoming_audio_messages\": {\n        \"included\": 500,\n        \"remaining\": 500,\n        \"unlimited\": false,\n        \"used\": 0\n      },\n      \"incoming_audio_seconds\": {\n        \"included\": 15000,\n        \"remaining\": 15000,\n        \"unlimited\": false,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 500,\n        \"profiles\": 1,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 1,\n        \"incoming_audio_messages\": 0,\n        \"incoming_audio_seconds\": 0\n      },\n      \"by_type\": [\n        {\n          \"usage_type\": \"profile_created\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 0,\n            \"profiles\": 1,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 0,\n            \"incoming_audio_messages\": 0,\n            \"incoming_audio_seconds\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:20:00.000000Z\"\n        },\n        {\n          \"usage_type\": \"chat_message_received\",\n          \"records_count\": 1,\n          \"used\": {\n            \"credits\": 500,\n            \"profiles\": 0,\n            \"avatar_images\": 0,\n            \"avatar_video_seconds\": 0,\n            \"voice_clones\": 0,\n            \"tts_characters\": 0,\n            \"chat_messages\": 1,\n            \"incoming_audio_messages\": 0,\n            \"incoming_audio_seconds\": 0\n          },\n          \"last_used_at\": \"2026-07-09T13:35:00.000000Z\"\n        }\n      ]\n    }\n  }\n}"
-            },
-            {
-              "name": "Admin Unlimited",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/subscription/limits",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "subscription",
-                    "limits"
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n  \"message\": \"Subscription limits retrieved successfully.\",\n  \"data\": {\n    \"subscription\": {\n      \"id\": 1,\n      \"user_id\": 1,\n      \"plan\": \"admin\",\n      \"plan_name\": \"Admin\",\n      \"unlimited\": true,\n      \"price_usd\": 0,\n      \"currency\": \"USD\",\n      \"interval\": \"monthly\",\n      \"status\": \"active\",\n      \"active\": true,\n      \"billing_mode\": \"free\",\n      \"cancel_at_period_end\": false,\n      \"started_at\": \"2026-07-09T00:00:00.000000Z\",\n      \"renews_at\": \"2026-08-09T00:00:00.000000Z\",\n      \"next_billing_at\": null\n    },\n    \"limits\": {\n      \"credits\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"profiles\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_images\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"avatar_video_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"voice_clones\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"tts_characters\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"chat_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"incoming_audio_messages\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      },\n      \"incoming_audio_seconds\": {\n        \"included\": null,\n        \"remaining\": null,\n        \"unlimited\": true,\n        \"used\": 0\n      }\n    },\n    \"usage\": {\n      \"totals\": {\n        \"credits\": 0,\n        \"profiles\": 0,\n        \"avatar_images\": 0,\n        \"avatar_video_seconds\": 0,\n        \"voice_clones\": 0,\n        \"tts_characters\": 0,\n        \"chat_messages\": 0,\n        \"incoming_audio_messages\": 0,\n        \"incoming_audio_seconds\": 0\n      },\n      \"by_type\": []\n    }\n  }\n}"
-            }
-          ]
+          "response": []
         },
         {
-          "name": "Start Subscription Trial Checkout",
+          "name": "Start Subscription Trial with Saved Payment Method",
           "event": [
             {
               "listen": "test",
@@ -1389,7 +1365,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"terms_accepted\": true\n}"
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"payment_source_id\": {{payment_method_id}},\n  \"terms_accepted\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/subscription/trial",
@@ -1402,7 +1378,58 @@
                 "trial"
               ]
             },
-            "description": "Creates a Wompi checkout for the free trial setup. It stores a reusable payment source and starts the trial after an approved Wompi event. Requires token ability: payments:create."
+            "description": "Starts the seven-day trial with an owned, active saved payment method. The method is made default for trial conversion. No card PAN or CVC reaches the API. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Start Paid Subscription with Saved Payment Method",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.payment_order) {",
+                  "  pm.environment.set(\"payment_order_id\", json.data.payment_order.id);",
+                  "}",
+                  "pm.test('paid subscription payment is processed with a saved method', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "  pm.expect(json.data.payment_source.id).to.eql(Number(pm.collectionVariables.get(\"payment_method_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"payment_source_id\": {{payment_method_id}},\n  \"terms_accepted\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscription/payment-source",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "payment-source"
+              ]
+            },
+            "description": "Charges an owned, active saved payment method to start a paid recurring plan. APPROVED activates the subscription, PENDING waits for provider resolution, and rejected charges leave the subscription inactive. Requires payments:create."
           },
           "response": []
         },
@@ -1529,6 +1556,97 @@
               ]
             },
             "description": "Reactivates a subscription or trial that was cancelled at period end before it expires. Requires token ability: payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subscription Billing State",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('returns payment recovery and sanitized default method state', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.payment_recovery).to.be.an('object');",
+              "  if (json.data.payment_method) {",
+              "    pm.expect(json.data.payment_method).to.not.have.property('provider_source_id');",
+              "    pm.expect(json.data.payment_method).to.have.property('requires_attention');",
+              "    pm.expect(json.data.payment_method).to.have.property('last_failure');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/billing-state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "billing-state"
+              ]
+            },
+        "description": "Returns the latest active or payment-failed recurring subscription, payment recovery schedule, sanitized default payment method including requires_attention and last_failure, and last payment order. can_retry_now is false until a rejected default method is replaced. Requires payments:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Failed Subscription Renewal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('manual renewal returns a supported payment outcome', function () {",
+                  "  pm.expect([200, 202, 402, 422]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 422) {",
+                  "  pm.test('recovery rejection includes a code', function () {",
+                  "    pm.expect(json.code).to.be.a('string');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/renewal/retry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "renewal",
+                "retry"
+              ]
+            },
+        "description": "Immediately retries a past-due subscription with the current chargeable default method. A method marked requires_attention cannot be used manually; add or select another default first. A pending payment for the same billing cycle blocks another charge even after the default method changes. Requires payments:create."
           },
           "response": []
         }
@@ -1794,6 +1912,477 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Payment Methods",
+      "item": [
+        {
+          "name": "Get Payment Method Setup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data) {",
+                  "  pm.environment.set(\"wompi_api_url\", json.data.api_url);",
+                  "  pm.environment.set(\"wompi_public_key\", json.data.public_key);",
+                  "  pm.environment.set(\"wompi_acceptance_token\", json.data.acceptance.acceptance_token);",
+                  "  pm.environment.set(\"wompi_personal_auth_token\", json.data.personal_data_auth.acceptance_token);",
+                  "}",
+                  "pm.test('returns Wompi tokenization setup without private credentials', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.public_key).to.be.a(\"string\");",
+                  "  pm.expect(json.data).to.not.have.property(\"private_key\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment-methods/setup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods",
+                "setup"
+              ]
+            },
+            "description": "Returns the public Wompi configuration and current acceptance tokens required to tokenize a card in the client. Private Wompi credentials are never returned. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Payment Method",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.payment_method) {",
+                  "  pm.collectionVariables.set(\"payment_method_id\", String(json.data.payment_method.id));",
+                  "}",
+                  "pm.test('stores only sanitized card display data', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "  pm.expect(json.data.payment_method).to.not.have.property(\"provider_source_id\");",
+                  "  pm.expect(json.data.payment_method).to.not.have.property(\"metadata\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"CARD\",\n  \"token\": \"{{payment_source_token}}\",\n  \"acceptance_token\": \"{{wompi_acceptance_token}}\",\n  \"accept_personal_auth\": \"{{wompi_personal_auth_token}}\",\n  \"make_default\": true,\n  \"metadata\": {\n    \"card\": {\n      \"brand\": \"VISA\",\n      \"last_four\": \"4242\",\n      \"exp_month\": 12,\n      \"exp_year\": 2030\n    },\n    \"wompi_environment\": \"sandbox\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payment-methods",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods"
+              ]
+            },
+            "description": "Registers a reusable Wompi payment source. First run Get Payment Method Setup, tokenize the card directly with Wompi, and set payment_source_token to that one-time token. Never place PAN or CVC values in this collection. make_default atomically selects the new method for active and payment-recovery subscriptions. Maximum methods are controlled by PAYMENTS_MAXIMUM_METHODS_PER_USER. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "List Payment Methods",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const methods = (json.data && json.data.payment_methods) || [];",
+                  "const selected = methods.find((method) => method.is_default) || methods[0];",
+                  "if (selected) { pm.collectionVariables.set(\"payment_method_id\", String(selected.id)); }",
+                  "pm.test('payment methods are sanitized', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+              "  methods.forEach((method) => {",
+              "    pm.expect(method).to.not.have.property(\"provider_source_id\");",
+              "    pm.expect(method).to.not.have.property(\"metadata\");",
+              "    pm.expect(method).to.have.property(\"requires_attention\");",
+              "    pm.expect(method).to.have.property(\"last_failure\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment-methods",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods"
+              ]
+            },
+        "description": "Lists enabled payment methods for the authenticated user with brand, last four digits, expiration, chargeability, default status, requires_attention, and sanitized last_failure. Provider identifiers and internal metadata are excluded. Requires payments:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Set Default Payment Method",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('selected payment method is now default', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.payment_method.is_default).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment-methods/{{payment_method_id}}/default",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods",
+                "{{payment_method_id}}",
+                "default"
+              ]
+            },
+        "description": "Makes an owned, enabled, reusable, non-expired method without a rejection attention flag the account default and synchronizes active or payment-recovery recurring subscriptions. Manual renewals and credit purchases use this default method. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Secondary Payment Method",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('secondary payment method is removed locally', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment-methods/{{secondary_payment_method_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods",
+                "{{secondary_payment_method_id}}"
+              ]
+            },
+            "description": "Soft-disables an owned secondary method. The default method and any method linked to a pending payment cannot be removed. Set another default first. Provider-side revocation is not currently supported by the Wompi integration. Requires payments:create."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Credits",
+      "item": [
+        {
+          "name": "Get Credit Catalog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('credit catalog exposes package and tariffs', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.price_per_1000_usd).to.eql(10);",
+                  "  pm.expect(json.data.minimum_purchase_credits).to.eql(1000);",
+                  "  pm.expect(json.data.purchase_step_credits).to.eql(1000);",
+                  "  pm.expect(json.data.rates.incoming_audio_seconds).to.eql(0.025);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/credits/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "catalog"
+              ]
+            },
+            "description": "Returns the one-time package price, allowed purchase range, tariff version, and credits consumed by each extendable service. Requires payments:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Credit Wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('wallet has persistent balance fields', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data).to.have.keys('available', 'reserved', 'debt', 'lifetime_purchased', 'lifetime_consumed', 'units_per_credit');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/credits/wallet",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "wallet"
+              ]
+            },
+            "description": "Returns persistent purchased credits. The balance is not reset by monthly usage renewal, but it is only consumable with an active paid subscription. Requires payments:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Purchase Credits",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json.data && json.data.payment_order) {",
+                  "  pm.environment.set('credit_payment_order_id', String(json.data.payment_order.id));",
+                  "}",
+                  "pm.test('credit purchase is approved or pending', function () {",
+                  "  pm.expect([201, 202]).to.include(pm.response.code);",
+                  "  pm.expect(json.data.payment_order.product_type).to.eql('credit_pack');",
+                  "  pm.expect(json.data.payment_order.credits).to.eql(Number(pm.collectionVariables.get('credit_purchase_amount')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credits\": {{credit_purchase_amount}},\n  \"payment_source_id\": {{payment_method_id}},\n  \"idempotency_key\": \"credit-postman-{{$guid}}\",\n  \"terms_accepted\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/credits/purchases",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "purchases"
+              ]
+            },
+        "description": "Creates a one-time Wompi charge against the selected reusable payment method for an active paid subscription. Set payment_method_id from List Payment Methods; omit payment_source_id to use the chargeable account default. Selecting a secondary method for this purchase does not change the renewal default. Minimum 1,000, maximum 100,000, in steps of 1,000. A provider decline returns CREDIT_PAYMENT_DECLINED and marks only the attempted method as requiring attention. Pending and provider-error outcomes grant no credits and do not reject the method. Do not reuse an idempotency key with a different amount or payment method. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "List Credit Purchases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/credits/purchases",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "purchases"
+              ]
+            },
+            "description": "Lists the authenticated user credit-pack payment orders, newest first. Requires payments:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Usage Analytics",
+      "item": [
+        {
+          "name": "Get Usage Analytics",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const to = new Date();",
+                  "const from = new Date(to.getFullYear(), to.getMonth() - 5, 1);",
+                  "pm.variables.set('usage_to', to.toISOString().slice(0, 10));",
+                  "pm.variables.set('usage_from', from.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('usage analytics separates plan and purchased credits', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data).to.have.keys('range', 'wallet', 'summary', 'periods', 'series');",
+                  "  pm.expect(json.data.summary).to.have.keys('plan_used', 'credit_covered', 'credits');",
+                  "  pm.expect(json.data.range.timezone).to.eql(pm.collectionVariables.get('usage_timezone'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage?from={{usage_from}}&to={{usage_to}}&group_by={{usage_group_by}}&timezone={{usage_timezone}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usage"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{usage_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{usage_to}}"
+                },
+                {
+                  "key": "group_by",
+                  "value": "{{usage_group_by}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "{{usage_timezone}}"
+                }
+              ]
+            },
+            "description": "Returns plan-covered use, purchased-credit use, monthly period snapshots, current wallet, and daily or monthly series. Date boundaries and buckets use the supplied IANA timezone. Maximum range: 24 months. Remains available without an active subscription. Requires subscription-limits:read."
+          },
+          "response": []
         }
       ]
     },
@@ -5652,6 +6241,41 @@
     {
       "key": "product_import_duplicate_action",
       "value": "skip",
+      "type": "string"
+    },
+    {
+      "key": "credit_purchase_amount",
+      "value": "1000",
+      "type": "string"
+    },
+    {
+      "key": "credit_payment_order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "usage_group_by",
+      "value": "month",
+      "type": "string"
+    },
+    {
+      "key": "usage_timezone",
+      "value": "America/Bogota",
+      "type": "string"
+    },
+    {
+      "key": "payment_method_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "secondary_payment_method_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payment_source_token",
+      "value": "",
       "type": "string"
     }
   ]

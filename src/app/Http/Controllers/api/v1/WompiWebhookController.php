@@ -2,22 +2,26 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\PaymentService\PaymentOperationsMonitor;
+use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentService;
+use App\Classes\Subscriptions\CreditAmount;
+use App\Classes\Subscriptions\CreditWalletService;
+use App\Classes\Subscriptions\PaymentMethodService;
+use App\Classes\Subscriptions\SubscriptionBillingService;
 use App\Classes\Subscriptions\SubscriptionPlanActivator;
-use App\Classes\Subscriptions\SubscriptionProfileAccessService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Enums\PaymentOrderStatus;
+use App\Enums\PaymentProductType;
 use App\Enums\PaymentProvider;
-use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentEvent;
 use App\Models\PaymentOrder;
-use App\Models\PaymentSource;
-use App\Models\Subscription;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WompiWebhookController extends Controller
 {
@@ -34,8 +38,12 @@ class WompiWebhookController extends Controller
         Request $request,
         PaymentService $paymentService,
         SubscriptionPlanActivator $subscriptionPlanActivator,
+        SubscriptionBillingService $subscriptionBilling,
         SubscriptionTrialService $trialService,
-        SubscriptionProfileAccessService $profileAccess,
+        CreditWalletService $creditWallets,
+        PaymentMethodService $paymentMethods,
+        PaymentPayloadSanitizer $payloadSanitizer,
+        PaymentOperationsMonitor $operationsMonitor,
     ): JsonResponse {
         $webhook = $paymentService->parseWebhook(
             ['x-event-checksum' => $request->header('X-Event-Checksum')],
@@ -54,16 +62,28 @@ class WompiWebhookController extends Controller
             'event_type' => $webhook->event,
             'checksum' => $webhook->checksum,
             'is_valid_signature' => $webhook->isValidSignature,
-            'payload' => $webhook->payload,
+            'payload' => $payloadSanitizer->webhook($webhook->payload),
         ]);
 
         if ($paymentEvent->processed_at) {
+            Log::info('Duplicate Wompi event acknowledged.', [
+                'payment_event_id' => $paymentEvent->id,
+                'provider_event_id' => $webhook->providerEventId,
+            ]);
+
             return response()->json(['message' => 'Wompi event already processed.']);
         }
 
         if (! $webhook->isValidSignature || ! $paymentOrder) {
             $paymentEvent->processed_at = now();
             $paymentEvent->save();
+
+            Log::warning('Wompi event ignored.', [
+                'has_payment_order' => $paymentOrder instanceof PaymentOrder,
+                'is_valid_signature' => $webhook->isValidSignature,
+                'payment_event_id' => $paymentEvent->id,
+                'provider_event_id' => $webhook->providerEventId,
+            ]);
 
             return response()->json(['message' => 'Wompi event ignored.']);
         }
@@ -73,57 +93,89 @@ class WompiWebhookController extends Controller
             $paymentEvent->processed_at = now();
             $paymentEvent->save();
 
+            Log::warning('Wompi event amount or currency mismatch.', [
+                'payment_event_id' => $paymentEvent->id,
+                'payment_order_id' => $paymentOrder->id,
+                'provider_event_id' => $webhook->providerEventId,
+            ]);
+
             return response()->json(['message' => 'Wompi event ignored.']);
         }
 
+        $operationsMonitor->recordValidWebhook();
+
         $notificationOrder = null;
         $statusChanged = false;
+        $statusTransitionIgnored = false;
+        $creditReversed = false;
 
         DB::transaction(function () use (
             $paymentOrder,
             $paymentEvent,
             $webhook,
             $subscriptionPlanActivator,
+            $subscriptionBilling,
             $trialService,
+            $creditWallets,
+            $paymentMethods,
+            $payloadSanitizer,
             &$notificationOrder,
-            &$statusChanged
+            &$statusChanged,
+            &$statusTransitionIgnored,
+            &$creditReversed
         ): void {
             /** @var PaymentOrder $order */
             $order = PaymentOrder::whereKey($paymentOrder->id)->lockForUpdate()->firstOrFail();
             $previousStatus = $order->status;
+            $incomingStatus = PaymentOrderStatus::from($webhook->status);
+
+            if (! $this->canApplyStatusTransition($previousStatus, $incomingStatus)) {
+                $statusTransitionIgnored = true;
+                $paymentEvent->payment_order_id = $order->id;
+                $paymentEvent->processed_at = now();
+                $paymentEvent->save();
+
+                Log::warning('Stale Wompi payment status transition ignored.', [
+                    'current_status' => $previousStatus->value,
+                    'incoming_status' => $incomingStatus->value,
+                    'payment_event_id' => $paymentEvent->id,
+                    'payment_order_id' => $order->id,
+                    'provider_event_id' => $webhook->providerEventId,
+                ]);
+
+                return;
+            }
 
             $order->provider_transaction_id = $webhook->providerTransactionId;
             $order->wompi_status = $webhook->providerStatus;
-            $order->raw_provider_payload = $webhook->payload;
-            $order->status = PaymentOrderStatus::from($webhook->status);
+            $order->raw_provider_payload = $payloadSanitizer->webhook($webhook->payload);
+            $order->status = $incomingStatus;
             $statusChanged = $previousStatus !== $order->status;
 
             if ($webhook->paymentSourceProviderId) {
-                $paymentSource = PaymentSource::updateOrCreate([
-                    'provider' => PaymentProvider::Wompi->value,
-                    'provider_source_id' => $webhook->paymentSourceProviderId,
-                ], [
-                    'user_id' => $order->user_id,
-                    'type' => is_scalar($webhook->transaction['payment_method_type'] ?? null)
+                $paymentSource = $paymentMethods->upsertFromWebhook(
+                    $order->user,
+                    $webhook->paymentSourceProviderId,
+                    is_scalar($webhook->transaction['payment_method_type'] ?? null)
                         ? (string) $webhook->transaction['payment_method_type']
                         : null,
-                    'status' => $order->status === PaymentOrderStatus::Approved ? 'active' : 'pending',
-                    'reusable' => true,
-                    'metadata' => ['transaction' => $webhook->transaction],
-                    'verified_at' => $order->status === PaymentOrderStatus::Approved ? now() : null,
-                    'last_used_at' => now(),
-                ]);
+                    $order->status === PaymentOrderStatus::Approved,
+                    $webhook->transaction,
+                );
+
+                $paymentSource->forceFill(['last_used_at' => now()])->save();
 
                 $order->payment_source_id = $paymentSource->id;
             }
 
             if (
-                $order->status === PaymentOrderStatus::Approved
+                $order->product_type === PaymentProductType::Subscription
+                && $order->status === PaymentOrderStatus::Approved
                 && $order->billing_reason === 'trial_setup'
                 && ! $this->trialHasRequiredPaymentSource($order)
             ) {
                 $order->status = PaymentOrderStatus::Error;
-                $order->raw_provider_payload = array_merge($webhook->payload, [
+                $order->raw_provider_payload = array_merge($order->raw_provider_payload ?? [], [
                     'local_error' => 'trial_payment_source_required',
                 ]);
             }
@@ -134,15 +186,29 @@ class WompiWebhookController extends Controller
 
             $order->save();
 
-            if ($order->status === PaymentOrderStatus::Approved && $order->billing_reason === 'trial_setup') {
+            if ($order->status === PaymentOrderStatus::Declined) {
+                $paymentMethods->markRejectedAfterDeclinedPayment($order);
+            } elseif ($order->status === PaymentOrderStatus::Approved) {
+                $paymentMethods->clearFailureAfterApprovedPayment($order);
+            }
+
+            if ($order->product_type === PaymentProductType::CreditPack) {
+                if ($order->status === PaymentOrderStatus::Approved) {
+                    $creditWallets->grantForPaymentOrder($order);
+                } elseif ($previousStatus === PaymentOrderStatus::Approved) {
+                    $creditWallets->reverseForPaymentOrder($order);
+                    $creditReversed = true;
+                }
+            } elseif ($order->status === PaymentOrderStatus::Approved && $order->billing_reason === 'trial_setup') {
                 $trialService->activateTrialFromPaymentOrder($order);
             } elseif ($order->status === PaymentOrderStatus::Approved) {
                 $subscriptionPlanActivator->activateForPaymentOrder($order);
             } elseif (
-                $order->billing_reason === 'trial_conversion'
+                $order->recurring
+                && in_array($order->billing_reason, ['subscription_renewal', 'trial_conversion'], true)
                 && ! in_array($order->status, [PaymentOrderStatus::Pending, PaymentOrderStatus::Approved], true)
             ) {
-                $this->markTrialConversionFailed($order, $profileAccess);
+                $subscriptionBilling->recordFailedPaymentOrder($order);
             }
 
             $paymentEvent->payment_order_id = $order->id;
@@ -153,8 +219,17 @@ class WompiWebhookController extends Controller
         });
 
         if ($statusChanged && $notificationOrder instanceof PaymentOrder) {
-            $this->dispatchPaymentNotifications($notificationOrder);
+            $this->dispatchPaymentNotifications($notificationOrder, $creditReversed);
         }
+
+        Log::info('Wompi event processed.', [
+            'credit_reversed' => $creditReversed,
+            'payment_event_id' => $paymentEvent->id,
+            'payment_order_id' => $paymentOrder->id,
+            'provider_event_id' => $webhook->providerEventId,
+            'status_transition_ignored' => $statusTransitionIgnored,
+            'status_changed' => $statusChanged,
+        ]);
 
         return response()->json(['message' => 'Wompi event processed successfully.']);
     }
@@ -163,6 +238,25 @@ class WompiWebhookController extends Controller
     {
         return $amountInCents === $paymentOrder->amount_in_cents
             && $currency === $paymentOrder->currency->value;
+    }
+
+    private function canApplyStatusTransition(
+        PaymentOrderStatus $current,
+        PaymentOrderStatus $incoming,
+    ): bool {
+        if ($current === $incoming || $current === PaymentOrderStatus::Pending) {
+            return true;
+        }
+
+        if ($current === PaymentOrderStatus::Approved) {
+            return $incoming === PaymentOrderStatus::Voided;
+        }
+
+        if ($current === PaymentOrderStatus::Voided) {
+            return false;
+        }
+
+        return $incoming === PaymentOrderStatus::Approved;
     }
 
     private function trialHasRequiredPaymentSource(PaymentOrder $paymentOrder): bool
@@ -174,8 +268,10 @@ class WompiWebhookController extends Controller
         return $paymentOrder->payment_source_id !== null;
     }
 
-    private function dispatchPaymentNotifications(PaymentOrder $paymentOrder): void
-    {
+    private function dispatchPaymentNotifications(
+        PaymentOrder $paymentOrder,
+        bool $creditReversed = false,
+    ): void {
         $paymentOrder->loadMissing('user');
         $user = $paymentOrder->user;
 
@@ -187,6 +283,12 @@ class WompiWebhookController extends Controller
         $data = $this->notificationDataForOrder($paymentOrder);
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
+            if ($paymentOrder->product_type === PaymentProductType::CreditPack) {
+                $dispatcher->send($user, 'credits_purchased', $data);
+
+                return;
+            }
+
             match ($paymentOrder->billing_reason) {
                 'trial_setup' => $dispatcher->send($user, 'trial_started', $data),
                 'trial_conversion' => $dispatcher->send($user, 'trial_converted_to_paid', $data),
@@ -199,6 +301,12 @@ class WompiWebhookController extends Controller
 
         if ($paymentOrder->status === PaymentOrderStatus::Pending) {
             $dispatcher->sendInApp($user, 'payment_pending', $data);
+
+            return;
+        }
+
+        if ($creditReversed) {
+            $dispatcher->send($user, 'credits_reversed', $data);
 
             return;
         }
@@ -218,40 +326,14 @@ class WompiWebhookController extends Controller
         $dispatcher->send($user, 'failed_payment', $data);
     }
 
-    private function markTrialConversionFailed(
-        PaymentOrder $paymentOrder,
-        SubscriptionProfileAccessService $profileAccess
-    ): void {
-        /** @var Subscription|null $subscription */
-        $subscription = Subscription::query()
-            ->where('user_id', $paymentOrder->user_id)
-            ->where('active', true)
-            ->where('status', SubscriptionStatus::Trialing->value)
-            ->lockForUpdate()
-            ->latest('started_at')
-            ->first();
-
-        if (! $subscription instanceof Subscription) {
-            return;
-        }
-
-        $subscription->active = false;
-        $subscription->status = SubscriptionStatus::PastDue;
-        $subscription->save();
-        $profileAccess->deactivateProfilesIfAccessEnded(
-            $subscription->user_id,
-            'trial_conversion_webhook_failed',
-            $subscription->id
-        );
-    }
-
     /**
      * @return array<string, mixed>
      */
     private function notificationDataForOrder(PaymentOrder $paymentOrder): array
     {
         return [
-            'plan' => $paymentOrder->plan->value,
+            'plan' => $paymentOrder->plan?->value ?? 'credits',
+            'credits' => number_format(CreditAmount::unitsToCredits((int) $paymentOrder->credit_units)),
             'amount' => sprintf('USD %.2f', (float) $paymentOrder->display_amount_usd),
             'payment_order_id' => $paymentOrder->id,
             'reference' => $paymentOrder->reference,

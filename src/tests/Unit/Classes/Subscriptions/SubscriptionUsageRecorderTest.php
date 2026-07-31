@@ -7,6 +7,7 @@ use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
+use App\Models\CreditWallet;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
@@ -94,7 +95,7 @@ class SubscriptionUsageRecorderTest extends TestCase
         $this->assertSame(1000.0, SubscriptionLimit::first()->credits_remaining);
     }
 
-    public function test_it_reduces_credits_for_chat_messages_and_tts_characters(): void
+    public function test_included_usage_does_not_reduce_purchased_credits(): void
     {
         $user = User::factory()->create();
         $profile = $this->profileFor($user);
@@ -119,11 +120,11 @@ class SubscriptionUsageRecorderTest extends TestCase
 
         $limit = SubscriptionLimit::first();
 
-        $this->assertSame(0.5, $chatUse->credits_used);
-        $this->assertSame(3.75, $ttsUse->credits_used);
+        $this->assertSame(0.0, $chatUse->credits_used);
+        $this->assertSame(0.0, $ttsUse->credits_used);
         $this->assertSame(999, $limit->chat_messages_remaining);
         $this->assertSame(9850, $limit->tts_characters_remaining);
-        $this->assertSame(995.75, $limit->credits_remaining);
+        $this->assertSame(0, CreditWallet::firstOrCreate(['user_id' => $user->id])->fresh()->available_units);
     }
 
     public function test_fractional_credit_charges_do_not_accumulate_rounding_drift(): void
@@ -132,7 +133,13 @@ class SubscriptionUsageRecorderTest extends TestCase
         $subscription = $this->createActiveSubscriptionFor($user);
         $recorder = new SubscriptionUsageRecorder;
 
-        foreach (range(1, 40) as $index) {
+        $subscription->limit()->update(['tts_characters_remaining' => 0]);
+        CreditWallet::create([
+            'user_id' => $user->id,
+            'available_units' => 100000,
+        ]);
+
+        foreach (range(1, 20) as $index) {
             $recorder->record(
                 userId: $user->id,
                 usageType: SubscriptionUsageType::VoiceTtsCharacters,
@@ -141,8 +148,8 @@ class SubscriptionUsageRecorderTest extends TestCase
             );
         }
 
-        $this->assertEqualsWithDelta(999.0, (float) $subscription->limit->fresh()->credits_remaining, 0.0001);
-        $this->assertEqualsWithDelta(1.0, (float) SubscriptionUse::sum('credits_used'), 0.0001);
+        $this->assertSame(99500, CreditWallet::where('user_id', $user->id)->firstOrFail()->available_units);
+        $this->assertEqualsWithDelta(0.5, (float) SubscriptionUse::sum('credits_used'), 0.0001);
     }
 
     public function test_an_idempotency_key_cannot_be_reused_for_different_usage(): void
@@ -168,7 +175,7 @@ class SubscriptionUsageRecorderTest extends TestCase
                 idempotencyKey: 'usage-conflict',
             );
         } finally {
-            $this->assertSame(999.5, (float) $subscription->limit->fresh()->credits_remaining);
+            $this->assertSame(999, (int) $subscription->limit->fresh()->chat_messages_remaining);
             $this->assertDatabaseCount('subscription_uses', 1);
         }
     }
@@ -191,7 +198,7 @@ class SubscriptionUsageRecorderTest extends TestCase
         $limit = SubscriptionLimit::firstOrFail();
 
         $this->assertSame(9980, $limit->tts_characters_remaining);
-        $this->assertSame(999.5, $limit->credits_remaining);
+        $this->assertSame(0.0, (float) $use->credits_used);
         $this->assertDatabaseHas('subscription_uses', ['id' => $use->id]);
 
         $this->assertTrue($recorder->release('tts:voice:release-test'));
@@ -199,7 +206,7 @@ class SubscriptionUsageRecorderTest extends TestCase
         $limit->refresh();
 
         $this->assertSame(10000, $limit->tts_characters_remaining);
-        $this->assertSame(1000.0, $limit->credits_remaining);
+        $this->assertSame(0.0, (float) $use->fresh()->credits_used);
         $this->assertDatabaseHas('subscription_uses', [
             'id' => $use->id,
             'status' => 'released',
