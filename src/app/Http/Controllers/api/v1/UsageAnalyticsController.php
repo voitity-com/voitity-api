@@ -106,7 +106,7 @@ class UsageAnalyticsController extends Controller
                     ->map(fn (SubscriptionUsagePeriod $period): array => $this->periodData($period, $uses))
                     ->values()
                     ->all(),
-                'series' => $this->series($uses, $groupBy, $timezone),
+                'series' => $this->series($uses, $ledger, $groupBy, $timezone),
             ],
         ]);
     }
@@ -194,21 +194,50 @@ class UsageAnalyticsController extends Controller
 
     /**
      * @param  Collection<int, SubscriptionUse>  $uses
+     * @param  Collection<int, CreditLedgerEntry>  $ledger
      * @return list<array<string, mixed>>
      */
-    private function series(Collection $uses, string $groupBy, string $timezone): array
-    {
-        return $uses
-            ->where('status', SubscriptionUse::STATUS_FINALIZED)
-            ->groupBy(function (SubscriptionUse $use) use ($groupBy, $timezone): string {
-                $usedAt = $use->used_at->copy()->timezone($timezone);
+    private function series(
+        Collection $uses,
+        Collection $ledger,
+        string $groupBy,
+        string $timezone,
+    ): array {
+        $usesByBucket = $uses
+            ->where('purchased_credit_units', '>', 0)
+            ->groupBy(
+                fn (SubscriptionUse $use): string => $this->bucket(
+                    $use->used_at,
+                    $groupBy,
+                    $timezone,
+                )
+            );
+        $ledgerByBucket = $ledger
+            ->whereIn('type', [
+                CreditLedgerEntryType::Purchase,
+                CreditLedgerEntryType::Reversal,
+            ])
+            ->groupBy(
+                fn (CreditLedgerEntry $entry): string => $this->bucket(
+                    $entry->occurred_at,
+                    $groupBy,
+                    $timezone,
+                )
+            );
 
-                return $groupBy === 'day'
-                    ? $usedAt->format('Y-m-d')
-                    : $usedAt->format('Y-m');
-            })
-            ->map(function (Collection $bucketUses, string $bucket): array {
-                $services = $bucketUses
+        return $usesByBucket
+            ->keys()
+            ->merge($ledgerByBucket->keys())
+            ->unique()
+            ->sort()
+            ->map(function (string $bucket) use ($ledgerByBucket, $usesByBucket): array {
+                /** @var Collection<int, SubscriptionUse> $bucketUses */
+                $bucketUses = $usesByBucket->get($bucket, collect());
+                /** @var Collection<int, CreditLedgerEntry> $bucketLedger */
+                $bucketLedger = $ledgerByBucket->get($bucket, collect());
+                $finalizedUses = $bucketUses->where('status', SubscriptionUse::STATUS_FINALIZED);
+                $reservedUses = $bucketUses->where('status', SubscriptionUse::STATUS_RESERVED);
+                $services = $finalizedUses
                     ->groupBy(fn (SubscriptionUse $use): string => $use->usage_type->value)
                     ->map(fn (Collection $serviceUses): array => [
                         'operations' => $serviceUses->count(),
@@ -220,10 +249,33 @@ class UsageAnalyticsController extends Controller
 
                 return [
                     'bucket' => $bucket,
+                    'credits' => [
+                        'purchased' => CreditAmount::unitsToCredits((int) $bucketLedger
+                            ->where('type', CreditLedgerEntryType::Purchase)
+                            ->sum('amount_units')),
+                        'consumed' => CreditAmount::unitsToCredits(
+                            (int) $finalizedUses->sum('purchased_credit_units')
+                        ),
+                        'reserved' => CreditAmount::unitsToCredits(
+                            (int) $reservedUses->sum('purchased_credit_units')
+                        ),
+                        'reversed' => CreditAmount::unitsToCredits(abs((int) $bucketLedger
+                            ->where('type', CreditLedgerEntryType::Reversal)
+                            ->sum('amount_units'))),
+                    ],
                     'services' => $services,
                 ];
             })
             ->values()
             ->all();
+    }
+
+    private function bucket(Carbon $occurredAt, string $groupBy, string $timezone): string
+    {
+        $localDate = $occurredAt->copy()->timezone($timezone);
+
+        return $groupBy === 'day'
+            ? $localDate->format('Y-m-d')
+            : $localDate->format('Y-m');
     }
 }
