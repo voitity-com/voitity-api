@@ -5,6 +5,7 @@ namespace App\Classes\Subscriptions;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
@@ -157,6 +158,19 @@ class SubscriptionEntitlementService
      */
     private function capacityErrors(Subscription $subscription, SubscriptionLimit $limit, array $amounts): array
     {
+        if (
+            ($amounts['profiles'] ?? 0) > 0
+            && ! $this->planCatalog->isUnlimited($subscription->plan)
+        ) {
+            $profileLimit = max(0, (int) (
+                $this->planCatalog->configFor($subscription->plan)['limits']['profiles'] ?? 0
+            ));
+            $profileCount = Profile::query()
+                ->where('user_id', $subscription->user_id)
+                ->count();
+            $limit->setAttribute('profiles_remaining', max(0, $profileLimit - $profileCount));
+        }
+
         $allocation = $this->funding->allocate(
             $subscription,
             $limit,

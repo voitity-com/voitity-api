@@ -2242,6 +2242,7 @@
                   "try { json = pm.response.json(); } catch (e) {}",
                   "if (json.data && json.data.payment_order) {",
                   "  pm.environment.set('credit_payment_order_id', String(json.data.payment_order.id));",
+                  "  pm.environment.set('payment_order_id', String(json.data.payment_order.id));",
                   "}",
                   "pm.test('credit purchase is approved or pending', function () {",
                   "  pm.expect([201, 202]).to.include(pm.response.code);",
@@ -2280,6 +2281,48 @@
               ]
             },
         "description": "Creates a one-time Wompi charge against the selected reusable payment method for an active paid subscription. Set payment_method_id from List Payment Methods; omit payment_source_id to use the chargeable account default. Selecting a secondary method for this purchase does not change the renewal default. Minimum 1,000, maximum 100,000, in steps of 1,000. A provider decline returns CREDIT_PAYMENT_DECLINED and marks only the attempted method as requiring attention. Pending and provider-error outcomes grant no credits and do not reject the method. Do not reuse an idempotency key with a different amount or payment method. Requires payments:create."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Credit Purchase Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('returns the selected credit purchase order', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.id).to.eql(Number(pm.environment.get('credit_payment_order_id')));",
+                  "  pm.expect(json.data.product_type).to.eql('credit_pack');",
+                  "  pm.expect(['pending', 'approved', 'declined', 'error', 'expired', 'voided']).to.include(json.data.status);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{credit_payment_order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "{{credit_payment_order_id}}"
+              ]
+            },
+            "description": "Polls the credit purchase created by Purchase Credits until Wompi and the webhook move it from pending to an approved or terminal status. The administrator uses this existing endpoint to refresh the wallet without a manual page reload. Requires payments:read."
           },
           "response": []
         },
