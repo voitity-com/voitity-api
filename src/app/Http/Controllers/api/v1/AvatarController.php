@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Repositories\AvatarRepository;
+use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
@@ -55,7 +56,8 @@ class AvatarController extends Controller
     public function generateAvatar(
         GenerateAvatarRequest $request,
         AvatarRepository $avatarRepository,
-        SubscriptionEntitlementService $entitlements
+        SubscriptionEntitlementService $entitlements,
+        AvatarGenerationSpecification $avatarSpecification,
     ): JsonResponse {
         $profile = null;
 
@@ -72,10 +74,10 @@ class AvatarController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $entitlements->assertCanUse($profile->user_id ?: $user->id, [
-                'avatar_images' => 1,
-                'avatar_video_seconds' => $this->avatarVideoSeconds(),
-            ]);
+            $entitlements->assertCanUse(
+                $profile->user_id ?: $user->id,
+                $avatarSpecification->usageAmounts(),
+            );
 
             $aiImage = $avatarRepository->generateAvatar($user, $profile, $request->file('image'));
             $avatar = ProfileAvatar::with(['aiImage', 'aiVideo'])
@@ -265,13 +267,6 @@ class AvatarController extends Controller
         return $user->role === 'admin' || $profile->user_id === $user->id;
     }
 
-    private function avatarVideoSeconds(): int
-    {
-        $driver = (string) config('videoai.default', 'runway');
-
-        return max(1, (int) config("videoai.drivers.{$driver}.default_duration", 5));
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -304,6 +299,7 @@ class AvatarController extends Controller
             'profile_id' => $avatar->profile_id,
             'aiimage_id' => $avatar->aiimage_id,
             'ai_video_id' => $avatar->ai_video_id,
+            'video_duration_seconds' => $avatar->video_duration_seconds,
             'file' => $avatar->file,
             'status' => $avatar->status,
             'failure_code' => $avatar->failure_code,

@@ -22,6 +22,7 @@ class AiVideoTest extends TestCase
             'user_id',
             'profile_id',
             'aiimage_id',
+            'video_duration_seconds',
             'source_id',
             'source',
             'status',
@@ -61,9 +62,11 @@ class AiVideoTest extends TestCase
             'source' => 'runway',
             'status' => 'succeeded',
             'file' => 'videos/runway-task-id.mp4',
+            'video_duration_seconds' => 2,
         ]);
 
         $this->assertSame('succeeded', $aiVideo->status);
+        $this->assertSame(2, $aiVideo->video_duration_seconds);
         $this->assertTrue($aiVideo->user->is($user));
         $this->assertTrue($aiVideo->profile->is($profile));
         $this->assertTrue($aiVideo->aiImage->is($aiImage));

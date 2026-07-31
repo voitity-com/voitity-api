@@ -2,7 +2,7 @@
 
 namespace App\Listeners\AI\Images;
 
-use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
@@ -231,9 +231,7 @@ class GetAIImageForAvatar implements ShouldQueue
             return;
         }
 
-        $recorder = app(SubscriptionUsageRecorder::class);
-        $recorder->release("avatar-image:profile-avatar:{$avatar->id}");
-        $recorder->release("avatar-video:profile-avatar:{$avatar->id}");
+        app(AvatarGenerationUsageService::class)->release($avatar);
     }
 
     /**

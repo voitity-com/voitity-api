@@ -16,12 +16,17 @@ class AiVideo extends Model
         'user_id',
         'profile_id',
         'aiimage_id',
+        'video_duration_seconds',
         'source_id',
         'source',
         'status',
         'file',
         'failure_code',
         'failure_reason',
+    ];
+
+    protected $casts = [
+        'video_duration_seconds' => 'integer',
     ];
 
     public function user()

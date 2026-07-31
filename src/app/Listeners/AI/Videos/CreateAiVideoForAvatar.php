@@ -2,7 +2,8 @@
 
 namespace App\Listeners\AI\Videos;
 
-use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Classes\Subscriptions\AvatarGenerationSpecification;
+use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
@@ -59,11 +60,18 @@ class CreateAiVideoForAvatar implements ShouldQueue
                 'source_image_url' => $event->sourceImageUrl,
             ]);
 
+            $avatar = ProfileAvatar::where('aiimage_id', $aiImage->id)->latest('id')->first();
+            $durationSeconds = max(1, (int) (
+                $avatar?->video_duration_seconds
+                ?? app(AvatarGenerationSpecification::class)->videoDurationSeconds()
+            ));
+
             try {
                 $aiVideo = AiVideoModel::create([
                     'user_id' => $aiImage->user_id,
                     'profile_id' => $aiImage->profile_id,
                     'aiimage_id' => $aiImage->id,
+                    'video_duration_seconds' => $durationSeconds,
                     'source_id' => 'creating-'.Str::uuid()->toString(),
                     'source' => config('videoai.default', 'runway'),
                     'status' => 'creating',
@@ -88,7 +96,8 @@ class CreateAiVideoForAvatar implements ShouldQueue
 
             $video = $this->videoAIService->createVideo(
                 $event->sourceImageUrl,
-                config('videoai.prompts.video')
+                config('videoai.prompts.video'),
+                duration: $durationSeconds,
             );
 
             if (! $video->id) {
@@ -116,6 +125,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
                 'aivideo_id' => $aiVideo->id,
                 'aiimage_id' => $aiImage->id,
                 'source_id' => $aiVideo->source_id,
+                'duration_seconds' => $durationSeconds,
             ]);
 
             event(new AiVideoForAvatarCreated($aiVideo, $aiImage));
@@ -211,9 +221,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
             return;
         }
 
-        $recorder = app(SubscriptionUsageRecorder::class);
-        $recorder->release("avatar-image:profile-avatar:{$avatar->id}");
-        $recorder->release("avatar-video:profile-avatar:{$avatar->id}");
+        app(AvatarGenerationUsageService::class)->release($avatar);
     }
 
     /**

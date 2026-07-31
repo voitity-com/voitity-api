@@ -36,7 +36,7 @@ class AvatarRepositoryTest extends TestCase
     public function it_generates_avatar_image_and_dispatches_avatar_event(): void
     {
         config()->set('videoai.default', 'runway');
-        config()->set('videoai.drivers.runway.default_duration', 5);
+        config()->set('videoai.drivers.runway.default_duration', 2);
 
         Event::fake([AiImageForAvatarCreated::class]);
         Storage::fake('profiles');
@@ -75,21 +75,17 @@ class AvatarRepositoryTest extends TestCase
             'user_id' => $user->id,
             'profile_id' => $profile->id,
             'aiimage_id' => $aiImage->id,
+            'video_duration_seconds' => 2,
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
         $this->assertDatabaseHas('subscription_uses', [
             'user_id' => $user->id,
             'profile_id' => $profile->id,
-            'usage_type' => SubscriptionUsageType::AvatarImageCreated->value,
+            'usage_type' => SubscriptionUsageType::AvatarGenerated->value,
             'avatar_images_used' => 1,
-            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
-        ]);
-        $this->assertDatabaseHas('subscription_uses', [
-            'user_id' => $user->id,
-            'profile_id' => $profile->id,
-            'usage_type' => SubscriptionUsageType::AvatarVideoCreated->value,
-            'avatar_video_seconds_used' => 5,
-            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'avatar_video_seconds_used' => 2,
+            'idempotency_key' => "avatar-generation:profile-avatar:{$avatar->id}",
+            'status' => SubscriptionUse::STATUS_RESERVED,
         ]);
         $limit = $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail();
         $this->assertSame(0, (int) $limit->avatar_images_remaining);
@@ -169,13 +165,9 @@ class AvatarRepositoryTest extends TestCase
 
         $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
-        $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
+        $this->assertSame(2, (int) $limit->avatar_video_seconds_remaining);
         $this->assertDatabaseHas('subscription_uses', [
-            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
-            'status' => SubscriptionUse::STATUS_RELEASED,
-        ]);
-        $this->assertDatabaseHas('subscription_uses', [
-            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'idempotency_key' => "avatar-generation:profile-avatar:{$avatar->id}",
             'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
         Event::assertNotDispatched(AiImageForAvatarCreated::class);
@@ -246,7 +238,7 @@ class AvatarRepositoryTest extends TestCase
             'period_renews_at' => $subscription->renews_at,
             'profiles_remaining' => 1,
             'avatar_images_remaining' => 1,
-            'avatar_video_seconds_remaining' => 5,
+            'avatar_video_seconds_remaining' => 2,
             'voice_clones_remaining' => 1,
             'tts_characters_remaining' => 10000,
             'chat_messages_remaining' => 1000,

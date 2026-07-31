@@ -10,6 +10,7 @@ use App\Listeners\AI\Videos\CreateAiVideoForAvatar;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
+use App\Models\ProfileAvatar;
 use App\Models\User;
 use Illuminate\Support\Facades\Event;
 use Mockery;
@@ -30,10 +31,17 @@ class CreateAiVideoForAvatarTest extends TestCase
         Event::fake([AiVideoForAvatarCreated::class]);
 
         $aiImage = $this->aiImage();
+        ProfileAvatar::create([
+            'user_id' => $aiImage->user_id,
+            'profile_id' => $aiImage->profile_id,
+            'aiimage_id' => $aiImage->id,
+            'video_duration_seconds' => 2,
+            'status' => ProfileAvatar::STATUS_PROCESSING,
+        ]);
         $service = Mockery::mock(VideoAIService::class);
         $service->shouldReceive('createVideo')
             ->once()
-            ->with('https://example.com/generated-image.png', config('videoai.prompts.video'))
+            ->with('https://example.com/generated-image.png', config('videoai.prompts.video'), '', 2)
             ->andReturn(new AiVideoResult(id: 'video-source-id', status: 'PENDING'));
 
         $listener = new CreateAiVideoForAvatar($service);
@@ -45,6 +53,7 @@ class CreateAiVideoForAvatarTest extends TestCase
         $this->assertSame($aiImage->user_id, $aiVideo->user_id);
         $this->assertSame($aiImage->profile_id, $aiVideo->profile_id);
         $this->assertSame($aiImage->id, $aiVideo->aiimage_id);
+        $this->assertSame(2, $aiVideo->video_duration_seconds);
         $this->assertSame('pending', $aiVideo->status);
         $this->assertNull($aiVideo->file);
 

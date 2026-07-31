@@ -112,14 +112,18 @@ class SubscriptionLimitsResponse
         return collect(self::METRICS)
             ->mapWithKeys(function (array $columns, string $metric) use ($limit, $plan, $unlimited): array {
                 $remaining = $this->usageValue($metric, $limit?->{$columns['remaining']} ?? 0);
-                $used = $this->usageValue($metric, $this->usageTotals[$metric] ?? 0);
+                $included = $unlimited ? null : $this->includedValue($metric, $plan);
+                $used = $unlimited
+                    ? $this->usageValue($metric, $this->usageTotals[$metric] ?? 0)
+                    : $this->usageValue($metric, max(0, (float) $included - (float) $remaining));
 
                 return [
                     $metric => [
-                        'included' => $unlimited ? null : $this->includedValue($metric, $plan),
+                        'included' => $included,
                         'remaining' => $unlimited ? null : $remaining,
                         'unlimited' => $unlimited,
                         'used' => $used,
+                        'total_used' => $this->usageValue($metric, $this->usageTotals[$metric] ?? 0),
                     ],
                 ];
             })
@@ -192,6 +196,12 @@ class SubscriptionLimitsResponse
 
     private function includedValue(string $metric, ?string $plan): int|float
     {
+        $snapshot = $this->subscription->limit?->usagePeriod?->limits_snapshot;
+
+        if (is_array($snapshot) && array_key_exists($metric, $snapshot)) {
+            return $this->usageValue($metric, $snapshot[$metric]);
+        }
+
         $trialing = $this->enumValue($this->subscription->status) === 'trialing';
 
         if ($trialing) {

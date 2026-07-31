@@ -10,11 +10,13 @@ use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
+use App\Events\MessageStored;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -289,7 +291,7 @@ class MessageControllerTest extends TestAPI
         ]);
         $this->createActiveSubscriptionFor($user);
 
-        Event::fake([\App\Events\MessageStored::class]);
+        Event::fake([MessageStored::class]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->postJson(self::ENDPOINT.'/'.$profile->id.'/messages', [
@@ -305,7 +307,7 @@ class MessageControllerTest extends TestAPI
             'type' => 'question',
             'text' => 'Queue this message',
         ]);
-        Event::assertDispatched(\App\Events\MessageStored::class);
+        Event::assertDispatched(MessageStored::class);
     }
 
     public function test_store_returns_bad_gateway_when_chat_ai_generation_fails(): void
@@ -494,6 +496,168 @@ class MessageControllerTest extends TestAPI
         $this->assertSame('Audio grabado desde el navegador', $question->text);
         $this->assertNotNull($question->audio);
         Storage::disk('public')->assertExists($this->storagePathFromUrl($question->audio));
+    }
+
+    public function test_browser_webm_usage_is_reconciled_with_transcription_duration(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken(
+            'test-token',
+            ['messages:write', 'subscription-limits:read']
+        )->plainTextToken;
+
+        $this->mockAudioChatClient(
+            profile: $profile,
+            transcribedText: 'Audio de casi ocho segundos',
+            answerText: 'Audio recibido.',
+            inspectedDurationSeconds: 1,
+            transcriptionDurationSeconds: 7.92,
+        );
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->browserWebmAudioUpload(),
+            ]);
+
+        $response->assertOk();
+
+        $question = Message::where('profile_id', $profile->id)
+            ->where('type', 'question')
+            ->firstOrFail();
+        $use = SubscriptionUse::where('user_id', $user->id)->sole();
+        $limit = $subscription->limit()->firstOrFail();
+
+        $this->assertSame(8, $use->incoming_audio_seconds_used);
+        $this->assertSame(1, $use->incoming_audio_messages_used);
+        $this->assertSame(2, $use->reservation_sequence);
+        $this->assertSame(SubscriptionUse::STATUS_FINALIZED, $use->status);
+        $this->assertSame(Message::class, $use->source_type);
+        $this->assertSame((string) $question->id, $use->source_id);
+        $this->assertSame(8, $use->metadata['duration_seconds']);
+        $this->assertSame('transcription', $use->metadata['duration_source']);
+        $this->assertSame(1, $use->metadata['inspected_duration_seconds']);
+        $this->assertSame(7.92, $use->metadata['transcription_duration_seconds']);
+        $this->assertSame(14992, $limit->incoming_audio_seconds_remaining);
+        $this->assertSame(499, $limit->incoming_audio_messages_remaining);
+        $this->assertSame(999, $limit->chat_messages_remaining);
+
+        $limitsResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/subscription/limits');
+
+        $limitsResponse->assertOk();
+        $limitsResponse->assertJsonPath('data.limits.incoming_audio_messages.used', 1);
+        $limitsResponse->assertJsonPath('data.limits.incoming_audio_seconds.used', 8);
+        $limitsResponse->assertJsonPath('data.usage.totals.incoming_audio_messages', 1);
+        $limitsResponse->assertJsonPath('data.usage.totals.incoming_audio_seconds', 8);
+    }
+
+    public function test_transcription_encoder_padding_at_thirty_seconds_is_tolerated(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+
+        $this->mockAudioChatClient(
+            profile: $profile,
+            transcribedText: 'Audio en el limite permitido',
+            answerText: 'Audio recibido.',
+            inspectedDurationSeconds: 1,
+            transcriptionDurationSeconds: 30.06,
+        );
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->browserWebmAudioUpload(),
+            ]);
+
+        $response->assertOk();
+        $this->assertSame(30, SubscriptionUse::sole()->incoming_audio_seconds_used);
+        $this->assertSame(
+            14970,
+            $subscription->limit()->firstOrFail()->incoming_audio_seconds_remaining
+        );
+    }
+
+    public function test_audio_above_duration_tolerance_is_rejected_after_transcription(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+        $this->mockAudioDuration(1);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getTextFromAudio')
+            ->once()
+            ->andReturn(new ChatAITextFromAudio(
+                source: 'openai',
+                audioPath: '/tmp/audio.webm',
+                text: 'Audio demasiado largo',
+                status: 'success',
+                duration: 30.51,
+            ));
+        $chatAiClient->shouldNotReceive('getAnswer');
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->browserWebmAudioUpload(),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('code', 'AUDIO_DURATION_EXCEEDED');
+        $this->assertSame(SubscriptionUse::STATUS_RELEASED, SubscriptionUse::sole()->status);
+        $this->assertSame(
+            15000,
+            $subscription->limit()->firstOrFail()->incoming_audio_seconds_remaining
+        );
+        $this->assertDatabaseCount('messages', 0);
+    }
+
+    public function test_reconciliation_failure_restores_the_preflight_audio_reservation(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $subscription = $this->createActiveSubscriptionFor($user);
+        $subscription->limit()->update(['incoming_audio_seconds_remaining' => 1]);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+        $this->mockAudioDuration(1);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getTextFromAudio')
+            ->once()
+            ->andReturn(new ChatAITextFromAudio(
+                source: 'openai',
+                audioPath: '/tmp/audio.webm',
+                text: 'Audio de ocho segundos',
+                status: 'success',
+                duration: 7.92,
+            ));
+        $chatAiClient->shouldNotReceive('getAnswer');
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->browserWebmAudioUpload(),
+            ]);
+
+        $response->assertStatus(402);
+        $response->assertJsonPath('code', 'PURCHASED_CREDITS_REQUIRED');
+
+        $limit = $subscription->limit()->firstOrFail();
+
+        $this->assertSame(1, $limit->incoming_audio_seconds_remaining);
+        $this->assertSame(500, $limit->incoming_audio_messages_remaining);
+        $this->assertSame(1000, $limit->chat_messages_remaining);
+        $this->assertSame(SubscriptionUse::STATUS_RELEASED, SubscriptionUse::sole()->status);
+        $this->assertDatabaseCount('messages', 0);
     }
 
     public function test_store_audio_fails_when_chat_does_not_belong_to_profile(): void
@@ -736,9 +900,14 @@ class MessageControllerTest extends TestAPI
         return UploadedFile::fake()->create('recording.webm', 128, 'video/webm');
     }
 
-    private function mockAudioChatClient(Profile $profile, string $transcribedText, string $answerText): void
-    {
-        $this->mockAudioDuration(4);
+    private function mockAudioChatClient(
+        Profile $profile,
+        string $transcribedText,
+        string $answerText,
+        int $inspectedDurationSeconds = 4,
+        float $transcriptionDurationSeconds = 3.5,
+    ): void {
+        $this->mockAudioDuration($inspectedDurationSeconds);
 
         $chatAiClient = Mockery::mock(ChatAIClient::class);
         $chatAiClient->shouldReceive('getTextFromAudio')
@@ -753,7 +922,7 @@ class MessageControllerTest extends TestAPI
                 status: 'success',
                 confidence: 0.9,
                 detectedLanguage: 'es',
-                duration: 3.5
+                duration: $transcriptionDurationSeconds
             ));
 
         $chatAiClient->shouldReceive('getAnswer')

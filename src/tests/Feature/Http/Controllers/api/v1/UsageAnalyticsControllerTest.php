@@ -78,6 +78,37 @@ class UsageAnalyticsControllerTest extends TestAPI
             ->assertJsonCount(0, 'data.series');
     }
 
+    public function test_avatar_bundle_credits_are_reported_as_image_and_video_services(): void
+    {
+        $user = User::factory()->create();
+        [, $limit] = $this->createConfiguredSubscription($user);
+        $limit->update([
+            'avatar_images_remaining' => 0,
+            'avatar_video_seconds_remaining' => 0,
+        ]);
+        CreditWallet::create([
+            'user_id' => $user->id,
+            'available_units' => CreditAmount::creditsToUnits(1000),
+        ]);
+        app(SubscriptionUsageRecorder::class)->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarGenerated,
+            amounts: ['avatar_images' => 1, 'avatar_video_seconds' => 2],
+            idempotencyKey: 'analytics:avatar-bundle',
+        );
+        $token = $user->createToken('analytics', ['subscription-limits:read'])->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/usage?from='.now()->startOfMonth()->toDateString().'&to='.now()->toDateString())
+            ->assertOk()
+            ->assertJsonPath('data.summary.credits.consumed', 72.5)
+            ->assertJsonPath('data.series.0.credits.consumed', 72.5)
+            ->assertJsonPath('data.series.0.services.avatar_image_created.operations', 1)
+            ->assertJsonPath('data.series.0.services.avatar_image_created.purchased_credits', 12.5)
+            ->assertJsonPath('data.series.0.services.avatar_video_created.operations', 1)
+            ->assertJsonPath('data.series.0.services.avatar_video_created.purchased_credits', 60);
+    }
+
     public function test_usage_analytics_remains_available_without_an_active_subscription(): void
     {
         $user = User::factory()->create();

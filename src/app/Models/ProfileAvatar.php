@@ -23,10 +23,15 @@ class ProfileAvatar extends Model
         'profile_id',
         'aiimage_id',
         'ai_video_id',
+        'video_duration_seconds',
         'file',
         'status',
         'failure_code',
         'failure_reason',
+    ];
+
+    protected $casts = [
+        'video_duration_seconds' => 'integer',
     ];
 
     public function user()

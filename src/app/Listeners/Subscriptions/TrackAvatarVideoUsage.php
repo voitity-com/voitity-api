@@ -27,8 +27,17 @@ class TrackAvatarVideoUsage implements ShouldQueue
             return;
         }
 
-        $seconds = (int) config('videoai.drivers.'.($aiVideo->source ?: config('videoai.default', 'runway')).'.default_duration', 5);
         $avatar = $this->profileAvatarFor($event, $aiVideo);
+
+        if ($avatar && $this->hasAtomicAvatarReservation($avatar)) {
+            return;
+        }
+
+        $seconds = (int) (
+            $aiVideo->video_duration_seconds
+            ?? $avatar?->video_duration_seconds
+            ?? config('videoai.drivers.'.($aiVideo->source ?: config('videoai.default', 'runway')).'.default_duration', 2)
+        );
 
         if (! $avatar && $this->hasProfileAvatarReservation($aiVideo)) {
             return;
@@ -98,5 +107,13 @@ class TrackAvatarVideoUsage implements ShouldQueue
             ->where('source_type', ProfileAvatar::class)
             ->where('idempotency_key', 'like', 'avatar-video:profile-avatar:%')
             ->exists();
+    }
+
+    private function hasAtomicAvatarReservation(ProfileAvatar $avatar): bool
+    {
+        return SubscriptionUse::where(
+            'idempotency_key',
+            "avatar-generation:profile-avatar:{$avatar->id}"
+        )->exists();
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Listeners\AI\Videos;
 
-use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
@@ -41,7 +41,8 @@ class GetAIVideoForAvatar implements ShouldQueue
         }
 
         if ($aiVideo->status === 'succeeded' && $aiVideo->file) {
-            $this->updateProfileAvatar($event, $aiVideo);
+            $avatar = $this->updateProfileAvatar($event, $aiVideo);
+            $this->finalizeAvatarUsage($avatar, $aiVideo);
 
             Log::info('GetAIVideoForAvatar skipped because AiVideo is already stored.', [
                 'aivideo_id' => $aiVideo->id,
@@ -73,6 +74,7 @@ class GetAIVideoForAvatar implements ShouldQueue
                 $aiVideo->save();
 
                 $avatar = $this->updateProfileAvatar($event, $aiVideo);
+                $this->finalizeAvatarUsage($avatar, $aiVideo);
                 $this->notifyAvatarGenerated($avatar);
 
                 Log::info('AI video generated and stored', [
@@ -173,6 +175,8 @@ class GetAIVideoForAvatar implements ShouldQueue
             $avatar->profile_id = $aiVideo->profile_id;
             $avatar->aiimage_id = $event->aiImage?->id;
             $avatar->ai_video_id = $aiVideo->id;
+            $avatar->video_duration_seconds = $aiVideo->video_duration_seconds
+                ?? $avatar->video_duration_seconds;
             $avatar->file = $aiVideo->file;
             $avatar->status = ProfileAvatar::STATUS_ACTIVE;
             $avatar->failure_code = null;
@@ -274,6 +278,20 @@ class GetAIVideoForAvatar implements ShouldQueue
         ]);
     }
 
+    private function finalizeAvatarUsage(?ProfileAvatar $avatar, $aiVideo): void
+    {
+        if (! $avatar) {
+            return;
+        }
+
+        app(AvatarGenerationUsageService::class)->finalize($avatar, [
+            'ai_video_id' => $aiVideo->id,
+            'provider' => $aiVideo->source,
+            'provider_source_id' => $aiVideo->source_id,
+            'duration_seconds' => (int) ($aiVideo->video_duration_seconds ?? $avatar->video_duration_seconds),
+        ]);
+    }
+
     private function notifyAvatarFailure(AiVideoForAvatarCreated $event, string $reason): void
     {
         $avatar = ProfileAvatar::query()
@@ -323,9 +341,7 @@ class GetAIVideoForAvatar implements ShouldQueue
             return;
         }
 
-        $recorder = app(SubscriptionUsageRecorder::class);
-        $recorder->release("avatar-image:profile-avatar:{$avatar->id}");
-        $recorder->release("avatar-video:profile-avatar:{$avatar->id}");
+        app(AvatarGenerationUsageService::class)->release($avatar);
     }
 
     /**

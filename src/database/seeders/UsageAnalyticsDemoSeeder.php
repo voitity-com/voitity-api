@@ -26,7 +26,7 @@ class UsageAnalyticsDemoSeeder extends Seeder
     private const LIMITS = [
         'profiles' => 1,
         'avatar_images' => 1,
-        'avatar_video_seconds' => 5,
+        'avatar_video_seconds' => 2,
         'voice_clones' => 1,
         'tts_characters' => 20000,
         'chat_messages' => 1000,
@@ -249,9 +249,9 @@ class UsageAnalyticsDemoSeeder extends Seeder
                 [
                     'type' => SubscriptionUsageType::AvatarVideoCreated,
                     'day' => 22,
-                    'plan' => ['avatar_video_seconds' => 3 + ($index % 3)],
+                    'plan' => ['avatar_video_seconds' => 2],
                     'credit' => ['avatar_video_seconds' => 1 + ($index % 2)],
-                    'columns' => ['avatar_video_seconds_used' => 4 + (($index % 3) + ($index % 2))],
+                    'columns' => ['avatar_video_seconds_used' => 3 + ($index % 2)],
                 ],
                 [
                     'type' => SubscriptionUsageType::VoiceCloned,
@@ -312,7 +312,7 @@ class UsageAnalyticsDemoSeeder extends Seeder
         $definitions = [
             [SubscriptionUsageType::ProfileCreated, ['profiles' => 1], ['profiles_used' => 1]],
             [SubscriptionUsageType::AvatarImageCreated, ['avatar_images' => 1], ['avatar_images_used' => 1]],
-            [SubscriptionUsageType::AvatarVideoCreated, ['avatar_video_seconds' => 4], ['avatar_video_seconds_used' => 4]],
+            [SubscriptionUsageType::AvatarVideoCreated, ['avatar_video_seconds' => 2], ['avatar_video_seconds_used' => 2]],
             [SubscriptionUsageType::VoiceCloned, ['voice_clones' => 1], ['voice_clones_used' => 1]],
             [SubscriptionUsageType::VoiceTtsCharacters, ['tts_characters' => 17_300], ['tts_characters_used' => 17_300]],
             [SubscriptionUsageType::ChatMessageReceived, ['chat_messages' => 760], ['chat_messages_used' => 760]],
@@ -350,7 +350,7 @@ class UsageAnalyticsDemoSeeder extends Seeder
         $limit->update([
             'profiles_remaining' => 0,
             'avatar_images_remaining' => 0,
-            'avatar_video_seconds_remaining' => 1,
+            'avatar_video_seconds_remaining' => 0,
             'voice_clones_remaining' => 0,
             'tts_characters_remaining' => 2700,
             'chat_messages_remaining' => 240,

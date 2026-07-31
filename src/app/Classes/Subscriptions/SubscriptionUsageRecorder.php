@@ -183,6 +183,9 @@ class SubscriptionUsageRecorder
                 $reservationSequence = $existingUse
                     ? max(1, (int) $existingUse->reservation_sequence + 1)
                     : 1;
+                $metadata = array_replace($metadata, [
+                    'credit_cost_units' => $this->creditCostUnitsByMetric($allocation->creditCovered),
+                ]);
                 $attributes = array_merge([
                     'subscription_id' => $subscription->id,
                     'user_id' => $user->id,
@@ -249,6 +252,59 @@ class SubscriptionUsageRecorder
 
             throw $exception;
         }
+    }
+
+    /**
+     * Atomically replaces a pending reservation when a provider supplies a
+     * more authoritative billable amount than the preflight inspection.
+     *
+     * @param  array<string, int>  $amounts
+     * @param  array<string, mixed>  $metadata
+     */
+    public function replaceReservation(
+        int $userId,
+        SubscriptionUsageType $usageType,
+        array $amounts,
+        string $idempotencyKey,
+        ?int $profileId = null,
+        ?string $sourceType = null,
+        ?string $sourceId = null,
+        array $metadata = []
+    ): SubscriptionUse {
+        return DB::transaction(function () use (
+            $userId,
+            $usageType,
+            $amounts,
+            $idempotencyKey,
+            $profileId,
+            $sourceType,
+            $sourceId,
+            $metadata
+        ): SubscriptionUse {
+            /** @var SubscriptionUse $existingUse */
+            $existingUse = SubscriptionUse::where('idempotency_key', $idempotencyKey)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($existingUse->status !== SubscriptionUse::STATUS_RESERVED) {
+                throw new \RuntimeException('Only a pending subscription usage reservation can be replaced.');
+            }
+
+            if (! $this->release($idempotencyKey)) {
+                throw new \RuntimeException('Unable to release subscription usage before replacing it.');
+            }
+
+            return $this->reserve(
+                userId: $userId,
+                usageType: $usageType,
+                amounts: $amounts,
+                idempotencyKey: $idempotencyKey,
+                profileId: $profileId,
+                sourceType: $sourceType,
+                sourceId: $sourceId,
+                metadata: $metadata,
+            );
+        });
     }
 
     /**
@@ -385,6 +441,29 @@ class SubscriptionUsageRecorder
         }
 
         return $released;
+    }
+
+    /**
+     * Persist the tariff breakdown used at reservation time so analytics do
+     * not change when a future tariff version is deployed.
+     *
+     * @param  array<string, int>  $creditCovered
+     * @return array<string, int>
+     */
+    private function creditCostUnitsByMetric(array $creditCovered): array
+    {
+        $rates = (array) config('subscriptions.credit_store.rates_in_units', []);
+        $costs = [];
+
+        foreach ($creditCovered as $metric => $amount) {
+            if (! isset($rates[$metric])) {
+                continue;
+            }
+
+            $costs[$metric] = max(0, (int) $amount) * max(0, (int) $rates[$metric]);
+        }
+
+        return $costs;
     }
 
     public function releaseStaleReservations(?Carbon $now = null): int

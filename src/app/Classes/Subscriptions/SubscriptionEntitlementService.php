@@ -2,6 +2,7 @@
 
 namespace App\Classes\Subscriptions;
 
+use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Subscription;
@@ -86,8 +87,8 @@ class SubscriptionEntitlementService
 
         if ($subscription->renews_at->isPast()) {
             $subscription->status = $subscription->cancel_at_period_end
-                ? \App\Enums\SubscriptionStatus::Cancelled
-                : \App\Enums\SubscriptionStatus::Expired;
+                ? SubscriptionStatus::Cancelled
+                : SubscriptionStatus::Expired;
             $subscription->active = false;
             $subscription->save();
             $this->profileAccess->deactivateProfilesIfAccessEnded(
@@ -184,6 +185,10 @@ class SubscriptionEntitlementService
     {
         if (($amounts['incoming_audio_messages'] ?? 0) > 0 || ($amounts['incoming_audio_seconds'] ?? 0) > 0) {
             return SubscriptionUsageType::IncomingAudioMessage;
+        }
+
+        if (($amounts['avatar_images'] ?? 0) > 0 && ($amounts['avatar_video_seconds'] ?? 0) > 0) {
+            return SubscriptionUsageType::AvatarGenerated;
         }
 
         if (($amounts['avatar_images'] ?? 0) > 0) {

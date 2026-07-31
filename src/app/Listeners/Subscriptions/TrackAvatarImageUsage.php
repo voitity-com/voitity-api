@@ -30,6 +30,10 @@ class TrackAvatarImageUsage implements ShouldQueue
         $avatar = ProfileAvatar::where('aiimage_id', $aiImage->id)->first()
             ?: $this->processingProfileAvatarFor($aiImage);
 
+        if ($avatar && $this->hasAtomicAvatarReservation($avatar)) {
+            return;
+        }
+
         if (! $avatar && $this->hasProfileAvatarReservation($aiImage)) {
             return;
         }
@@ -66,6 +70,14 @@ class TrackAvatarImageUsage implements ShouldQueue
             ->where('source_type', ProfileAvatar::class)
             ->where('idempotency_key', 'like', 'avatar-image:profile-avatar:%')
             ->exists();
+    }
+
+    private function hasAtomicAvatarReservation(ProfileAvatar $avatar): bool
+    {
+        return SubscriptionUse::where(
+            'idempotency_key',
+            "avatar-generation:profile-avatar:{$avatar->id}"
+        )->exists();
     }
 
     private function processingProfileAvatarFor(AiImage $aiImage): ?ProfileAvatar

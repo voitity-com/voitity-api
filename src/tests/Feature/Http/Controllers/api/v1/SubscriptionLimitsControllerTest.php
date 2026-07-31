@@ -104,11 +104,11 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertJsonPath('data.limits.profiles.included', 1);
         $response->assertJsonPath('data.limits.profiles.remaining', 0);
         $response->assertJsonPath('data.limits.profiles.used', 1);
-        $response->assertJsonPath('data.limits.avatar_video_seconds.included', 5);
-        $response->assertJsonPath('data.limits.avatar_video_seconds.remaining', 3);
+        $response->assertJsonPath('data.limits.avatar_video_seconds.included', 2);
+        $response->assertJsonPath('data.limits.avatar_video_seconds.remaining', 0);
         $response->assertJsonPath('data.limits.avatar_video_seconds.used', 2);
         $response->assertJsonPath('data.limits.tts_characters.included', 20000);
-        $response->assertJsonPath('data.limits.tts_characters.remaining', 9000);
+        $response->assertJsonPath('data.limits.tts_characters.remaining', 19000);
         $response->assertJsonPath('data.limits.tts_characters.used', 1000);
         $response->assertJsonPath('data.usage.totals.purchased_credits', 50);
         $response->assertJsonPath('data.usage.totals.profiles', 1);
@@ -239,7 +239,8 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response->assertStatus(200);
         $response->assertJsonPath('data.limits.avatar_images.included', 1);
         $response->assertJsonPath('data.limits.avatar_images.remaining', 0);
-        $response->assertJsonPath('data.limits.avatar_images.used', 2);
+        $response->assertJsonPath('data.limits.avatar_images.used', 1);
+        $response->assertJsonPath('data.limits.avatar_images.total_used', 2);
     }
 
     public function test_annual_subscription_limits_are_reset_monthly_and_usage_is_period_scoped(): void
@@ -322,9 +323,9 @@ class SubscriptionLimitsControllerTest extends TestAPI
             'period_renews_at' => $subscription->renews_at,
             'profiles_remaining' => 0,
             'avatar_images_remaining' => 1,
-            'avatar_video_seconds_remaining' => 3,
+            'avatar_video_seconds_remaining' => 0,
             'voice_clones_remaining' => 1,
-            'tts_characters_remaining' => 9000,
+            'tts_characters_remaining' => 19000,
             'chat_messages_remaining' => 1000,
             'credits_remaining' => 950,
         ]);

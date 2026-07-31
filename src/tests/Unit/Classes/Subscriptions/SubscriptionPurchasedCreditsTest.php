@@ -116,6 +116,37 @@ class SubscriptionPurchasedCreditsTest extends TestCase
         $this->assertSame(0.75, $use->credits_used);
     }
 
+    public function test_avatar_generation_uses_credits_for_image_and_video_when_either_plan_limit_is_exhausted(): void
+    {
+        $user = User::factory()->create();
+        [, $limit] = $this->createConfiguredSubscription($user);
+        $limit->update([
+            'avatar_images_remaining' => 0,
+            'avatar_video_seconds_remaining' => 2,
+        ]);
+        $wallet = $this->fundWallet($user, 1000);
+
+        $use = app(SubscriptionUsageRecorder::class)->record(
+            userId: $user->id,
+            usageType: SubscriptionUsageType::AvatarGenerated,
+            amounts: ['avatar_images' => 1, 'avatar_video_seconds' => 2],
+            idempotencyKey: 'credits:avatar-bundle',
+        );
+
+        $this->assertSame(2, $limit->fresh()->avatar_video_seconds_remaining);
+        $this->assertSame(927500, $wallet->fresh()->available_units);
+        $this->assertSame([], $use->plan_covered);
+        $this->assertSame([
+            'avatar_images' => 1,
+            'avatar_video_seconds' => 2,
+        ], $use->credit_covered);
+        $this->assertSame(72500, $use->purchased_credit_units);
+        $this->assertSame([
+            'avatar_images' => 12500,
+            'avatar_video_seconds' => 60000,
+        ], $use->metadata['credit_cost_units']);
+    }
+
     public function test_all_extendable_limits_can_continue_with_the_configured_tariffs(): void
     {
         $user = User::factory()->create();

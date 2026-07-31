@@ -29,6 +29,16 @@ class UsageAnalyticsController extends Controller
         'incoming_audio_seconds',
     ];
 
+    private const CREDIT_SERVICE_BY_METRIC = [
+        'avatar_images' => 'avatar_image_created',
+        'avatar_video_seconds' => 'avatar_video_created',
+        'voice_clones' => 'voice_cloned',
+        'tts_characters' => 'voice_tts_characters',
+        'chat_messages' => 'chat_message_received',
+        'incoming_audio_messages' => 'incoming_audio_message',
+        'incoming_audio_seconds' => 'incoming_audio_message',
+    ];
+
     /**
      * @OA\Get(
      *     path="/api/usage",
@@ -237,15 +247,7 @@ class UsageAnalyticsController extends Controller
                 $bucketLedger = $ledgerByBucket->get($bucket, collect());
                 $finalizedUses = $bucketUses->where('status', SubscriptionUse::STATUS_FINALIZED);
                 $reservedUses = $bucketUses->where('status', SubscriptionUse::STATUS_RESERVED);
-                $services = $finalizedUses
-                    ->groupBy(fn (SubscriptionUse $use): string => $use->usage_type->value)
-                    ->map(fn (Collection $serviceUses): array => [
-                        'operations' => $serviceUses->count(),
-                        'purchased_credits' => CreditAmount::unitsToCredits(
-                            (int) $serviceUses->sum('purchased_credit_units')
-                        ),
-                    ])
-                    ->all();
+                $services = $this->creditServices($finalizedUses);
 
                 return [
                     'bucket' => $bucket,
@@ -267,6 +269,45 @@ class UsageAnalyticsController extends Controller
                 ];
             })
             ->values()
+            ->all();
+    }
+
+    /**
+     * Split bundled operations, such as avatar image plus video, into the
+     * services shown by analytics while preserving the original tariff.
+     *
+     * @param  Collection<int, SubscriptionUse>  $uses
+     * @return array<string, array{operations: int, purchased_credits: float|int}>
+     */
+    private function creditServices(Collection $uses): array
+    {
+        $services = [];
+        $rates = (array) config('subscriptions.credit_store.rates_in_units', []);
+
+        foreach ($uses as $use) {
+            $metadataCosts = (array) (($use->metadata ?? [])['credit_cost_units'] ?? []);
+
+            foreach ((array) $use->credit_covered as $metric => $amount) {
+                $service = self::CREDIT_SERVICE_BY_METRIC[$metric] ?? null;
+
+                if (! $service) {
+                    continue;
+                }
+
+                $units = array_key_exists($metric, $metadataCosts)
+                    ? max(0, (int) $metadataCosts[$metric])
+                    : max(0, (int) $amount) * max(0, (int) ($rates[$metric] ?? 0));
+                $services[$service] ??= ['use_ids' => [], 'units' => 0];
+                $services[$service]['use_ids'][(int) $use->id] = true;
+                $services[$service]['units'] += $units;
+            }
+        }
+
+        return collect($services)
+            ->map(fn (array $service): array => [
+                'operations' => count($service['use_ids']),
+                'purchased_credits' => CreditAmount::unitsToCredits((int) $service['units']),
+            ])
             ->all();
     }
 

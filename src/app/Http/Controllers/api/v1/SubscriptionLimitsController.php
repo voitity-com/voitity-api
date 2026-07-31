@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\Subscription\SubscriptionLimitsResponse;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,6 +97,7 @@ class SubscriptionLimitsController extends Controller
             }
 
             $limit = $limitPeriods->syncCurrentPeriod($subscription);
+            $limit->loadMissing('usagePeriod');
             $subscription->setRelation('limit', $limit);
             $usageBreakdown = $this->usageBreakdown($subscription, $limit);
 
@@ -151,7 +153,7 @@ class SubscriptionLimitsController extends Controller
             ->selectRaw('SUM(incoming_audio_messages_used) as incoming_audio_messages_used')
             ->selectRaw('SUM(incoming_audio_seconds_used) as incoming_audio_seconds_used')
             ->selectRaw('MAX(used_at) as last_used_at')
-            ->where('status', '!=', \App\Models\SubscriptionUse::STATUS_RELEASED)
+            ->where('status', '!=', SubscriptionUse::STATUS_RELEASED)
             ->where('used_at', '>=', $limit->period_started_at)
             ->where('used_at', '<', $limit->period_renews_at)
             ->groupBy('usage_type')

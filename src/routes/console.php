@@ -4,6 +4,7 @@ use App\Classes\PaymentService\PaymentOperationsMonitor;
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
+use App\Classes\Subscriptions\SubscriptionUsageAccountingRepairService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\UsdCopRateService\UsdCopRateService;
 use App\Jobs\Payments\RecordPaymentQueueHeartbeat;
@@ -103,6 +104,22 @@ Artisan::command('subscriptions:release-stale-usage-reservations', function (Sub
 
     return Command::SUCCESS;
 })->purpose('Release provider usage reservations left pending after an interrupted process');
+
+Artisan::command('subscriptions:repair-usage-accounting {--user_id=}', function (
+    SubscriptionUsageAccountingRepairService $repair
+): int {
+    $userId = $this->option('user_id');
+    $summary = $repair->repair($userId !== null && $userId !== '' ? (int) $userId : null);
+
+    $this->info(sprintf(
+        'Usage accounting repaired. Audio: %d. Avatars: %d. Limits rebuilt: %d.',
+        $summary['audio_uses_repaired'],
+        $summary['avatar_generations_repaired'],
+        $summary['limits_rebuilt'],
+    ));
+
+    return Command::SUCCESS;
+})->purpose('Repair legacy audio durations and atomic avatar credit accounting');
 
 Artisan::command('subscriptions:bill-recurring', function (UsdCopRateService $usdCopRateService): int {
     $usdCopRateService->syncConfig();

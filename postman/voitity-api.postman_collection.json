@@ -1318,7 +1318,7 @@
                 "limits"
               ]
             },
-            "description": "Gets the active subscription, current monthly period, remaining included limits, purchased-credit wallet, and finalized/reserved usage grouped by usage_type. Released reservations are excluded. Requires subscription-limits:read."
+            "description": "Gets the active subscription, current monthly period, remaining included limits, purchased-credit wallet, and finalized/reserved usage grouped by usage_type. Each limit exposes plan-period used, total_used across plan and purchased credits, remaining, and included. Duration metrics are seconds. Released reservations are excluded. Requires subscription-limits:read."
           },
           "response": []
         },
@@ -2339,6 +2339,9 @@
                   "  pm.expect(json.data).to.have.keys('range', 'wallet', 'summary', 'periods', 'series');",
                   "  pm.expect(json.data.summary).to.have.keys('plan_used', 'credit_covered', 'credits');",
                   "  pm.expect(json.data.range.timezone).to.eql(pm.collectionVariables.get('usage_timezone'));",
+                  "  const serviceCredits = json.data.series.reduce((total, bucket) => total + Object.values(bucket.services || {}).reduce((subtotal, service) => subtotal + service.purchased_credits, 0), 0);",
+                  "  const consumedCredits = json.data.series.reduce((total, bucket) => total + bucket.credits.consumed, 0);",
+                  "  pm.expect(serviceCredits).to.be.closeTo(consumedCredits, 0.001);",
                   "});"
                 ]
               }

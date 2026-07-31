@@ -37,7 +37,7 @@ class SubscriptionLimitPeriodServiceTest extends TestCase
         $this->assertTrue($limit->period_renews_at->isSameDay(Carbon::parse('2026-02-15')));
         $this->assertSame(1, $limit->profiles_remaining);
         $this->assertSame(1, $limit->avatar_images_remaining);
-        $this->assertSame(5, $limit->avatar_video_seconds_remaining);
+        $this->assertSame(2, $limit->avatar_video_seconds_remaining);
         $this->assertSame(1, $limit->voice_clones_remaining);
         $this->assertSame(20000, $limit->tts_characters_remaining);
         $this->assertSame(1000, $limit->chat_messages_remaining);

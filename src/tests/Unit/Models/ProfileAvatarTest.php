@@ -24,6 +24,7 @@ class ProfileAvatarTest extends TestCase
             'profile_id',
             'aiimage_id',
             'ai_video_id',
+            'video_duration_seconds',
             'file',
             'status',
             'deleted_at',
@@ -60,10 +61,12 @@ class ProfileAvatarTest extends TestCase
             'aiimage_id' => $aiImage->id,
             'ai_video_id' => $aiVideo->id,
             'file' => $aiVideo->file,
+            'video_duration_seconds' => 2,
         ]);
         $avatar->refresh();
 
         $this->assertSame('active', $avatar->status);
+        $this->assertSame(2, $avatar->video_duration_seconds);
         $this->assertTrue($avatar->user->is($user));
         $this->assertTrue($avatar->profile->is($profile));
         $this->assertTrue($avatar->aiImage->is($aiImage));

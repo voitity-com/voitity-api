@@ -6,6 +6,7 @@ return [
     'usage_reservation_ttl_minutes' => (int) env('SUBSCRIPTION_USAGE_RESERVATION_TTL_MINUTES', 60),
     'message_rate_limit_per_minute' => (int) env('SUBSCRIPTION_MESSAGE_RATE_LIMIT_PER_MINUTE', 20),
     'audio_message_max_duration_seconds' => (int) env('SUBSCRIPTION_AUDIO_MESSAGE_MAX_DURATION_SECONDS', 30),
+    'audio_message_duration_tolerance_seconds' => (float) env('SUBSCRIPTION_AUDIO_MESSAGE_DURATION_TOLERANCE_SECONDS', 0.5),
     'audio_message_max_size_kb' => (int) env('SUBSCRIPTION_AUDIO_MESSAGE_MAX_SIZE_KB', 10240),
     'payment_retry_hours' => [6, 24, 72],
     'credit_store' => [
@@ -36,7 +37,7 @@ return [
         'limits' => [
             'profiles' => 1,
             'avatar_images' => 1,
-            'avatar_video_seconds' => 5,
+            'avatar_video_seconds' => (int) env('RUNWAY_DEFAULT_DURATION', 2),
             'voice_clones' => 1,
             'tts_characters' => 2000,
             'chat_messages' => 100,
@@ -60,7 +61,7 @@ return [
             'limits' => [
                 'profiles' => 1,
                 'avatar_images' => 1,
-                'avatar_video_seconds' => 5,
+                'avatar_video_seconds' => (int) env('RUNWAY_DEFAULT_DURATION', 2),
                 'voice_clones' => 1,
                 'tts_characters' => 20000,
                 'chat_messages' => 1000,
@@ -91,11 +92,11 @@ return [
                 'avatar_video_seconds' => [
                     'provider' => 'Runway',
                     'service' => 'gen4.5',
-                    'unit' => 'Video de 5 segundos',
-                    'volume' => 5,
+                    'unit' => 'Video de 2 segundos',
+                    'volume' => 2,
                     'base' => '12 creditos por segundo',
-                    'calculated_base' => 60,
-                    'cost_usd' => 0.60,
+                    'calculated_base' => 24,
+                    'cost_usd' => 0.24,
                     'notes' => 'Duracion editable desde videoai.default_duration.',
                 ],
                 'voice_clones' => [
@@ -139,7 +140,7 @@ return [
                     'notes' => 'Escenario maximo: 500 audios x 30 segundos = 250 minutos.',
                 ],
             ],
-            'estimated_total_cost_usd' => 4.83,
+            'estimated_total_cost_usd' => 4.47,
         ],
         'starter_annual' => [
             'name' => 'Starter',
@@ -154,7 +155,7 @@ return [
             'limits' => [
                 'profiles' => 1,
                 'avatar_images' => 1,
-                'avatar_video_seconds' => 5,
+                'avatar_video_seconds' => (int) env('RUNWAY_DEFAULT_DURATION', 2),
                 'voice_clones' => 1,
                 'tts_characters' => 20000,
                 'chat_messages' => 1000,
@@ -171,7 +172,7 @@ return [
                     'onlyfans' => ['selected_media' => 10],
                 ],
             ],
-            'estimated_total_cost_usd' => 57.96,
+            'estimated_total_cost_usd' => 53.64,
         ],
         'admin' => [
             'name' => 'Admin',

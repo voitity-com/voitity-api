@@ -21,7 +21,7 @@ Both Starter plans have the same capacity per monthly usage period:
 | --- | ---: |
 | Published profiles | 1 |
 | Avatar images | 1 |
-| Avatar video | 5 seconds |
+| Avatar video | 2 seconds |
 | Authorized voice clones | 1 |
 | Visitor messages, text or audio | 1,000 |
 | Incoming audio messages | 500 |
@@ -84,8 +84,8 @@ included audio seconds cannot cover the request, purchased credits cover the
 complete transcription duration. The visitor message metric is allocated
 independently.
 
-A new five-second avatar generated after the included allowance costs 162.5
-credits: 12.5 for the image plus 150 for the video. Re-cloning a voice after the
+A new two-second avatar generated after the included allowance costs 72.5
+credits: 12.5 for the image plus 60 for the video. Re-cloning a voice after the
 included clone costs 100 credits.
 
 ### Forty Percent Provider-Cost Target
@@ -131,7 +131,14 @@ Every eligible operation follows the same invariant:
 Purchased credits are never used while the corresponding included metric can
 cover the operation. Exhausting chat does not cause TTS to use credits, and
 exhausting TTS does not cause chat to use credits. Each metric renews and spends
-independently.
+independently, except provider operations explicitly modeled as atomic bundles.
+
+Avatar image and animation are one atomic bundle. The current duration comes
+from `RUNWAY_DEFAULT_DURATION`, is persisted on `profile_avatars` and
+`aivideos`, and is sent unchanged to Runway. If either the image or video plan
+allowance cannot cover the complete generation, purchased credits fund both
+components. Analytics still displays the image and video credit costs
+separately.
 
 The profile count remains a hard plan limit. Credits cannot activate a second
 profile on Starter.
@@ -203,12 +210,22 @@ blocked.
 ### Incoming Audio
 
 1. Validate the 10 MB upload limit.
-2. Read real duration with getID3.
-3. Reject unknown duration or audio over 30 seconds.
+2. Read a preflight duration with getID3.
+3. Reject unknown duration or audio already known to exceed 30 seconds.
 4. Reserve chat, audio-message count, and audio seconds atomically.
 5. Call transcription.
-6. Finalize after the provider attempt.
-7. Release only if failure happened before provider consumption.
+6. Reconcile the reservation with the provider-reported duration, rounded up
+   to a whole second. This duration is authoritative for WebM recordings because
+   browser containers can report an inaccurate duration.
+7. Allow up to 0.5 seconds of encoder padding at the 30-second boundary and
+   reject a provider-confirmed duration above that tolerance.
+8. Finalize after the message is stored, or after a failed provider attempt.
+9. Release only if failure happened before provider consumption or if the
+   provider confirms that the recording exceeds the duration limit.
+
+Usage metadata preserves the preflight and transcription durations plus the
+selected duration source. Successful reservations are linked to the stored
+question message so production usage can be audited against message data.
 
 `ProfileMessagingCapabilitiesService` disables the microphone if plan capacity
 and wallet cannot cover at least one second of audio. It returns the affordable
@@ -221,8 +238,11 @@ TTS reserves the exact Unicode character count before ElevenLabs is called.
 When the plan and wallet cannot cover TTS, the generated answer remains text
 and no audio provider request starts.
 
-Avatar image and video operations reserve before Runway. Provider failures
-release reservations; successful generations finalize them.
+Avatar generation reserves one image plus the persisted video duration before
+Runway. The reservation remains pending across both queued provider operations.
+Image or video failure releases the complete bundle; successful video storage
+finalizes it. With the current two-second duration, a credit-funded generation
+reserves and consumes exactly 72.5 credits.
 
 Voice cloning creates a unique reservation per `VoiceProviderRequest`. A
 successful queued clone finalizes that reservation. A failed job releases it.
@@ -252,6 +272,12 @@ reversals, period snapshots, and per-service series. It remains available after
 subscription expiration so users can inspect history and the dormant wallet
 balance.
 
+`GET /api/subscription/limits` reports plan-period usage as included capacity
+minus remaining capacity. Raw operation totals, including work funded by
+purchased credits, remain available under `usage.totals` and as `total_used` on
+each limit. Duration metrics are seconds; the admin renders an explicit `s`
+unit so audio-message count and incoming-audio duration cannot be confused.
+
 ## Reservation Recovery
 
 Usage states are:
@@ -270,6 +296,18 @@ php artisan subscriptions:release-stale-usage-reservations
 every ten minutes. Reservations older than 60 minutes are released by default.
 Change the threshold with
 `SUBSCRIPTION_USAGE_RESERVATION_TTL_MINUTES`.
+
+After deploying the duration and atomic-avatar accounting migration, run the
+idempotent repair once:
+
+```sh
+php artisan subscriptions:repair-usage-accounting
+```
+
+Use `--user_id=<id>` to scope an audit or repair. It rebuilds old incoming-audio
+seconds from stored transcription duration, consolidates split avatar rows when
+image credits and plan video were mixed, and recalculates current remaining
+limits from the period snapshot and non-released usage.
 
 ## Runtime Requirements
 

@@ -209,6 +209,7 @@ class MessageController extends Controller
         $audioUsageKey = null;
         $audioUsageFinalized = false;
         $transcriptionAttempted = false;
+        $audioUsageMetadata = [];
 
         try {
             $payload = $request->validated();
@@ -239,7 +240,7 @@ class MessageController extends Controller
             }
 
             try {
-                $durationSeconds = $audioInspector->durationSeconds($audio);
+                $inspectedDurationSeconds = $audioInspector->durationSeconds($audio);
             } catch (\Throwable $exception) {
                 Log::warning('Incoming audio rejected because its duration could not be determined.', [
                     'error' => $exception->getMessage(),
@@ -259,9 +260,10 @@ class MessageController extends Controller
 
             $maxDuration = max(1, (int) config('subscriptions.audio_message_max_duration_seconds', 30));
 
-            if ($durationSeconds > $maxDuration) {
+            if ($inspectedDurationSeconds > $maxDuration) {
                 Log::notice('Incoming audio rejected because it exceeds the duration limit.', [
-                    'duration_seconds' => $durationSeconds,
+                    'duration_seconds' => $inspectedDurationSeconds,
+                    'duration_source' => 'container',
                     'max_duration_seconds' => $maxDuration,
                     'profile_id' => $profile->id,
                 ]);
@@ -284,12 +286,14 @@ class MessageController extends Controller
                     amounts: [
                         'chat_messages' => 1,
                         'incoming_audio_messages' => 1,
-                        'incoming_audio_seconds' => $durationSeconds,
+                        'incoming_audio_seconds' => $inspectedDurationSeconds,
                     ],
                     idempotencyKey: $audioUsageKey,
                     profileId: $profile->id,
                     metadata: [
-                        'duration_seconds' => $durationSeconds,
+                        'duration_seconds' => $inspectedDurationSeconds,
+                        'duration_source' => 'container',
+                        'inspected_duration_seconds' => $inspectedDurationSeconds,
                         'mime_type' => $audio->getMimeType(),
                         'size' => $audio->getSize(),
                     ],
@@ -298,16 +302,81 @@ class MessageController extends Controller
 
             $transcriptionAttempted = true;
             $transcription = $transcriptionService->transcribe($audio);
+            $transcriptionDurationSeconds = $this->transcriptionDuration($transcription);
+            $durationSeconds = $this->authoritativeAudioDurationSeconds(
+                $transcription,
+                $inspectedDurationSeconds,
+                $maxDuration,
+            );
+            $audioUsageMetadata = [
+                'duration_seconds' => $durationSeconds,
+                'duration_source' => $transcriptionDurationSeconds !== null
+                    ? 'transcription'
+                    : 'container',
+                'inspected_duration_seconds' => $inspectedDurationSeconds,
+                'transcription_duration_seconds' => $transcriptionDurationSeconds,
+                'transcription_source' => $transcription->source,
+                'transcription_status' => $transcription->status,
+            ];
 
-            if ($audioUsageKey) {
-                $usage->finalize($audioUsageKey, [
-                    'transcription_source' => $transcription->source,
-                    'transcription_status' => $transcription->status,
+            if ($durationSeconds > $maxDuration) {
+                if ($audioUsageKey) {
+                    $usage->release($audioUsageKey);
+                }
+
+                Log::notice('Incoming audio rejected after transcription confirmed it exceeds the duration limit.', [
+                    'inspected_duration_seconds' => $inspectedDurationSeconds,
+                    'max_duration_seconds' => $maxDuration,
+                    'profile_id' => $profile->id,
+                    'transcription_duration_seconds' => $transcription->duration,
                 ]);
-                $audioUsageFinalized = true;
+
+                return response()->json([
+                    'message' => "Audio messages can be up to {$maxDuration} seconds.",
+                    'code' => 'AUDIO_DURATION_EXCEEDED',
+                    'errors' => ['audio' => ["Audio messages can be up to {$maxDuration} seconds."]],
+                    'data' => [
+                        'messaging_capabilities' => $capabilities->forProfile($profile),
+                    ],
+                ], 422);
+            }
+
+            if (
+                $audioUsageKey
+                && $profile->user_id
+                && $durationSeconds !== $inspectedDurationSeconds
+            ) {
+                $usage->replaceReservation(
+                    userId: $profile->user_id,
+                    usageType: SubscriptionUsageType::IncomingAudioMessage,
+                    amounts: [
+                        'chat_messages' => 1,
+                        'incoming_audio_messages' => 1,
+                        'incoming_audio_seconds' => $durationSeconds,
+                    ],
+                    idempotencyKey: $audioUsageKey,
+                    profileId: $profile->id,
+                    metadata: array_merge($audioUsageMetadata, [
+                        'mime_type' => $audio->getMimeType(),
+                        'size' => $audio->getSize(),
+                    ]),
+                );
+
+                Log::info('Incoming audio usage reconciled with transcription duration.', [
+                    'idempotency_key' => $audioUsageKey,
+                    'inspected_duration_seconds' => $inspectedDurationSeconds,
+                    'profile_id' => $profile->id,
+                    'recorded_duration_seconds' => $durationSeconds,
+                    'transcription_duration_seconds' => $transcription->duration,
+                ]);
             }
 
             if ($transcription->isFailed()) {
+                if ($audioUsageKey) {
+                    $usage->finalize($audioUsageKey, $audioUsageMetadata);
+                    $audioUsageFinalized = true;
+                }
+
                 return response()->json([
                     'message' => 'Audio transcription failed.',
                     'code' => 'AUDIO_TRANSCRIPTION_FAILED',
@@ -320,6 +389,11 @@ class MessageController extends Controller
             $text = trim($transcription->text);
 
             if ($text === '') {
+                if ($audioUsageKey) {
+                    $usage->finalize($audioUsageKey, $audioUsageMetadata);
+                    $audioUsageFinalized = true;
+                }
+
                 return response()->json([
                     'message' => 'Audio transcription did not produce text.',
                     'code' => 'AUDIO_TRANSCRIPTION_EMPTY',
@@ -345,18 +419,23 @@ class MessageController extends Controller
                 usage: $usage,
                 capabilities: $capabilities,
                 usageReservationKey: $audioUsageKey,
+                usageFinalizationMetadata: $audioUsageMetadata,
                 publicRequest: $publicRequest,
                 chatSessionToken: $request->header('X-Bigmelo-Chat-Token'),
             );
         } catch (SubscriptionEntitlementException $e) {
+            if ($audioUsageKey && ! $audioUsageFinalized) {
+                $usage->release($audioUsageKey);
+            }
+
             return $this->entitlementErrorResponse($e, $profile, $capabilities);
         } catch (\Throwable $e) {
             if ($audioUsageKey && ! $audioUsageFinalized) {
                 if ($transcriptionAttempted) {
-                    $usage->finalize($audioUsageKey, [
+                    $usage->finalize($audioUsageKey, array_merge($audioUsageMetadata, [
                         'transcription_status' => 'exception',
                         'error' => $e->getMessage(),
-                    ]);
+                    ]));
                 } else {
                     $usage->release($audioUsageKey);
                 }
@@ -403,6 +482,7 @@ class MessageController extends Controller
         bool $includeRequestMetadata = false,
         array $requestData = [],
         ?string $usageReservationKey = null,
+        array $usageFinalizationMetadata = [],
         bool $publicRequest = false,
         ?string $chatSessionToken = null,
     ): JsonResponse {
@@ -463,7 +543,7 @@ class MessageController extends Controller
             if ($usageReservationKey) {
                 $usage->finalize(
                     $usageReservationKey,
-                    ['message_id' => $message->id],
+                    array_merge($usageFinalizationMetadata, ['message_id' => $message->id]),
                     Message::class,
                     (string) $message->id,
                 );
@@ -653,6 +733,43 @@ class MessageController extends Controller
         }
 
         return Storage::disk($diskName)->url($path);
+    }
+
+    private function authoritativeAudioDurationSeconds(
+        ChatAITextFromAudio $transcription,
+        int $inspectedDurationSeconds,
+        int $maxDurationSeconds,
+    ): int {
+        $transcriptionDurationSeconds = $this->transcriptionDuration($transcription);
+
+        if ($transcriptionDurationSeconds === null) {
+            return $inspectedDurationSeconds;
+        }
+
+        $roundedDurationSeconds = (int) ceil($transcriptionDurationSeconds);
+        $toleranceSeconds = max(
+            0.0,
+            (float) config('subscriptions.audio_message_duration_tolerance_seconds', 0.5)
+        );
+
+        if ($transcriptionDurationSeconds <= $maxDurationSeconds + $toleranceSeconds) {
+            return min($maxDurationSeconds, $roundedDurationSeconds);
+        }
+
+        return $roundedDurationSeconds;
+    }
+
+    private function transcriptionDuration(ChatAITextFromAudio $transcription): ?float
+    {
+        $duration = $transcription->duration;
+
+        if (! is_float($duration) && ! is_int($duration)) {
+            return null;
+        }
+
+        $duration = (float) $duration;
+
+        return is_finite($duration) && $duration > 0 ? $duration : null;
     }
 
     private function transcriptionPayload(ChatAITextFromAudio $transcription): array

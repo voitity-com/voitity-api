@@ -57,6 +57,7 @@ class SubscriptionUsageFundingService
         }
 
         $this->applyIncomingAudioBundlePolicy($usageType, $amounts, $limit, $planCovered, $creditCovered);
+        $this->applyAvatarGenerationBundlePolicy($usageType, $amounts, $limit, $planCovered, $creditCovered);
 
         $creditUnits = 0;
         $errors = [];
@@ -125,6 +126,46 @@ class SubscriptionUsageFundingService
 
         if ($secondsAmount > 0) {
             $creditCovered['incoming_audio_seconds'] = $secondsAmount;
+        }
+    }
+
+    /**
+     * An avatar image and its animation are one provider operation. The plan
+     * must cover both metrics; otherwise purchased credits fund both.
+     *
+     * @param  array<string, int>  $amounts
+     * @param  array<string, int>  $planCovered
+     * @param  array<string, int>  $creditCovered
+     */
+    private function applyAvatarGenerationBundlePolicy(
+        SubscriptionUsageType $usageType,
+        array $amounts,
+        SubscriptionLimit $limit,
+        array &$planCovered,
+        array &$creditCovered,
+    ): void {
+        if ($usageType !== SubscriptionUsageType::AvatarGenerated) {
+            return;
+        }
+
+        $imageAmount = max(0, (int) ($amounts['avatar_images'] ?? 0));
+        $secondsAmount = max(0, (int) ($amounts['avatar_video_seconds'] ?? 0));
+
+        if (
+            (int) $limit->avatar_images_remaining >= $imageAmount
+            && (int) $limit->avatar_video_seconds_remaining >= $secondsAmount
+        ) {
+            return;
+        }
+
+        unset($planCovered['avatar_images'], $planCovered['avatar_video_seconds']);
+
+        if ($imageAmount > 0) {
+            $creditCovered['avatar_images'] = $imageAmount;
+        }
+
+        if ($secondsAmount > 0) {
+            $creditCovered['avatar_video_seconds'] = $secondsAmount;
         }
     }
 }

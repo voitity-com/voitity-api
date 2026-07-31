@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Listeners\AI\Videos;
 
+use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\AiVideo as AiVideoResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
@@ -84,6 +85,11 @@ class GetAIVideoForAvatarTest extends TestCase
         ]);
 
         [$aiImage, $aiVideo] = $this->aiImageAndVideo();
+        $subscription = $this->createActiveSubscriptionFor($aiVideo->user()->firstOrFail());
+        $subscription->limit()->update([
+            'avatar_images_remaining' => 1,
+            'avatar_video_seconds_remaining' => 2,
+        ]);
         $existingAiImage = AiImage::create([
             'user_id' => $aiImage->user_id,
             'profile_id' => $aiImage->profile_id,
@@ -105,9 +111,15 @@ class GetAIVideoForAvatarTest extends TestCase
             'profile_id' => $aiVideo->profile_id,
             'aiimage_id' => $aiImage->id,
             'ai_video_id' => null,
+            'video_duration_seconds' => 2,
             'file' => null,
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
+        app(AvatarGenerationUsageService::class)->reserve(
+            $aiVideo->user()->firstOrFail(),
+            $aiVideo->profile()->firstOrFail(),
+            $processingAvatar,
+        );
 
         $service = Mockery::mock(VideoAIService::class);
         $service->shouldReceive('getVideo')
@@ -132,6 +144,12 @@ class GetAIVideoForAvatarTest extends TestCase
         $this->assertSame($aiVideo->id, $processingAvatar->ai_video_id);
         $this->assertSame($aiVideo->file, $processingAvatar->file);
         $this->assertSame(ProfileAvatar::STATUS_ACTIVE, $processingAvatar->status);
+        $this->assertDatabaseHas('subscription_uses', [
+            'idempotency_key' => "avatar-generation:profile-avatar:{$processingAvatar->id}",
+            'status' => SubscriptionUse::STATUS_FINALIZED,
+            'avatar_images_used' => 1,
+            'avatar_video_seconds_used' => 2,
+        ]);
     }
 
     #[Test]
@@ -147,29 +165,19 @@ class GetAIVideoForAvatarTest extends TestCase
             'user_id' => $user->id,
             'profile_id' => $profile->id,
             'aiimage_id' => $aiImage->id,
+            'video_duration_seconds' => 2,
             'status' => ProfileAvatar::STATUS_PROCESSING,
         ]);
         SubscriptionUse::create([
             'subscription_id' => $subscription->id,
             'user_id' => $user->id,
             'profile_id' => $profile->id,
-            'usage_type' => SubscriptionUsageType::AvatarImageCreated,
+            'usage_type' => SubscriptionUsageType::AvatarGenerated,
             'source_type' => ProfileAvatar::class,
             'source_id' => (string) $avatar->id,
-            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
+            'idempotency_key' => "avatar-generation:profile-avatar:{$avatar->id}",
             'avatar_images_used' => 1,
-            'metadata' => ['reservation' => 'avatar_generation'],
-            'used_at' => now(),
-        ]);
-        SubscriptionUse::create([
-            'subscription_id' => $subscription->id,
-            'user_id' => $user->id,
-            'profile_id' => $profile->id,
-            'usage_type' => SubscriptionUsageType::AvatarVideoCreated,
-            'source_type' => ProfileAvatar::class,
-            'source_id' => (string) $avatar->id,
-            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
-            'avatar_video_seconds_used' => 5,
+            'avatar_video_seconds_used' => 2,
             'metadata' => ['reservation' => 'avatar_generation'],
             'used_at' => now(),
         ]);
@@ -201,13 +209,9 @@ class GetAIVideoForAvatarTest extends TestCase
         $this->assertSame('SAFETY.OUTPUT.VIDEO', $avatar->failure_code);
         $this->assertSame('Video generation failed moderation.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
-        $this->assertSame(5, (int) $limit->avatar_video_seconds_remaining);
+        $this->assertSame(2, (int) $limit->avatar_video_seconds_remaining);
         $this->assertDatabaseHas('subscription_uses', [
-            'idempotency_key' => "avatar-image:profile-avatar:{$avatar->id}",
-            'status' => SubscriptionUse::STATUS_RELEASED,
-        ]);
-        $this->assertDatabaseHas('subscription_uses', [
-            'idempotency_key' => "avatar-video:profile-avatar:{$avatar->id}",
+            'idempotency_key' => "avatar-generation:profile-avatar:{$avatar->id}",
             'status' => SubscriptionUse::STATUS_RELEASED,
         ]);
         $notification = AppNotification::where('user_id', $user->id)

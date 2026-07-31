@@ -5,6 +5,7 @@ namespace App\Enums;
 enum SubscriptionUsageType: string
 {
     case ProfileCreated = 'profile_created';
+    case AvatarGenerated = 'avatar_generated';
     case AvatarImageCreated = 'avatar_image_created';
     case AvatarVideoCreated = 'avatar_video_created';
     case VoiceCloned = 'voice_cloned';
