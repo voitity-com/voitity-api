@@ -5,6 +5,7 @@ return [
     'folder' => trim((string) env('PRODUCTS_IMAGE_FOLDER', 'products'), '/'),
     'visibility' => env('PRODUCTS_IMAGE_VISIBILITY', 'public'),
     'max_products' => (int) env('PRODUCTS_MAX_PER_PROFILE', 15),
+    'recommendation_guidance_max_length' => (int) env('PRODUCTS_RECOMMENDATION_GUIDANCE_MAX_LENGTH', 1500),
     'max_image_size_mb' => (int) env('PRODUCTS_MAX_IMAGE_SIZE_MB', 10),
     'message_description_limit' => (int) env('PRODUCTS_MESSAGE_DESCRIPTION_LIMIT', 120),
     'csv_max_size_kb' => (int) env('PRODUCTS_CSV_MAX_SIZE_KB', 5120),

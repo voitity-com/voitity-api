@@ -205,6 +205,7 @@ class OpenAIClientTest extends TestCase
         $profile = Profile::factory()->for($user)->create([
             'locale' => 'es',
             'products_enabled' => true,
+            'product_recommendation_guidance' => 'Si habla de fútbol, ofrece ayudarle a elegir un balón.',
         ]);
         $service = app(ProfileProductService::class);
         $published = $service->create($profile, $user, [
@@ -251,7 +252,13 @@ class OpenAIClientTest extends TestCase
                 && str_contains($prompt, 'product answers may use up to 400 characters')
                 && str_contains($prompt, 'attach every directly compared product')
                 && str_contains($prompt, 'Do not invent ingredients, prices, discounts')
-                && str_contains($prompt, 'implied benefits such as improving performance, recovery');
+                && str_contains($prompt, 'implied benefits such as improving performance, recovery')
+                && str_contains($prompt, 'Profile-specific product recommendation guidance')
+                && str_contains($prompt, 'Si habla de fútbol, ofrece ayudarle a elegir un balón.')
+                && str_contains($prompt, 'routing only, not product facts')
+                && str_contains($prompt, 'keep product_action as "none"')
+                && str_contains($prompt, 'accepts that offer or explicitly requests a recommendation')
+                && str_contains($prompt, 'Direct product mentions and explicit product requests keep the existing');
         });
     }
 

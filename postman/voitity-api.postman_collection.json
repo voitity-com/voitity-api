@@ -4657,7 +4657,8 @@
                     "exec": [
                       "pm.test('Product recommendations are enabled', function () { pm.response.to.have.status(200); });",
                       "const data = pm.response.json().data;",
-                      "pm.expect(data.products_enabled).to.eql(true);"
+                      "pm.expect(data.products_enabled).to.eql(true);",
+                      "pm.expect(data.recommendation_guidance).to.eql('If the visitor mentions football or soccer, offer to help choose a ball.');"
                     ]
                   }
                 }
@@ -4676,7 +4677,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"enabled\": true\n}"
+                  "raw": "{\n  \"enabled\": true,\n  \"recommendation_guidance\": \"If the visitor mentions football or soccer, offer to help choose a ball.\"\n}"
                 },
                 "url": {
                   "raw": "{{base_url}}/api/profile/{{profile_id}}/products/settings",
@@ -4691,7 +4692,7 @@
                     "settings"
                   ]
                 },
-                "description": "Allows published products to be supplied to ServiceAI and attached organically to relevant profile conversations."
+                "description": "Allows published products to be supplied to ServiceAI and attached organically to relevant profile conversations. Optional recommendation_guidance is profile-level routing text, limited to 1,500 characters. It can help offer products for indirect needs but is not treated as factual product data."
               },
               "response": []
             },

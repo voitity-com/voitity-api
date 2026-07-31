@@ -56,4 +56,17 @@ class SubscriptionPlanCapabilityServiceTest extends TestCase
         $this->assertSame(0, $service->productsPerProfile($profile));
         $this->assertSame(0, $service->selectedMediaPerProfile($profile, 'tiktok'));
     }
+
+    public function test_product_capacity_never_exceeds_the_application_catalog_limit(): void
+    {
+        config([
+            'products.max_products' => 15,
+            'subscriptions.plans.admin.capabilities.products_per_profile' => 2147483647,
+        ]);
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        $this->createConfiguredSubscription($user, SubscriptionPlan::Admin);
+
+        $this->assertSame(15, app(SubscriptionPlanCapabilityService::class)->productsPerProfile($profile));
+    }
 }

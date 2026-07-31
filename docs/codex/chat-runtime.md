@@ -27,9 +27,13 @@ Important files:
 - `src/app/Classes/Subscriptions/ProfileMessagingCapabilitiesService.php`
 - `src/app/Classes/ChatAIService/ChatAIClient.php`
 - `src/app/Classes/ChatAIService/OpenAI/OpenAIClient.php`
+- `src/app/Services/Products/ProfileProductPromptService.php`
 - `src/app/Models/Profile.php`
 - `src/app/Models/Chat.php`
 - `src/app/Models/Message.php`
+
+Product catalog and profile-specific recommendation behavior are documented in
+[`../products-and-recommendations.md`](../products-and-recommendations.md).
 
 ## Current Prompt Caveat
 
