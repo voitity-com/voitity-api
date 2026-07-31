@@ -305,9 +305,11 @@ php artisan subscriptions:repair-usage-accounting
 ```
 
 Use `--user_id=<id>` to scope an audit or repair. It rebuilds old incoming-audio
-seconds from stored transcription duration, consolidates split avatar rows when
-image credits and plan video were mixed, and recalculates current remaining
-limits from the period snapshot and non-released usage.
+seconds from stored transcription duration, including legacy rows that lack a
+message source by correlating an unclaimed audio question from the same profile
+within a two-minute window. It also consolidates split avatar rows when image
+credits and plan video were mixed, and recalculates current remaining limits
+from the period snapshot and non-released usage.
 
 ## Runtime Requirements
 

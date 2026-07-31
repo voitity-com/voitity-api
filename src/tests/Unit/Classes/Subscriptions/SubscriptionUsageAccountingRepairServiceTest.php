@@ -103,6 +103,7 @@ class SubscriptionUsageAccountingRepairServiceTest extends TestCase
             'data' => [
                 'request' => [
                     'transcription' => ['duration' => 29.9999997],
+                    'audio_url' => 'https://example.test/audio.webm',
                 ],
             ],
         ]);
@@ -116,8 +117,6 @@ class SubscriptionUsageAccountingRepairServiceTest extends TestCase
             ],
             'repair:incoming-audio',
             $profile->id,
-            Message::class,
-            (string) $message->id,
         );
 
         $first = app(SubscriptionUsageAccountingRepairService::class)->repair($user->id);
@@ -130,6 +129,8 @@ class SubscriptionUsageAccountingRepairServiceTest extends TestCase
         $this->assertDatabaseHas('subscription_uses', [
             'idempotency_key' => 'repair:incoming-audio',
             'incoming_audio_seconds_used' => 30,
+            'source_type' => Message::class,
+            'source_id' => (string) $message->id,
             'status' => SubscriptionUse::STATUS_FINALIZED,
         ]);
         $this->assertDatabaseHas('subscription_uses', [

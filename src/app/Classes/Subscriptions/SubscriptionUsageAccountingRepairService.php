@@ -51,6 +51,7 @@ class SubscriptionUsageAccountingRepairService
     private function repairIncomingAudioSeconds(?int $userId): int
     {
         $repaired = 0;
+        $claimedMessageIds = $this->claimedAudioMessageIds($userId);
 
         SubscriptionUse::query()
             ->where('usage_type', SubscriptionUsageType::IncomingAudioMessage)
@@ -58,20 +59,35 @@ class SubscriptionUsageAccountingRepairService
             ->when($userId, fn ($query) => $query->where('user_id', $userId))
             ->orderBy('id')
             ->get()
-            ->each(function (SubscriptionUse $use) use (&$repaired): void {
-                $seconds = $this->authoritativeAudioSeconds($use);
+            ->each(function (SubscriptionUse $use) use (&$claimedMessageIds, &$repaired): void {
+                $message = $this->audioMessageForUse($use, $claimedMessageIds);
+                $seconds = $this->authoritativeAudioSeconds($use, $message);
+                $needsMessageLink = $message
+                    && ($use->source_type !== Message::class || (int) $use->source_id !== (int) $message->id);
 
-                if ($seconds === null || $seconds === (int) $use->incoming_audio_seconds_used) {
+                if ($message) {
+                    $claimedMessageIds[(int) $message->id] = true;
+                }
+
+                if (
+                    $seconds === null
+                    || ($seconds === (int) $use->incoming_audio_seconds_used && ! $needsMessageLink)
+                ) {
                     return;
                 }
 
                 $originalUsedAt = $use->used_at?->copy();
                 $originalFinalizedAt = $use->finalized_at?->copy();
+                $transcriptionDuration = $message ? $this->messageTranscriptionDuration($message) : null;
                 $metadata = array_replace($use->metadata ?? [], [
                     'accounting_repaired_at' => now()->toJSON(),
                     'duration_seconds' => $seconds,
                     'duration_source' => 'stored_transcription',
+                    'message_id' => $message?->id ?? ($use->metadata ?? [])['message_id'] ?? null,
                     'previous_duration_seconds' => (int) $use->incoming_audio_seconds_used,
+                    'transcription_duration_seconds' => $transcriptionDuration
+                        ?? ($use->metadata ?? [])['transcription_duration_seconds']
+                        ?? null,
                 ]);
 
                 $this->recorder->release((string) $use->idempotency_key);
@@ -85,8 +101,8 @@ class SubscriptionUsageAccountingRepairService
                     ],
                     idempotencyKey: (string) $use->idempotency_key,
                     profileId: $use->profile_id ? (int) $use->profile_id : null,
-                    sourceType: $use->source_type,
-                    sourceId: $use->source_id,
+                    sourceType: $message ? Message::class : $use->source_type,
+                    sourceId: $message ? (string) $message->id : $use->source_id,
                     metadata: $metadata,
                 );
 
@@ -183,18 +199,65 @@ class SubscriptionUsageAccountingRepairService
         return $rebuilt;
     }
 
-    private function authoritativeAudioSeconds(SubscriptionUse $use): ?int
+    /** @param array<int, true> $claimedMessageIds */
+    private function audioMessageForUse(SubscriptionUse $use, array $claimedMessageIds): ?Message
     {
-        $metadataDuration = ($use->metadata ?? [])['transcription_duration_seconds'] ?? null;
-        $duration = is_numeric($metadataDuration) ? (float) $metadataDuration : null;
         $messageId = $use->source_type === Message::class ? $use->source_id : null;
         $messageId ??= ($use->metadata ?? [])['message_id'] ?? null;
 
-        if ($duration === null && $messageId) {
-            $message = Message::find($messageId);
-            $storedDuration = $message?->data['request']['transcription']['duration'] ?? null;
-            $duration = is_numeric($storedDuration) ? (float) $storedDuration : null;
+        if ($messageId) {
+            return Message::find($messageId);
         }
+
+        if (! $use->profile_id || ! $use->used_at) {
+            return null;
+        }
+
+        return Message::query()
+            ->where('profile_id', $use->profile_id)
+            ->where('type', 'question')
+            ->whereBetween('created_at', [
+                $use->used_at->copy()->subSeconds(10),
+                $use->used_at->copy()->addMinutes(2),
+            ])
+            ->when(
+                $claimedMessageIds !== [],
+                fn ($query) => $query->whereNotIn('id', array_keys($claimedMessageIds))
+            )
+            ->get()
+            ->filter(fn (Message $message): bool => $this->messageTranscriptionDuration($message) !== null
+                && filled($message->data['request']['audio_url'] ?? null))
+            ->sortBy(fn (Message $message): int => abs($message->created_at->diffInSeconds($use->used_at, false)))
+            ->first();
+    }
+
+    /** @return array<int, true> */
+    private function claimedAudioMessageIds(?int $userId): array
+    {
+        $claimed = [];
+
+        SubscriptionUse::query()
+            ->where('usage_type', SubscriptionUsageType::IncomingAudioMessage)
+            ->where('status', '!=', SubscriptionUse::STATUS_RELEASED)
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->get(['source_type', 'source_id', 'metadata'])
+            ->each(function (SubscriptionUse $use) use (&$claimed): void {
+                $messageId = $use->source_type === Message::class ? $use->source_id : null;
+                $messageId ??= ($use->metadata ?? [])['message_id'] ?? null;
+
+                if ($messageId) {
+                    $claimed[(int) $messageId] = true;
+                }
+            });
+
+        return $claimed;
+    }
+
+    private function authoritativeAudioSeconds(SubscriptionUse $use, ?Message $message): ?int
+    {
+        $metadataDuration = ($use->metadata ?? [])['transcription_duration_seconds'] ?? null;
+        $duration = is_numeric($metadataDuration) ? (float) $metadataDuration : null;
+        $duration ??= $message ? $this->messageTranscriptionDuration($message) : null;
 
         if ($duration === null || ! is_finite($duration) || $duration <= 0) {
             return null;
@@ -205,5 +268,18 @@ class SubscriptionUsageAccountingRepairService
         $rounded = (int) ceil($duration);
 
         return $duration <= $max + $tolerance ? min($max, $rounded) : $rounded;
+    }
+
+    private function messageTranscriptionDuration(Message $message): ?float
+    {
+        $duration = $message->data['request']['transcription']['duration'] ?? null;
+
+        if (! is_numeric($duration)) {
+            return null;
+        }
+
+        $duration = (float) $duration;
+
+        return is_finite($duration) && $duration > 0 ? $duration : null;
     }
 }
