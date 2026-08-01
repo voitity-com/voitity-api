@@ -2272,6 +2272,274 @@
                 ]
             }
         },
+        "/api/profile/{profile}/insights": {
+            "get": {
+                "tags": [
+                    "Profile Insights"
+                ],
+                "summary": "Get the profile insights dashboard",
+                "description": "Backward-compatible Dashboard endpoint.",
+                "operationId": "3d0d7675adb787d15981db5ce3d05ef6",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "group_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "day",
+                                "month"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "America/Bogota"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dashboard retrieved successfully"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Invalid range"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "insights:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/profile/{profile}/insights/dashboard": {
+            "get": {
+                "tags": [
+                    "Profile Insights"
+                ],
+                "summary": "Get dashboard KPIs, trends, providers and classification coverage",
+                "operationId": "ea426173c2af9b07f974271770e80c07",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "group_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "day",
+                                "month"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dashboard retrieved successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "insights:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/profile/{profile}/insights/chats": {
+            "get": {
+                "tags": [
+                    "Profile Insights"
+                ],
+                "summary": "Get conversation goals, quality and downstream actions",
+                "operationId": "04e9cf06f62a5805d86f6b6115632283",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "group_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "day",
+                                "month"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chat insights retrieved successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "insights:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/profile/{profile}/insights/products": {
+            "get": {
+                "tags": [
+                    "Profile Insights"
+                ],
+                "summary": "Get active and historical product performance",
+                "operationId": "6f63bca4297234d1da7d54907433aa3f",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "group_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "day",
+                                "month"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Product insights retrieved successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": [
+                            "insights:read"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/profile/{profile}/messaging-capabilities": {
             "get": {
                 "tags": [
@@ -2344,6 +2612,90 @@
                         ]
                     }
                 ]
+            }
+        },
+        "/api/public/profiles/{profile}/interactions": {
+            "post": {
+                "tags": [
+                    "Profile Insights"
+                ],
+                "summary": "Record an allowlisted public profile interaction",
+                "operationId": "f8f5bad9e410544dbccf5b1f282d462b",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "event_id",
+                                    "visitor_id",
+                                    "event_type",
+                                    "surface"
+                                ],
+                                "properties": {
+                                    "event_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "visitor_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "event_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "profile_viewed",
+                                            "product_clicked",
+                                            "media_opened",
+                                            "media_external_clicked",
+                                            "social_link_clicked"
+                                        ]
+                                    },
+                                    "chat_id": {
+                                        "type": "integer",
+                                        "nullable": true
+                                    },
+                                    "subject_id": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "provider": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "surface": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Interaction recorded"
+                    },
+                    "200": {
+                        "description": "Duplicate interaction accepted without recounting"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Invalid event or subject"
+                    }
+                }
             }
         },
         "/api/subscription/billing-state": {
@@ -3312,6 +3664,10 @@
         {
             "name": "Profile",
             "description": "Profile"
+        },
+        {
+            "name": "Profile Insights",
+            "description": "Profile Insights"
         },
         {
             "name": "Subscriptions",

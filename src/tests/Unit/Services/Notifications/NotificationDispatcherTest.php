@@ -19,7 +19,7 @@ class NotificationDispatcherTest extends TestCase
 
         $user = User::factory()->create(['locale' => 'en']);
 
-        $notification = app(NotificationDispatcher::class)->send($user, 'payment_approved', [
+        $notification = app(NotificationDispatcher::class)->send($user, 'failed_payment', [
             'plan' => 'starter',
             'amount' => 'USD 9.00',
         ]);
@@ -28,12 +28,12 @@ class NotificationDispatcherTest extends TestCase
         $this->assertDatabaseHas('app_notifications', [
             'id' => $notification->id,
             'user_id' => $user->id,
-            'notification_key' => 'payment_approved',
+            'notification_key' => 'failed_payment',
             'category' => 'billing',
         ]);
         Mail::assertSent(PlatformNotificationMail::class, function (PlatformNotificationMail $mail) use ($user): bool {
             return $mail->hasTo($user->email)
-                && $mail->message->subject === 'Your Bigmelo payment was approved';
+                && $mail->message->subject === 'Your Bigmelo payment failed';
         });
     }
 
@@ -64,7 +64,7 @@ class NotificationDispatcherTest extends TestCase
             ->with($user->email)
             ->andThrow(new RuntimeException('SMTP rate limited'));
 
-        $notification = app(NotificationDispatcher::class)->send($user, 'payment_approved', [
+        $notification = app(NotificationDispatcher::class)->send($user, 'failed_payment', [
             'plan' => 'starter',
             'amount' => 'USD 9.00',
         ]);
@@ -73,9 +73,27 @@ class NotificationDispatcherTest extends TestCase
         $this->assertDatabaseHas('app_notifications', [
             'id' => $notification->id,
             'user_id' => $user->id,
-            'notification_key' => 'payment_approved',
+            'notification_key' => 'failed_payment',
         ]);
         Log::shouldHaveReceived('warning')->once();
+    }
+
+    public function test_non_failure_non_renewal_billing_event_is_email_only(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create(['locale' => 'en']);
+
+        $notification = app(NotificationDispatcher::class)->send($user, 'payment_approved', [
+            'plan' => 'starter',
+            'amount' => 'USD 9.00',
+        ]);
+
+        $this->assertNull($notification);
+        $this->assertDatabaseMissing('app_notifications', [
+            'user_id' => $user->id,
+            'notification_key' => 'payment_approved',
+        ]);
+        Mail::assertSent(PlatformNotificationMail::class);
     }
 
     public function test_notification_action_urls_point_to_admin_url(): void

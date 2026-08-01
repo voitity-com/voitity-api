@@ -68,44 +68,80 @@ class PublicProfileMessageControllerTest extends TestAPI
         $this->assertDatabaseCount('chats', 1);
     }
 
-    public function test_existing_public_chat_rejects_missing_or_tampered_session_token(): void
+    public function test_message_after_thirty_minutes_starts_new_chat_and_closes_previous_one(): void
+    {
+        config(['insights.chat_inactivity_minutes' => 30]);
+        $profile = $this->publicProfileWithSubscription();
+        $client = Mockery::mock(ChatAIClient::class);
+        $client->shouldReceive('getAnswer')->twice()->andReturn(
+            new ChatAIAnswer('openai', 'First answer', 'success'),
+            new ChatAIAnswer('openai', 'New chat answer', 'success'),
+        );
+        $this->instance(ChatAIClient::class, $client);
+        $first = $this->postJson("/api/public/profiles/{$profile->id}/messages", ['message' => 'First question']);
+        $chatId = (int) $first->json('data.chat_id');
+        $token = (string) $first->json('data.chat_token');
+        Chat::query()->whereKey($chatId)->update(['last_activity_at' => now()->subMinutes(31)]);
+
+        $second = $this->withHeader('X-Bigmelo-Chat-Token', $token)->postJson(
+            "/api/public/profiles/{$profile->id}/messages",
+            ['message' => 'Question after inactivity', 'chat_id' => $chatId],
+        );
+
+        $second->assertOk();
+        $this->assertNotSame($chatId, (int) $second->json('data.chat_id'));
+        $this->assertSame('closed', Chat::findOrFail($chatId)->status->value);
+        $this->assertDatabaseCount('chats', 2);
+    }
+
+    public function test_missing_or_tampered_token_starts_a_new_chat_without_continuing_target_chat(): void
     {
         $profile = $this->publicProfileWithSubscription();
         $chat = Chat::create(['profile_id' => $profile->id]);
         $token = app(PublicChatSession::class)->issue($profile, $chat);
+        $client = Mockery::mock(ChatAIClient::class);
+        $client->shouldReceive('getAnswer')->twice()->andReturn(
+            new ChatAIAnswer('openai', 'Fresh answer one', 'success'),
+            new ChatAIAnswer('openai', 'Fresh answer two', 'success'),
+        );
+        $this->instance(ChatAIClient::class, $client);
 
-        $this->postJson(
+        $missingTokenResponse = $this->postJson(
             "/api/public/profiles/{$profile->id}/messages",
             ['message' => 'Missing token', 'chat_id' => $chat->id],
-        )->assertNotFound()
-            ->assertJsonPath('code', 'CHAT_SESSION_INVALID');
+        )->assertOk();
 
-        $this->withHeader('X-Bigmelo-Chat-Token', $token.'tampered')
+        $tamperedTokenResponse = $this->withHeader('X-Bigmelo-Chat-Token', $token.'tampered')
             ->postJson(
                 "/api/public/profiles/{$profile->id}/messages",
                 ['message' => 'Tampered token', 'chat_id' => $chat->id],
             )
-            ->assertNotFound()
-            ->assertJsonPath('code', 'CHAT_SESSION_INVALID');
+            ->assertOk();
 
-        $this->assertDatabaseCount('messages', 0);
-        $this->assertDatabaseCount('subscription_uses', 0);
+        $this->assertNotSame($chat->id, (int) $missingTokenResponse->json('data.chat_id'));
+        $this->assertNotSame($chat->id, (int) $tamperedTokenResponse->json('data.chat_id'));
+        $this->assertSame(0, $chat->messages()->count());
     }
 
-    public function test_chat_session_token_can_not_be_used_for_another_profile(): void
+    public function test_chat_session_token_for_another_profile_starts_a_new_chat_on_target_profile(): void
     {
         $profile = $this->publicProfileWithSubscription();
         $otherProfile = $this->publicProfileWithSubscription();
         $chat = Chat::create(['profile_id' => $otherProfile->id]);
         $token = app(PublicChatSession::class)->issue($otherProfile, $chat);
+        $client = Mockery::mock(ChatAIClient::class);
+        $client->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer('openai', 'Safe fresh answer', 'success'));
+        $this->instance(ChatAIClient::class, $client);
 
-        $this->withHeader('X-Bigmelo-Chat-Token', $token)
+        $response = $this->withHeader('X-Bigmelo-Chat-Token', $token)
             ->postJson(
                 "/api/public/profiles/{$profile->id}/messages",
                 ['message' => 'Cross-profile attempt', 'chat_id' => $chat->id],
             )
-            ->assertNotFound()
-            ->assertJsonPath('code', 'CHAT_SESSION_INVALID');
+            ->assertOk();
+
+        $this->assertNotSame($chat->id, (int) $response->json('data.chat_id'));
+        $this->assertSame($profile->id, Chat::findOrFail((int) $response->json('data.chat_id'))->profile_id);
     }
 
     public function test_visitor_can_not_message_non_public_profile(): void

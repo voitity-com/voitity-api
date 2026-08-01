@@ -131,4 +131,14 @@ class Profile extends Model
     {
         return $this->hasMany(SubscriptionUse::class);
     }
+
+    public function interactionEvents(): HasMany
+    {
+        return $this->hasMany(ProfileInteractionEvent::class);
+    }
+
+    public function chatAnalyses(): HasMany
+    {
+        return $this->hasMany(ChatAnalysis::class);
+    }
 }

@@ -9,9 +9,11 @@ use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileConversationMessage;
 use App\Models\ProfileIntegration;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Insights\ProfileInteractionRecorder;
 use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Products\ProfileProductPromptService;
@@ -182,7 +184,7 @@ class AnswerBuilder
             if ($mediaPayload === [] && $productPayload === []) {
                 $fallback = $this->conversationMessages()->resolvedMessage(
                     $profile,
-                    \App\Models\ProfileConversationMessage::TYPE_FALLBACK_NO_ANSWER
+                    ProfileConversationMessage::TYPE_FALLBACK_NO_ANSWER
                 );
                 $answerText = (string) $fallback['text'];
                 $source = 'profile_conversation_message';
@@ -227,6 +229,10 @@ class AnswerBuilder
                 'products' => $productPayload,
             ],
         ]);
+
+        $interactionRecorder = app(ProfileInteractionRecorder::class);
+        $interactionRecorder->recordShownMedia($profile, $answerMessage, $mediaPayload);
+        $interactionRecorder->recordShownProducts($profile, $answerMessage, $productPayload);
 
         return new AnswerResponse($answerMessage, $chatAIAnswer, $audioPayload, $mediaPayload, $productPayload);
     }

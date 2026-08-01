@@ -1,13 +1,25 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\ChatAIServiceProvider;
+use App\Providers\ConversationInsightsServiceProvider;
+use App\Providers\EventServiceProvider;
+use App\Providers\PaymentServiceProvider;
+use App\Providers\ProfileKnowledgeAIServiceProvider;
+use App\Providers\UsdCopRateServiceProvider;
+use App\Providers\VideoAIServiceProvider;
+use App\Providers\VoiceSampleServiceProvider;
+use App\Providers\VoiceServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\EventServiceProvider::class,
-    App\Providers\ChatAIServiceProvider::class,
-    App\Providers\ProfileKnowledgeAIServiceProvider::class,
-    App\Providers\VoiceSampleServiceProvider::class,
-    App\Providers\VoiceServiceProvider::class,
-    App\Providers\VideoAIServiceProvider::class,
-    App\Providers\UsdCopRateServiceProvider::class,
-    App\Providers\PaymentServiceProvider::class,
+    AppServiceProvider::class,
+    EventServiceProvider::class,
+    ChatAIServiceProvider::class,
+    ConversationInsightsServiceProvider::class,
+    ProfileKnowledgeAIServiceProvider::class,
+    VoiceSampleServiceProvider::class,
+    VoiceServiceProvider::class,
+    VideoAIServiceProvider::class,
+    UsdCopRateServiceProvider::class,
+    PaymentServiceProvider::class,
 ];

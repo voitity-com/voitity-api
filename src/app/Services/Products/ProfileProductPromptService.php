@@ -90,6 +90,7 @@ class ProfileProductPromptService
             'description' => $product->description,
             'image_url' => $this->images->imageUrl($product),
             'destination_type' => $product->destination_type->value,
+            'status' => $product->status->value,
             'public_url' => $this->links->publicUrl($product),
             'action_url' => $this->links->actionUrl($product),
         ];
