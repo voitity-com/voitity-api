@@ -17,12 +17,14 @@ use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
 use App\Http\Controllers\api\v1\ProfileConversationMessageController;
 use App\Http\Controllers\api\v1\ProfileFeatureController;
+use App\Http\Controllers\api\v1\ProfileInsightsController;
 use App\Http\Controllers\api\v1\ProfileIntegrationController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
 use App\Http\Controllers\api\v1\PublicProfileController;
+use App\Http\Controllers\api\v1\PublicProfileInteractionController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
@@ -62,6 +64,9 @@ Route::prefix('/public')->group(function () {
     Route::post('/profiles/{profile}/messages', [MessageController::class, 'publicStore'])
         ->whereNumber('profile')
         ->middleware('throttle:profile-messages');
+    Route::post('/profiles/{profile}/interactions', [PublicProfileInteractionController::class, 'store'])
+        ->whereNumber('profile')
+        ->middleware('throttle:profile-interactions');
 });
 
 Route::get('/test', [TestController::class, 'index'])->middleware(['auth:sanctum', 'abilities:test:test']);
@@ -154,6 +159,10 @@ Route::prefix('/profile')->group(function () {
     Route::get('/{profile}/facts', [ProfileKnowledgeController::class, 'facts'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/facts/{fact}', [ProfileKnowledgeController::class, 'updateFact'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/quality', [ProfileKnowledgeController::class, 'quality'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::get('/{profile}/insights', [ProfileInsightsController::class, 'show'])->middleware(['auth:sanctum', 'abilities:insights:read']);
+    Route::get('/{profile}/insights/dashboard', [ProfileInsightsController::class, 'dashboard'])->middleware(['auth:sanctum', 'abilities:insights:read']);
+    Route::get('/{profile}/insights/chats', [ProfileInsightsController::class, 'chats'])->middleware(['auth:sanctum', 'abilities:insights:read']);
+    Route::get('/{profile}/insights/products', [ProfileInsightsController::class, 'products'])->middleware(['auth:sanctum', 'abilities:insights:read']);
     Route::post('/{profile}/activate', [ProfileController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/deactivate', [ProfileController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);

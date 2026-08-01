@@ -1626,10 +1626,10 @@
                   "pm.test('returns payment recovery and sanitized default method state', function () {",
                   "  pm.expect(pm.response.code).to.eql(200);",
                   "  pm.expect(json.data.payment_recovery).to.be.an('object');",
-              "  if (json.data.payment_method) {",
-              "    pm.expect(json.data.payment_method).to.not.have.property('provider_source_id');",
-              "    pm.expect(json.data.payment_method).to.have.property('requires_attention');",
-              "    pm.expect(json.data.payment_method).to.have.property('last_failure');",
+                  "  if (json.data.payment_method) {",
+                  "    pm.expect(json.data.payment_method).to.not.have.property('provider_source_id');",
+                  "    pm.expect(json.data.payment_method).to.have.property('requires_attention');",
+                  "    pm.expect(json.data.payment_method).to.have.property('last_failure');",
                   "  }",
                   "});"
                 ]
@@ -1655,7 +1655,7 @@
                 "billing-state"
               ]
             },
-        "description": "Returns the latest active or payment-failed recurring subscription, payment recovery schedule, sanitized default payment method including requires_attention and last_failure, and last payment order. can_retry_now is false until a rejected default method is replaced. Requires payments:read."
+            "description": "Returns the latest active or payment-failed recurring subscription, payment recovery schedule, sanitized default payment method including requires_attention and last_failure, and last payment order. can_retry_now is false until a rejected default method is replaced. Requires payments:read."
           },
           "response": []
         },
@@ -1701,7 +1701,7 @@
                 "retry"
               ]
             },
-        "description": "Immediately retries a past-due subscription with the current chargeable default method. A method marked requires_attention cannot be used manually; add or select another default first. A pending payment for the same billing cycle blocks another charge even after the default method changes. Requires payments:create."
+            "description": "Immediately retries a past-due subscription with the current chargeable default method. A method marked requires_attention cannot be used manually; add or select another default first. A pending payment for the same billing cycle blocks another charge even after the default method changes. Requires payments:create."
           },
           "response": []
         }
@@ -2085,11 +2085,11 @@
                   "if (selected) { pm.collectionVariables.set(\"payment_method_id\", String(selected.id)); }",
                   "pm.test('payment methods are sanitized', function () {",
                   "  pm.expect(pm.response.code).to.eql(200);",
-              "  methods.forEach((method) => {",
-              "    pm.expect(method).to.not.have.property(\"provider_source_id\");",
-              "    pm.expect(method).to.not.have.property(\"metadata\");",
-              "    pm.expect(method).to.have.property(\"requires_attention\");",
-              "    pm.expect(method).to.have.property(\"last_failure\");",
+                  "  methods.forEach((method) => {",
+                  "    pm.expect(method).to.not.have.property(\"provider_source_id\");",
+                  "    pm.expect(method).to.not.have.property(\"metadata\");",
+                  "    pm.expect(method).to.have.property(\"requires_attention\");",
+                  "    pm.expect(method).to.have.property(\"last_failure\");",
                   "  });",
                   "});"
                 ]
@@ -2114,7 +2114,7 @@
                 "payment-methods"
               ]
             },
-        "description": "Lists enabled payment methods for the authenticated user with brand, last four digits, expiration, chargeability, default status, requires_attention, and sanitized last_failure. Provider identifiers and internal metadata are excluded. Requires payments:read."
+            "description": "Lists enabled payment methods for the authenticated user with brand, last four digits, expiration, chargeability, default status, requires_attention, and sanitized last_failure. Provider identifiers and internal metadata are excluded. Requires payments:read."
           },
           "response": []
         },
@@ -2155,7 +2155,7 @@
                 "default"
               ]
             },
-        "description": "Makes an owned, enabled, reusable, non-expired method without a rejection attention flag the account default and synchronizes active or payment-recovery recurring subscriptions. Manual renewals and credit purchases use this default method. Requires payments:create."
+            "description": "Makes an owned, enabled, reusable, non-expired method without a rejection attention flag the account default and synchronizes active or payment-recovery recurring subscriptions. Manual renewals and credit purchases use this default method. Requires payments:create."
           },
           "response": []
         },
@@ -2335,7 +2335,7 @@
                 "purchases"
               ]
             },
-        "description": "Creates a one-time Wompi charge against the selected reusable payment method for an active paid subscription. Set payment_method_id from List Payment Methods; omit payment_source_id to use the chargeable account default. Selecting a secondary method for this purchase does not change the renewal default. Minimum 1,000, maximum 100,000, in steps of 1,000. A provider decline returns CREDIT_PAYMENT_DECLINED and marks only the attempted method as requiring attention. Pending and provider-error outcomes grant no credits and do not reject the method. Do not reuse an idempotency key with a different amount or payment method. Requires payments:create."
+            "description": "Creates a one-time Wompi charge against the selected reusable payment method for an active paid subscription. Set payment_method_id from List Payment Methods; omit payment_source_id to use the chargeable account default. Selecting a secondary method for this purchase does not change the renewal default. Minimum 1,000, maximum 100,000, in steps of 1,000. A provider decline returns CREDIT_PAYMENT_DECLINED and marks only the attempted method as requiring attention. Pending and provider-error outcomes grant no credits and do not reject the method. Do not reuse an idempotency key with a different amount or payment method. Requires payments:create."
           },
           "response": []
         },
@@ -2482,6 +2482,189 @@
               ]
             },
             "description": "Returns plan-covered use, purchased-credit use, monthly period snapshots, current wallet, and daily or monthly series. Date boundaries and buckets use the supplied IANA timezone. Maximum range: 24 months. Remains available without an active subscription. Requires subscription-limits:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile Insights",
+      "description": "Profile-scoped Dashboard, Chats, and Products reports. Metric definitions live in docs/INSIGHTS_METRICS.md and architecture/optimization guidance in docs/PROFILE_INSIGHTS.md.",
+      "item": [
+        {
+          "name": "Get Profile Insights Dashboard",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const to = new Date();",
+                  "const from = new Date(to);",
+                  "from.setMonth(from.getMonth() - 1);",
+                  "pm.variables.set(\"insights_to\", to.toISOString().slice(0, 10));",
+                  "pm.variables.set(\"insights_from\", from.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test(\"insights metrics are structurally reconciled\", function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data.summary).to.include.all.keys(\"new_chats\", \"total_messages\", \"unique_visitors\", \"product_clicks\", \"instagram_shown\", \"instagram_external_clicks\", \"tiktok_shown\", \"tiktok_external_clicks\", \"onlyfans_images_shown\", \"onlyfans_external_clicks\");",
+                  "  json.data.provider_funnel.forEach((row) => pm.expect(row.ctr).to.eql(row.shown ? Math.round((row.external_clicks / row.shown) * 10000) / 100 : 0));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/insights/dashboard?from={{insights_from}}&to={{insights_to}}&timezone={{insights_timezone}}&group_by=day",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "insights",
+                "dashboard"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{insights_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{insights_to}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "{{insights_timezone}}"
+                },
+                {
+                  "key": "group_by",
+                  "value": "day"
+                }
+              ]
+            },
+            "description": "Returns the V1 executive Dashboard using database-side aggregates. Requires insights:read and profile ownership (admin bypass supported). Defaults to the previous calendar month through today when dates are omitted."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile Insights Chats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('chat goals and quality are structurally reconciled', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data).to.have.keys('range', 'tracking_started_at', 'definitions_version', 'tabs', 'summary', 'goals', 'analysis_coverage', 'goal_trend', 'goal_actions');",
+                  "  pm.expect(json.data.summary.total_chats).to.eql(json.data.analysis_coverage.total_chats);",
+                  "  pm.expect(json.data.analysis_coverage.classified).to.eql(json.data.analysis_coverage.completed + json.data.analysis_coverage.needs_review);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/insights/chats?from={{insights_from}}&to={{insights_to}}&timezone={{insights_timezone}}&group_by=day",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "insights",
+                "chats"
+              ],
+              "query": [
+                { "key": "from", "value": "{{insights_from}}" },
+                { "key": "to", "value": "{{insights_to}}" },
+                { "key": "timezone", "value": "{{insights_timezone}}" },
+                { "key": "group_by", "value": "day" }
+              ]
+            },
+            "description": "Returns conversation volume, duration, message density, classification coverage, goal trend, confidence, and distinct chats with downstream actions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile Insights Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('product report preserves and reconciles history', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(json.data).to.have.keys('range', 'tracking_started_at', 'definitions_version', 'tabs', 'available', 'summary', 'products', 'series');",
+                  "  const shown = json.data.products.reduce((total, product) => total + product.shown, 0);",
+                  "  const clicks = json.data.products.reduce((total, product) => total + product.clicks, 0);",
+                  "  pm.expect(json.data.summary.shown).to.eql(shown);",
+                  "  pm.expect(json.data.summary.clicks).to.eql(clicks);",
+                  "  json.data.products.forEach((product) => pm.expect(product.ctr).to.eql(product.shown ? Math.round((product.clicks / product.shown) * 10000) / 100 : 0));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/insights/products?from={{insights_from}}&to={{insights_to}}&timezone={{insights_timezone}}&group_by=day",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "insights",
+                "products"
+              ],
+              "query": [
+                { "key": "from", "value": "{{insights_from}}" },
+                { "key": "to", "value": "{{insights_to}}" },
+                { "key": "timezone", "value": "{{insights_timezone}}" },
+                { "key": "group_by", "value": "day" }
+              ]
+            },
+            "description": "Returns shown cards, clicks, CTR, click surfaces, destinations, unique click visitors, associated goals, and deleted/unpublished product history."
           },
           "response": []
         }
@@ -2659,6 +2842,10 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Bigmelo-Visitor-Id",
+                "value": "{{anonymous_visitor_id}}"
               }
             ],
             "body": {
@@ -2716,6 +2903,10 @@
               {
                 "key": "X-Bigmelo-Chat-Token",
                 "value": "{{public_chat_token}}"
+              },
+              {
+                "key": "X-Bigmelo-Visitor-Id",
+                "value": "{{anonymous_visitor_id}}"
               }
             ],
             "body": {
@@ -2735,7 +2926,7 @@
                 "messages"
               ]
             },
-            "description": "Continues the chat created by the previous request. A missing, expired, tampered, or cross-profile token returns CHAT_SESSION_INVALID."
+            "description": "Continues an active chat. Missing, expired, tampered, cross-profile, closed, or inactive sessions are safely replaced with a new chat and the same message is processed."
           },
           "response": []
         },
@@ -2769,6 +2960,10 @@
               {
                 "key": "X-Bigmelo-Chat-Token",
                 "value": "{{public_chat_token}}"
+              },
+              {
+                "key": "X-Bigmelo-Visitor-Id",
+                "value": "{{anonymous_visitor_id}}"
               }
             ],
             "body": {
@@ -2801,6 +2996,158 @@
               ]
             },
             "description": "Sends an audio message of at most 30 seconds. Set public_audio_file_path to a local supported audio file."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Public Profile View",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000001\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"profile_viewed\",\n  \"surface\": \"profile_page\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent, allowlisted interaction. media_shown is server-owned and cannot be submitted by clients."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Public Product Click",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000002\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"product_clicked\",\n  \"chat_id\": \"{{public_chat_id}}\",\n  \"subject_id\": \"{{product_id}}\",\n  \"surface\": \"product_button\",\n  \"metadata\": {\n    \"destination_type\": \"external_url\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent, allowlisted interaction. media_shown is server-owned and cannot be submitted by clients."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Public Media Exit",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000003\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"media_external_clicked\",\n  \"chat_id\": \"{{public_chat_id}}\",\n  \"subject_id\": \"{{integration_media_id}}\",\n  \"provider\": \"instagram\",\n  \"media_type\": \"image\",\n  \"surface\": \"chat_media_card\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent, allowlisted interaction. media_shown is server-owned and cannot be submitted by clients."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Public Social Icon Click",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000004\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"social_link_clicked\",\n  \"provider\": \"instagram\",\n  \"surface\": \"profile_social_nav\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent, allowlisted interaction. media_shown is server-owned and cannot be submitted by clients."
           },
           "response": []
         }
@@ -6716,6 +7063,26 @@
     },
     {
       "key": "payment_source_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "anonymous_visitor_id",
+      "value": "20000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "insights_timezone",
+      "value": "America/Bogota",
+      "type": "string"
+    },
+    {
+      "key": "insights_from",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "insights_to",
       "value": "",
       "type": "string"
     }

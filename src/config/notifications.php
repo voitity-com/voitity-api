@@ -807,15 +807,6 @@ return [
                 'es' => ['title' => 'Nuevo chat recibido', 'body' => ':profile recibió un nuevo chat.'],
             ],
         ],
-        'new_visitor_message_received' => [
-            'email' => false,
-            'app' => true,
-            'category' => 'chat',
-            'copy' => [
-                'en' => ['title' => 'New visitor message', 'body' => ':profile received a new visitor message.'],
-                'es' => ['title' => 'Nuevo mensaje de visitante', 'body' => ':profile recibió un nuevo mensaje de visitante.'],
-            ],
-        ],
         'ai_response_failed' => [
             'email' => true,
             'app' => true,

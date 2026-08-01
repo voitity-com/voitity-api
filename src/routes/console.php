@@ -10,9 +10,12 @@ use App\Classes\UsdCopRateService\UsdCopRateService;
 use App\Jobs\Payments\RecordPaymentQueueHeartbeat;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
+use App\Models\Message;
 use App\Models\ProfileProduct;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Insights\ChatLifecycleService;
+use App\Services\Insights\ProfileInteractionRecorder;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Products\ProfileProductImageService;
 use Database\Seeders\LocalTestUserSeeder;
@@ -274,7 +277,42 @@ Artisan::command('payments:heartbeat', function (PaymentOperationsMonitor $monit
     return Command::SUCCESS;
 })->purpose('Record payment scheduler activity and verify the payment queue worker');
 
+Artisan::command('insights:close-inactive-chats', function (ChatLifecycleService $lifecycle): int {
+    $closed = $lifecycle->closeInactive();
+    $this->info("Inactive chats closed: {$closed}");
+
+    return Command::SUCCESS;
+})->purpose('Close inactive profile chats and queue conversation classification');
+
+Artisan::command('insights:backfill-media-shown {--profile_id=}', function (ProfileInteractionRecorder $recorder): int {
+    $profileId = $this->option('profile_id');
+    $recorded = 0;
+
+    Message::query()
+        ->with('profile')
+        ->where('type', 'answer')
+        ->when($profileId !== null && $profileId !== '', fn ($query) => $query->where('profile_id', (int) $profileId))
+        ->orderBy('id')
+        ->chunkById(100, function ($messages) use (&$recorded, $recorder): void {
+            foreach ($messages as $message) {
+                $media = is_array($message->data['media'] ?? null) ? $message->data['media'] : [];
+
+                if ($message->profile && $media !== []) {
+                    $before = $message->profile->interactionEvents()->where('idempotency_key', 'like', "answer:{$message->id}:media:%")->count();
+                    $recorder->recordShownMedia($message->profile, $message, $media);
+                    $after = $message->profile->interactionEvents()->where('idempotency_key', 'like', "answer:{$message->id}:media:%")->count();
+                    $recorded += max(0, $after - $before);
+                }
+            }
+        });
+
+    $this->info("Historical media-shown events created: {$recorded}");
+
+    return Command::SUCCESS;
+})->purpose('Backfill server-owned media shown events from persisted answer payloads');
+
 Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
+Schedule::command('insights:close-inactive-chats')->everyFiveMinutes()->withoutOverlapping(5)->onOneServer();
 Schedule::command('subscriptions:bill-recurring')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05')->withoutOverlapping(60)->onOneServer();

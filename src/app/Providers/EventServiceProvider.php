@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Events\ChatClosed;
 use App\Events\MessageStored;
 use App\Events\Subscriptions\SubscriptionUsageRequested;
 use App\Events\Voices\VoiceSampleAdded;
@@ -12,6 +13,7 @@ use App\Listeners\AI\Images\GetAIImageForAvatar;
 use App\Listeners\AI\Videos\CreateAiVideoForAvatar;
 use App\Listeners\AI\Videos\GetAIVideoForAvatar;
 use App\Listeners\ProcessStoredMessage;
+use App\Listeners\QueueConversationClassification;
 use App\Listeners\Subscriptions\RecordSubscriptionUsage;
 use App\Listeners\Subscriptions\TrackAvatarImageUsage;
 use App\Listeners\Subscriptions\TrackAvatarVideoUsage;
@@ -27,6 +29,9 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
+        ChatClosed::class => [
+            QueueConversationClassification::class,
+        ],
         MessageStored::class => [
             ProcessStoredMessage::class,
         ],

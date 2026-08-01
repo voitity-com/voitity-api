@@ -12,6 +12,13 @@ use Throwable;
 
 class NotificationDispatcher
 {
+    private const BILLING_APP_NOTIFICATION_KEYS = [
+        'failed_payment',
+        'successful_subscription_renewal',
+        'failed_subscription_renewal',
+        'subscription_renewal_reminder',
+    ];
+
     public function __construct(private readonly NotificationMessageFormatter $formatter) {}
 
     /**
@@ -29,7 +36,7 @@ class NotificationDispatcher
         $channels ??= $this->configuredChannels($config);
         $notification = null;
 
-        if (in_array('app', $channels, true) && (bool) ($config['app'] ?? false)) {
+        if (in_array('app', $channels, true) && $this->appNotificationEnabled($key, $config)) {
             $notification = $this->createAppNotification($user, $key, $config, $data);
         }
 
@@ -117,6 +124,22 @@ class NotificationDispatcher
             (bool) ($config['app'] ?? false) ? 'app' : null,
             (bool) ($config['email'] ?? false) ? 'email' : null,
         ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function appNotificationEnabled(string $key, array $config): bool
+    {
+        if (! (bool) ($config['app'] ?? false)) {
+            return false;
+        }
+
+        if (($config['category'] ?? null) !== 'billing') {
+            return true;
+        }
+
+        return in_array($key, self::BILLING_APP_NOTIFICATION_KEYS, true);
     }
 
     /**

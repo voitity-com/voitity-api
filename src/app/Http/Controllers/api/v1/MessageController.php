@@ -19,6 +19,8 @@ use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
+use App\Services\Insights\AnonymousVisitor;
+use App\Services\Insights\ChatLifecycleService;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +36,8 @@ class MessageController extends Controller
     public function __construct(
         private readonly PublicChatSession $publicChatSessions,
         private readonly PublicProfileAccess $publicProfiles,
+        private readonly ChatLifecycleService $chatLifecycle,
+        private readonly AnonymousVisitor $anonymousVisitors,
     ) {}
 
     /**
@@ -108,15 +112,26 @@ class MessageController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
+            $chatId = isset($payload['chat_id']) ? (int) $payload['chat_id'] : null;
+            $chatId = $this->continuableChatId(
+                $profile,
+                $chatId,
+                $publicRequest,
+                $request->header('X-Bigmelo-Chat-Token'),
+            );
+
             return $this->storeQuestionAndProcess(
                 profile: $profile,
                 actor: $user instanceof User ? $user : null,
                 text: $payload['message'],
-                chatId: isset($payload['chat_id']) ? (int) $payload['chat_id'] : null,
+                chatId: $chatId,
                 usage: $usage,
                 capabilities: $capabilities,
                 publicRequest: $publicRequest,
                 chatSessionToken: $request->header('X-Bigmelo-Chat-Token'),
+                visitorIdHash: $publicRequest
+                    ? $this->anonymousVisitors->hash($request->header('X-Bigmelo-Visitor-Id'))
+                    : null,
             );
         } catch (SubscriptionEntitlementException $e) {
             return $this->entitlementErrorResponse($e, $profile, $capabilities);
@@ -221,6 +236,12 @@ class MessageController extends Controller
             }
 
             $chatId = isset($payload['chat_id']) ? (int) $payload['chat_id'] : null;
+            $chatId = $this->continuableChatId(
+                $profile,
+                $chatId,
+                $publicRequest,
+                $request->header('X-Bigmelo-Chat-Token'),
+            );
             $targetError = $this->validateMessageTarget(
                 $user instanceof User ? $user : null,
                 $profile,
@@ -422,6 +443,9 @@ class MessageController extends Controller
                 usageFinalizationMetadata: $audioUsageMetadata,
                 publicRequest: $publicRequest,
                 chatSessionToken: $request->header('X-Bigmelo-Chat-Token'),
+                visitorIdHash: $publicRequest
+                    ? $this->anonymousVisitors->hash($request->header('X-Bigmelo-Visitor-Id'))
+                    : null,
             );
         } catch (SubscriptionEntitlementException $e) {
             if ($audioUsageKey && ! $audioUsageFinalized) {
@@ -485,6 +509,7 @@ class MessageController extends Controller
         array $usageFinalizationMetadata = [],
         bool $publicRequest = false,
         ?string $chatSessionToken = null,
+        ?string $visitorIdHash = null,
     ): JsonResponse {
         $targetError = $this->validateMessageTarget(
             $actor,
@@ -513,10 +538,7 @@ class MessageController extends Controller
         }
 
         try {
-            $isNewChat = $chatId === null;
-            $chat = $chatId
-                ? $profile->chats()->find($chatId)
-                : $profile->chats()->create();
+            [$chat, $isNewChat] = $this->chatLifecycle->resolve($profile, $chatId, $visitorIdHash);
 
             if (! $chat instanceof Chat) {
                 throw new RuntimeException('Unable to resolve chat for the provided profile.');
@@ -560,7 +582,7 @@ class MessageController extends Controller
             ? $this->publicChatSessions->issue($profile, $chat)
             : null;
 
-        $this->notifyMessageReceived($profile, $actor, $chat->id, $isNewChat);
+        $this->notifyMessageReceived($profile, $chat->id, $isNewChat);
 
         $event = new MessageStored($message);
         event($event);
@@ -719,6 +741,27 @@ class MessageController extends Controller
         return in_array($user->role, ['admin', 'api'], true) || (int) $profile->user_id === (int) $user->id;
     }
 
+    private function continuableChatId(Profile $profile, ?int $chatId, bool $publicRequest, ?string $token): ?int
+    {
+        if (! $publicRequest || $chatId === null) {
+            return $chatId;
+        }
+
+        $chatExists = $profile->chats()->whereKey($chatId)->exists();
+
+        if (! $chatExists || ! $this->publicChatSessions->isValid($token, $profile, $chatId)) {
+            Log::info('Public chat session was replaced with a new chat.', [
+                'profile_id' => $profile->id,
+                'requested_chat_id' => $chatId,
+                'reason' => $chatExists ? 'invalid_token' : 'chat_missing',
+            ]);
+
+            return null;
+        }
+
+        return $chatId;
+    }
+
     private function storeUploadedAudio(UploadedFile $audio, Profile $profile): string
     {
         $diskName = $this->audioMessageDisk();
@@ -809,7 +852,7 @@ class MessageController extends Controller
         return (string) config('chatai.audio_messages.visibility', 'public');
     }
 
-    private function notifyMessageReceived(Profile $profile, ?User $actor, int $chatId, bool $isNewChat): void
+    private function notifyMessageReceived(Profile $profile, int $chatId, bool $isNewChat): void
     {
         $profile->loadMissing('user');
 
@@ -829,13 +872,7 @@ class MessageController extends Controller
             $dispatcher->sendInApp($profile->user, 'new_chat_received', $data);
         }
 
-        if (
-            ! $actor instanceof User
-            || (int) $actor->id !== (int) $profile->user_id
-            || $actor->role === 'api'
-        ) {
-            $dispatcher->sendInApp($profile->user, 'new_visitor_message_received', $data);
-        }
+        // A new chat remains actionable; individual visitor messages intentionally do not create notifications.
     }
 
     private function isPublicRequest(StoreMessageRequest|StoreAudioMessageRequest $request): bool
