@@ -5,13 +5,41 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\PublicProfiles\PublicProfileAccess;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
+use App\Enums\ProfileStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Profile\PublicProfileResponse;
+use App\Http\Responses\Profile\PublicProfileSeoResponse;
 use App\Models\Profile;
+use App\Models\ProfileAvatar;
 use Illuminate\Http\JsonResponse;
 
 class PublicProfileController extends Controller
 {
+    public function seoIndex(): JsonResponse
+    {
+        $profiles = Profile::query()
+            ->where('active', true)
+            ->where('status', ProfileStatus::Published->value)
+            ->with([
+                'avatars' => fn ($query) => $query
+                    ->where('status', ProfileAvatar::STATUS_ACTIVE)
+                    ->with('aiImage')
+                    ->orderByDesc('updated_at'),
+            ])
+            ->orderBy('alias')
+            ->limit(50000)
+            ->get(['id', 'alias', 'name', 'locale', 'networks', 'updated_at'])
+            ->map(fn (Profile $profile): array => (new PublicProfileSeoResponse($profile))->toArray())
+            ->values();
+
+        return response()->json([
+            'message' => 'Public SEO profiles retrieved successfully.',
+            'data' => [
+                'profiles' => $profiles,
+            ],
+        ])->header('Cache-Control', 'public, max-age=300');
+    }
+
     public function show(
         string $alias,
         PublicProfileAccess $access,

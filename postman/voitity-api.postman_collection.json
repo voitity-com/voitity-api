@@ -2675,6 +2675,35 @@
       "description": "Anonymous profile-page endpoints. These requests deliberately use no authentication; continuing a chat requires the encrypted, chat-scoped token returned when the chat is created.",
       "item": [
         {
+          "name": "List Public SEO Profiles",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/seo/profiles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "seo",
+                "profiles"
+              ]
+            },
+            "description": "Returns the safe public identity projection used to generate profile HTML, structured data, and the sitemap. Only active, published profiles are included."
+          },
+          "response": []
+        },
+        {
           "name": "Get Public Profile By Alias",
           "event": [
             {

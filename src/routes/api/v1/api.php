@@ -48,6 +48,8 @@ Route::post('/contact-submissions', [ContactSubmissionController::class, 'store'
 Route::get('/subscription/public-plans', [SubscriptionPlansController::class, 'publicIndex']);
 
 Route::prefix('/public')->group(function () {
+    Route::get('/seo/profiles', [PublicProfileController::class, 'seoIndex'])
+        ->middleware('throttle:public-profile-reads');
     Route::get('/social-networks', [PublicProfileController::class, 'socialNetworks'])
         ->middleware('throttle:public-profile-reads');
     Route::get('/profiles/{alias}', [PublicProfileController::class, 'show'])
