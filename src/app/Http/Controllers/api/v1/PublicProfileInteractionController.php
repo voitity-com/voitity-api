@@ -33,6 +33,7 @@ class PublicProfileInteractionController extends Controller
      *         @OA\Property(property="chat_id", type="integer", nullable=true),
      *         @OA\Property(property="subject_id", type="string", nullable=true),
      *         @OA\Property(property="provider", type="string", nullable=true),
+     *         @OA\Property(property="destination_type", type="string", nullable=true, enum={"provider_video","provider_channel"}),
      *         @OA\Property(property="surface", type="string")
      *     )),
      *
@@ -85,6 +86,7 @@ class PublicProfileInteractionController extends Controller
             'provider' => $recorder->provider($data['provider'] ?? null),
             'surface' => $data['surface'] ?? null,
             'media_type' => $data['media_type'] ?? null,
+            'destination_type' => $data['destination_type'] ?? null,
             'occurred_at' => now(),
             'metadata' => $product instanceof ProfileProduct
                 ? ['destination_type' => $product->destination_type->value]

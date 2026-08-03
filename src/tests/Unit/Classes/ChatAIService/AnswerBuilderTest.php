@@ -28,6 +28,7 @@ use App\Services\Products\ProfileProductService;
 use Illuminate\Support\Facades\Event;
 use Mockery;
 use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AnswerBuilderTest extends TestCase
@@ -2273,6 +2274,177 @@ class AnswerBuilderTest extends TestCase
         $this->assertStringEndsWith('...', $response['text']);
     }
 
+    public function test_get_answer_attaches_selected_youtube_video_for_provider_availability_question(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $media = $this->createSelectedYouTubeVideo($profile, $user);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Que videos de youtube tienes?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'No tengo videos de YouTube disponibles en este momento.',
+                    'media_request' => true,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('youtube', $response['media'][0]['provider_key']);
+        $this->assertSame('https://www.youtube.com/@bigmeloai', $response['media'][0]['channel_url']);
+        $this->assertStringContainsString('Te comparto este video', $response['text']);
+        $this->assertStringContainsString('YouTube', $response['text']);
+    }
+
+    public function test_get_answer_recommends_youtube_video_when_question_matches_admin_description(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $media = $this->createSelectedYouTubeVideo($profile, $user);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Como creo un perfil?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'Puedes crear un perfil siguiendo las instrucciones de la plataforma.',
+                    'media_request' => false,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('youtube', $response['media'][0]['provider_key']);
+        $this->assertStringContainsString('Puedes crear un perfil', $response['text']);
+        $this->assertStringContainsString('Puedes verlo en YouTube', $response['text']);
+    }
+
+    #[DataProvider('implicitIntegrationMediaProvider')]
+    public function test_get_answer_recommends_other_integration_media_when_question_matches_observation(
+        string $provider,
+        string $questionText,
+        string $answerText,
+        string $observation,
+        string $mediaType,
+        bool $ageRestricted
+    ): void {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => $provider,
+            'provider_user_id' => "{$provider}-user",
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => $provider,
+            'provider_media_id' => "{$provider}-media",
+            'media_type' => $mediaType,
+            'media_url' => $mediaType === 'VIDEO'
+                ? "https://example.com/{$provider}.mp4"
+                : "https://example.com/{$provider}.jpg",
+            'permalink' => "https://example.com/{$provider}/media",
+            'caption' => ucfirst($provider).' media',
+            'observation' => $observation,
+            'age_restricted' => $ageRestricted,
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => $questionText,
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => $answerText,
+                    'media_request' => false,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame($provider, $response['media'][0]['provider_key']);
+        $this->assertSame($ageRestricted, $response['media'][0]['age_restricted']);
+    }
+
     public function test_get_answer_handles_voice_driver_failure(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);
@@ -2357,5 +2529,68 @@ class AnswerBuilderTest extends TestCase
         ]);
 
         return $subscription;
+    }
+
+    private function createSelectedYouTubeVideo(Profile $profile, User $user): ProfileIntegrationMedia
+    {
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_user_id' => 'UCbigmelo',
+            'username' => '@bigmeloai',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+            'metadata' => [
+                'channel_url' => 'https://www.youtube.com/@bigmeloai',
+            ],
+        ]);
+
+        return ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_media_id' => '4gJl-UWeIvU',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.youtube.com/watch?v=4gJl-UWeIvU',
+            'permalink' => 'https://www.youtube.com/watch?v=4gJl-UWeIvU',
+            'thumbnail_url' => 'https://i.ytimg.com/vi/4gJl-UWeIvU/maxresdefault.jpg',
+            'caption' => 'bigmelo Crea tu perfil inteligente',
+            'observation' => 'Cómo crear un perfil en bigmelo',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+    }
+
+    /**
+     * @return array<string, array{string, string, string, string, string, bool}>
+     */
+    public static function implicitIntegrationMediaProvider(): array
+    {
+        return [
+            'instagram' => [
+                ProfileIntegration::PROVIDER_INSTAGRAM,
+                '¿Qué sabes del evento en Medellín?',
+                'No tengo información sobre el evento en Medellín.',
+                'Una foto del evento tecnológico en Medellín.',
+                'IMAGE',
+                false,
+            ],
+            'tiktok' => [
+                ProfileIntegration::PROVIDER_TIKTOK,
+                '¿Qué tienes de Hulk?',
+                'No tengo información sobre Hulk.',
+                'Un video de Hulk, un muñequito para los lápices.',
+                'VIDEO',
+                false,
+            ],
+            'onlyfans' => [
+                ProfileIntegration::PROVIDER_ONLYFANS,
+                '¿Qué tienes de tanga roja?',
+                'No tengo información sobre la tanga roja.',
+                'Video promocional en ropa interior con tanga roja.',
+                'VIDEO',
+                true,
+            ],
+        ];
     }
 }

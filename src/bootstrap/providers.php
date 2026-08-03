@@ -10,6 +10,7 @@ use App\Providers\UsdCopRateServiceProvider;
 use App\Providers\VideoAIServiceProvider;
 use App\Providers\VoiceSampleServiceProvider;
 use App\Providers\VoiceServiceProvider;
+use App\Providers\YouTubeServiceProvider;
 
 return [
     AppServiceProvider::class,
@@ -22,4 +23,5 @@ return [
     VideoAIServiceProvider::class,
     UsdCopRateServiceProvider::class,
     PaymentServiceProvider::class,
+    YouTubeServiceProvider::class,
 ];

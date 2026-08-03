@@ -18,6 +18,8 @@ class FeatureService
 
     public const INTEGRATIONS_ONLYFANS = 'integrations.onlyfans';
 
+    public const INTEGRATIONS_YOUTUBE = 'integrations.youtube';
+
     /**
      * @return array<string, array{group: string, key: string, name: string, provider?: string}>
      */
@@ -46,6 +48,12 @@ class FeatureService
                 'key' => self::INTEGRATIONS_ONLYFANS,
                 'name' => 'OnlyFans',
                 'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            ],
+            self::INTEGRATIONS_YOUTUBE => [
+                'group' => 'integrations',
+                'key' => self::INTEGRATIONS_YOUTUBE,
+                'name' => 'YouTube',
+                'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
             ],
         ];
     }
@@ -208,6 +216,7 @@ class FeatureService
             ProfileIntegration::PROVIDER_INSTAGRAM => self::INTEGRATIONS_INSTAGRAM,
             ProfileIntegration::PROVIDER_TIKTOK => self::INTEGRATIONS_TIKTOK,
             ProfileIntegration::PROVIDER_ONLYFANS => self::INTEGRATIONS_ONLYFANS,
+            ProfileIntegration::PROVIDER_YOUTUBE => self::INTEGRATIONS_YOUTUBE,
             default => null,
         };
     }

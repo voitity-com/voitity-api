@@ -6,6 +6,8 @@ use App\Enums\ProfileProductDestinationType;
 use App\Enums\ProfileProductStatus;
 use App\Enums\ProfileStatus;
 use App\Models\Profile;
+use App\Models\ProfileIntegration;
+use App\Models\ProfileIntegrationMedia;
 use App\Models\ProfileProduct;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -96,6 +98,51 @@ class PublicProfileInteractionControllerTest extends TestAPI
             'subject_name' => 'Snapshot product',
             'subject_status' => 'published',
             'destination_type' => 'whatsapp',
+        ]);
+    }
+
+    public function test_youtube_channel_click_records_its_destination(): void
+    {
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+        $integration = ProfileIntegration::query()->create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_user_id' => 'UC1234567890123456789012',
+            'username' => '@bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::query()->create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_media_id' => 'dQw4w9WgXcQ',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'permalink' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'selected' => true,
+        ]);
+
+        $this->postJson("/api/public/profiles/{$profile->id}/interactions", [
+            'destination_type' => 'provider_channel',
+            'event_id' => (string) Str::uuid(),
+            'event_type' => 'media_external_clicked',
+            'media_type' => 'video',
+            'provider' => 'youtube',
+            'subject_id' => (string) $media->id,
+            'surface' => 'chat_media_modal',
+            'visitor_id' => (string) Str::uuid(),
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('profile_interaction_events', [
+            'destination_type' => 'provider_channel',
+            'profile_id' => $profile->id,
+            'provider' => 'youtube',
+            'subject_id' => (string) $media->id,
         ]);
     }
 }
