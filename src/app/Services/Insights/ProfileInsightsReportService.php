@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 class ProfileInsightsReportService
 {
-    public const DEFINITIONS_VERSION = 'v2';
+    public const DEFINITIONS_VERSION = 'v3';
 
     public function __construct(
         private readonly FeatureService $features,
@@ -237,6 +237,11 @@ class ProfileInsightsReportService
             'tiktok_external_clicks' => (int) ($events->tiktok_external_clicks ?? 0),
             'onlyfans_images_shown' => (int) ($events->onlyfans_images_shown ?? 0),
             'onlyfans_external_clicks' => (int) ($events->onlyfans_external_clicks ?? 0),
+            'youtube_shown' => (int) ($events->youtube_shown ?? 0),
+            'youtube_opened' => (int) ($events->youtube_opened ?? 0),
+            'youtube_external_clicks' => (int) ($events->youtube_external_clicks ?? 0),
+            'youtube_video_clicks' => (int) ($events->youtube_video_clicks ?? 0),
+            'youtube_channel_clicks' => (int) ($events->youtube_channel_clicks ?? 0),
         ];
     }
 
@@ -249,7 +254,12 @@ class ProfileInsightsReportService
             SUM(CASE WHEN event_type = 'media_shown' AND provider = 'tiktok' THEN 1 ELSE 0 END) AS tiktok_shown,
             SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'tiktok' THEN 1 ELSE 0 END) AS tiktok_external_clicks,
             SUM(CASE WHEN event_type = 'media_shown' AND provider = 'onlyfans' AND media_type = 'image' THEN 1 ELSE 0 END) AS onlyfans_images_shown,
-            SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'onlyfans' THEN 1 ELSE 0 END) AS onlyfans_external_clicks";
+            SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'onlyfans' THEN 1 ELSE 0 END) AS onlyfans_external_clicks,
+            SUM(CASE WHEN event_type = 'media_shown' AND provider = 'youtube' THEN 1 ELSE 0 END) AS youtube_shown,
+            SUM(CASE WHEN event_type = 'media_opened' AND provider = 'youtube' THEN 1 ELSE 0 END) AS youtube_opened,
+            SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'youtube' THEN 1 ELSE 0 END) AS youtube_external_clicks,
+            SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'youtube' AND destination_type = 'provider_video' THEN 1 ELSE 0 END) AS youtube_video_clicks,
+            SUM(CASE WHEN event_type = 'media_external_clicked' AND provider = 'youtube' AND destination_type = 'provider_channel' THEN 1 ELSE 0 END) AS youtube_channel_clicks";
     }
 
     /**
@@ -258,16 +268,18 @@ class ProfileInsightsReportService
     private function providerFunnel(Profile $profile, ProfileInsightsRange $range): array
     {
         $rows = $this->eventRangeQuery($profile, $range)
-            ->whereIn('provider', ['instagram', 'tiktok', 'onlyfans'])
+            ->whereIn('provider', ['instagram', 'tiktok', 'onlyfans', 'youtube'])
             ->groupBy('provider')
             ->select('provider')
             ->selectRaw("SUM(CASE WHEN event_type = 'media_shown' THEN 1 ELSE 0 END) AS shown")
             ->selectRaw("SUM(CASE WHEN event_type = 'media_opened' THEN 1 ELSE 0 END) AS opened")
             ->selectRaw("SUM(CASE WHEN event_type = 'media_external_clicked' THEN 1 ELSE 0 END) AS external_clicks")
+            ->selectRaw("SUM(CASE WHEN event_type = 'media_external_clicked' AND destination_type = 'provider_video' THEN 1 ELSE 0 END) AS video_clicks")
+            ->selectRaw("SUM(CASE WHEN event_type = 'media_external_clicked' AND destination_type = 'provider_channel' THEN 1 ELSE 0 END) AS channel_clicks")
             ->get()
             ->keyBy('provider');
 
-        return collect(['instagram', 'tiktok', 'onlyfans'])->map(function (string $provider) use ($rows): array {
+        return collect(['instagram', 'tiktok', 'onlyfans', 'youtube'])->map(function (string $provider) use ($rows): array {
             $row = $rows->get($provider);
             $shown = (int) ($row->shown ?? 0);
             $clicks = (int) ($row->external_clicks ?? 0);
@@ -277,6 +289,8 @@ class ProfileInsightsReportService
                 'shown' => $shown,
                 'opened' => (int) ($row->opened ?? 0),
                 'external_clicks' => $clicks,
+                'video_clicks' => (int) ($row->video_clicks ?? 0),
+                'channel_clicks' => (int) ($row->channel_clicks ?? 0),
                 'ctr' => $shown > 0 ? round(($clicks / $shown) * 100, 2) : 0,
             ];
         })->all();
@@ -367,6 +381,11 @@ class ProfileInsightsReportService
                 'tiktok_external_clicks' => (int) ($events->tiktok_external_clicks ?? 0),
                 'onlyfans_images_shown' => (int) ($events->onlyfans_images_shown ?? 0),
                 'onlyfans_external_clicks' => (int) ($events->onlyfans_external_clicks ?? 0),
+                'youtube_shown' => (int) ($events->youtube_shown ?? 0),
+                'youtube_opened' => (int) ($events->youtube_opened ?? 0),
+                'youtube_external_clicks' => (int) ($events->youtube_external_clicks ?? 0),
+                'youtube_video_clicks' => (int) ($events->youtube_video_clicks ?? 0),
+                'youtube_channel_clicks' => (int) ($events->youtube_channel_clicks ?? 0),
             ];
         })->all();
     }

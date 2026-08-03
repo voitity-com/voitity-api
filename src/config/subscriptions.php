@@ -76,6 +76,7 @@ return [
                     'instagram' => ['selected_media' => 10],
                     'tiktok' => ['selected_media' => 10],
                     'onlyfans' => ['selected_media' => 10],
+                    'youtube' => ['selected_media' => 10],
                 ],
             ],
             'cost_assumptions' => [
@@ -170,6 +171,7 @@ return [
                     'instagram' => ['selected_media' => 10],
                     'tiktok' => ['selected_media' => 10],
                     'onlyfans' => ['selected_media' => 10],
+                    'youtube' => ['selected_media' => 10],
                 ],
             ],
             'estimated_total_cost_usd' => 53.64,
@@ -203,6 +205,7 @@ return [
                     'instagram' => ['selected_media' => 2147483647],
                     'tiktok' => ['selected_media' => 2147483647],
                     'onlyfans' => ['selected_media' => 2147483647],
+                    'youtube' => ['selected_media' => 2147483647],
                 ],
             ],
         ],

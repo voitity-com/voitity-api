@@ -104,6 +104,22 @@ class AnswerBuilder
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
 
+        if (
+            $mediaPayload === []
+            && ! ($mediaContext['wants_media'] ?? false)
+            && ($mediaContext['candidate_media'] ?? []) !== []
+        ) {
+            $mediaPayload = $this->stronglyRelevantMediaPayloadForQuestion(
+                $question,
+                $mediaContext,
+                $answerText
+            );
+
+            if ($mediaPayload !== []) {
+                $mediaContext['wants_media'] = true;
+            }
+        }
+
         if ($structuredAnswer !== null && $this->shouldPreferUnseenMedia($question, $mediaPayload)) {
             $unseenMediaPayload = $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
 
@@ -360,6 +376,7 @@ class AnswerBuilder
         return array_merge($mediaContext, [
             'candidate_media' => $candidateMedia,
             'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
+            'requested_media_type' => $requestedType,
         ]);
     }
 
@@ -431,6 +448,7 @@ class AnswerBuilder
             'videos',
             'want',
             'what',
+            'youtube',
         ];
 
         return collect($this->searchTokens($question))
@@ -635,6 +653,29 @@ class AnswerBuilder
     }
 
     /**
+     * Recommend selected integration media when its admin-provided observation
+     * is a strong match for the visitor's question and the generated answer.
+     *
+     * @param  array<string, mixed>  $mediaContext
+     * @return array<int, array<string, mixed>>
+     */
+    private function stronglyRelevantMediaPayloadForQuestion(
+        Message $question,
+        array $mediaContext,
+        string $answerText
+    ): array {
+        $candidateMedia = $mediaContext['candidate_media'] ?? [];
+
+        if ($candidateMedia === []) {
+            return [];
+        }
+
+        $item = $this->targetedMediaItem($candidateMedia, $question, $answerText, 130);
+
+        return $item !== null ? [$this->mediaItemToPayload($item)] : [];
+    }
+
+    /**
      * @param  array<int|string>  $ids
      * @return array<int, array<string, mixed>>
      */
@@ -687,6 +728,7 @@ class AnswerBuilder
             'observation' => $item['observation'] ?? null,
             'age_restricted' => (bool) ($item['age_restricted'] ?? false),
             'taken_at' => $item['taken_at'] ?? null,
+            'channel_url' => $item['channel_url'] ?? null,
         ];
     }
 
@@ -717,8 +759,12 @@ class AnswerBuilder
      * @param  array<int, array<string, mixed>>  $media
      * @return array<string, mixed>|null
      */
-    private function targetedMediaItem(array $media, Message $question, string $answerText): ?array
-    {
+    private function targetedMediaItem(
+        array $media,
+        Message $question,
+        string $answerText,
+        int $minimumScore = 30
+    ): ?array {
         $questionText = $this->normalizeSearchText($question->text);
         $answerText = $this->normalizeSearchText($answerText);
         $bestItem = null;
@@ -738,7 +784,7 @@ class AnswerBuilder
             }
         }
 
-        return $bestScore >= 30 ? $bestItem : null;
+        return $bestScore >= $minimumScore ? $bestItem : null;
     }
 
     private function shouldForceShowAvailableMedia(Message $question, array $mediaContext): bool
@@ -764,7 +810,7 @@ class AnswerBuilder
         $normalized = mb_strtolower($text);
 
         return preg_match(
-            '/\b(qu[eé]\s+(?:contenido\s+)?tienes|tienes\s+(?:algo|contenido)|algo\s+de|what\s+do\s+you\s+have|anything\s+(?:from|on))\b/u',
+            '/\b(qu[eé]\b[^.?!]{0,60}\btienes|tienes\s+(?:algo|contenido)|algo\s+de|what\s+do\s+you\s+have|anything\s+(?:from|on))\b/u',
             $normalized
         ) === 1;
     }
@@ -807,6 +853,8 @@ class AnswerBuilder
             'onlyfans',
             'only fans',
             'tiktok',
+            'youtube',
+            'you tube',
             'photo',
             'picture',
             'image',
@@ -1140,18 +1188,23 @@ class AnswerBuilder
         $locale = $this->profileLocale($profile);
         $providers = $this->humanList($mediaContext['candidate_provider_labels'] ?? [], $locale);
         $locations = $this->mediaLocationLabels($mediaContext['candidate_media'] ?? []);
+        $isVideo = ($mediaContext['requested_media_type'] ?? null) === 'VIDEO';
+        $mediaName = $locale === 'en'
+            ? ($isVideo ? 'videos' : 'photos')
+            : ($isVideo ? 'videos' : 'fotos');
+        $one = $locale === 'en' ? 'one' : ($isVideo ? 'uno' : 'una');
 
         if ($locations !== []) {
             $places = $this->humanList($locations, $locale);
 
             return $locale === 'en'
-                ? "I have photos from {$providers} in {$places}. I can show you one."
-                : "Tengo fotos de {$providers} en {$places}. Puedo mostrarte una.";
+                ? "I have {$mediaName} from {$providers} in {$places}. I can show you {$one}."
+                : "Tengo {$mediaName} de {$providers} en {$places}. Puedo mostrarte {$one}.";
         }
 
         return $locale === 'en'
-            ? "I have photos from {$providers}. I can show you one."
-            : "Tengo fotos de {$providers}. Puedo mostrarte una.";
+            ? "I have {$mediaName} from {$providers}. I can show you {$one}."
+            : "Tengo {$mediaName} de {$providers}. Puedo mostrarte {$one}.";
     }
 
     /**
@@ -1165,11 +1218,15 @@ class AnswerBuilder
         $excludedProviders = $mediaContext['excluded_providers'] ?? [];
         $excludedSourceTypes = $mediaContext['excluded_source_types'] ?? [];
         $useUnseen = (bool) ($mediaContext['use_unseen'] ?? false);
+        $isVideo = ($mediaContext['requested_media_type'] ?? null) === 'VIDEO';
+        $mediaName = $locale === 'en'
+            ? ($isVideo ? 'videos' : 'photos')
+            : ($isVideo ? 'videos' : 'fotos');
 
         if ($useUnseen) {
             return $locale === 'en'
-                ? 'I do not have more photos available right now.'
-                : 'No tengo más fotos disponibles por ahora.';
+                ? "I do not have more {$mediaName} available right now."
+                : "No tengo más {$mediaName} disponibles por ahora.";
         }
 
         if (is_array($includedProviders) && $includedProviders !== []) {
@@ -1186,8 +1243,8 @@ class AnswerBuilder
             }
 
             return $locale === 'en'
-                ? "I do not have photos available on {$providers} right now."
-                : "No tengo fotos disponibles en {$providers} por ahora.";
+                ? "I do not have {$mediaName} available on {$providers} right now."
+                : "No tengo {$mediaName} disponibles en {$providers} por ahora.";
         }
 
         if (
@@ -1201,21 +1258,21 @@ class AnswerBuilder
             $providers = $this->humanList($availableLabels, $locale);
 
             return $locale === 'en'
-                ? "Right now I only have photos from {$providers}."
-                : "Por ahora solo tengo fotos de {$providers}.";
+                ? "Right now I only have {$mediaName} from {$providers}."
+                : "Por ahora solo tengo {$mediaName} de {$providers}.";
         }
 
         if (is_array($availableLabels) && $availableLabels !== []) {
             $providers = $this->humanList($availableLabels, $locale);
 
             return $locale === 'en'
-                ? "Right now I only have photos from {$providers}."
-                : "Por ahora solo tengo fotos de {$providers}.";
+                ? "Right now I only have {$mediaName} from {$providers}."
+                : "Por ahora solo tengo {$mediaName} de {$providers}.";
         }
 
         return $locale === 'en'
-            ? 'I do not have photos available right now.'
-            : 'No tengo fotos disponibles por ahora.';
+            ? "I do not have {$mediaName} available right now."
+            : "No tengo {$mediaName} disponibles por ahora.";
     }
 
     /**
@@ -1237,10 +1294,11 @@ class AnswerBuilder
     {
         $observation = $this->cleanMediaText($media['observation'] ?? null);
         $caption = $this->cleanMediaText($media['caption'] ?? null);
-        $location = $this->extractLocation($observation);
+        $isYouTube = ($media['provider_key'] ?? null) === ProfileIntegration::PROVIDER_YOUTUBE;
+        $location = $isYouTube ? null : $this->extractLocation($observation);
         $isVideo = $this->isVideoMedia($media);
 
-        if ($location === null && $observation === '') {
+        if (! $isYouTube && $location === null && $observation === '') {
             $location = $this->extractLocation($caption);
         }
 
@@ -1495,6 +1553,8 @@ class AnswerBuilder
     {
         return [
             'caption',
+            'como',
+            'contenido',
             'enlace',
             'experiencias',
             'foto',
@@ -1504,10 +1564,18 @@ class AnswerBuilder
             'instagram',
             'link',
             'mostrar',
+            'para',
             'photo',
             'photos',
             'preguntan',
             'social',
+            'sobre',
+            'tengo',
+            'tiene',
+            'tienes',
+            'video',
+            'videos',
+            'youtube',
         ];
     }
 

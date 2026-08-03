@@ -4,6 +4,9 @@ namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Integrations\StoreYouTubeIntegrationRequest;
+use App\Http\Requests\Integrations\StoreYouTubeMediaRequest;
+use App\Http\Requests\Integrations\UpdateYouTubeMediaSelectionRequest;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
@@ -12,6 +15,7 @@ use App\Services\Features\FeatureService;
 use App\Services\Integrations\InstagramIntegrationService;
 use App\Services\Integrations\OnlyFansIntegrationService;
 use App\Services\Integrations\TikTokIntegrationService;
+use App\Services\Integrations\YouTubeIntegrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -757,6 +761,237 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
+    public function youtubeConnect(
+        StoreYouTubeIntegrationRequest $request,
+        Profile $profile,
+        YouTubeIntegrationService $youtube,
+        FeatureService $features,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        try {
+            $integration = $youtube->connect($profile, $request->user(), $request->string('channel_url')->toString());
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['channel_url' => [$e->getMessage()]],
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to connect YouTube channel.', [
+                'profile_id' => $profile->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+
+        return response()->json([
+            'message' => 'YouTube channel connected successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+            ],
+        ]);
+    }
+
+    public function youtubeMedia(Request $request, Profile $profile, FeatureService $features): JsonResponse
+    {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        $integration = $this->youtubeIntegration($profile);
+
+        if (! $integration) {
+            return response()->json([
+                'message' => 'YouTube is not connected.',
+                'data' => [
+                    'integration' => null,
+                    'media' => [],
+                    'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_YOUTUBE),
+                ],
+            ]);
+        }
+
+        $media = $integration->media()
+            ->with('integration')
+            ->orderByDesc('taken_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json([
+            'message' => 'YouTube media retrieved successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $media->map(fn (ProfileIntegrationMedia $item) => $this->mediaToArray($item))->all(),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_YOUTUBE),
+            ],
+        ]);
+    }
+
+    public function youtubeAddMedia(
+        StoreYouTubeMediaRequest $request,
+        Profile $profile,
+        YouTubeIntegrationService $youtube,
+        FeatureService $features,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        $integration = $this->youtubeIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'YouTube is not connected.'], 404);
+        }
+
+        try {
+            $media = $youtube->addVideo(
+                $integration,
+                $request->string('video_url')->toString(),
+                $request->string('description')->toString(),
+                $request->boolean('selected', true),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['video_url' => [$e->getMessage()]],
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to add YouTube video.', [
+                'profile_id' => $profile->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+
+        return response()->json([
+            'message' => 'YouTube video added successfully.',
+            'data' => ['media' => $this->mediaToArray($media->load('integration'))],
+        ], 201);
+    }
+
+    public function youtubeUpdateMediaSelection(
+        UpdateYouTubeMediaSelectionRequest $request,
+        Profile $profile,
+        YouTubeIntegrationService $youtube,
+        FeatureService $features,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        $integration = $this->youtubeIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'YouTube is not connected.'], 404);
+        }
+
+        try {
+            $integration = $youtube->updateSelection($integration, $request->validated('media'));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['media' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'YouTube media selection updated successfully.',
+            'data' => [
+                'integration' => $this->integrationToArray($integration->loadCount([
+                    'media',
+                    'media as selected_media_count' => fn ($query) => $query->where('selected', true),
+                ])),
+                'media' => $integration->media()
+                    ->with('integration')
+                    ->orderByDesc('taken_at')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (ProfileIntegrationMedia $item) => $this->mediaToArray($item))
+                    ->all(),
+                'selection_limit' => $this->selectionLimit($profile, ProfileIntegration::PROVIDER_YOUTUBE),
+            ],
+        ]);
+    }
+
+    public function youtubeDeleteMedia(
+        Request $request,
+        Profile $profile,
+        ProfileIntegrationMedia $media,
+        YouTubeIntegrationService $youtube,
+        FeatureService $features,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        $integration = $this->youtubeIntegration($profile);
+
+        if (! $integration) {
+            return response()->json(['message' => 'YouTube is not connected.'], 404);
+        }
+
+        try {
+            $youtube->deleteMedia($integration, $media);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
+
+        return response()->json(['message' => 'YouTube video deleted successfully.']);
+    }
+
+    public function youtubeDisconnect(
+        Request $request,
+        Profile $profile,
+        YouTubeIntegrationService $youtube,
+        FeatureService $features,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfile($request, $profile)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_YOUTUBE, $features)) {
+            return $response;
+        }
+
+        $integration = $this->youtubeIntegration($profile);
+
+        if ($integration) {
+            $youtube->disconnect($integration);
+        }
+
+        return response()->json(['message' => 'YouTube disconnected successfully.']);
+    }
+
     private function authorizeProfile(Request $request, Profile $profile): ?JsonResponse
     {
         $user = $request->user();
@@ -804,6 +1039,13 @@ class ProfileIntegrationController extends Controller
             ->first();
     }
 
+    private function youtubeIntegration(Profile $profile): ?ProfileIntegration
+    {
+        return $profile->integrations()
+            ->where('provider', ProfileIntegration::PROVIDER_YOUTUBE)
+            ->first();
+    }
+
     private function integrationToArray(ProfileIntegration $integration): array
     {
         return [
@@ -837,6 +1079,10 @@ class ProfileIntegrationController extends Controller
             'age_restricted' => $media->age_restricted,
             'selected' => $media->selected,
             'taken_at' => $media->taken_at?->toIso8601String(),
+            'channel_url' => $media->provider === ProfileIntegration::PROVIDER_YOUTUBE
+                ? data_get($media->integration?->metadata, 'channel_url')
+                : null,
+            'availability' => data_get($media->metadata, 'availability', 'available'),
         ];
     }
 

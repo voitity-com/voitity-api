@@ -46,6 +46,18 @@ class ProfileInsightsControllerTest extends TestAPI
         $this->event($profile, $chat, ProfileInsightEventType::ProfileViewed, 'view-2', ['visitor_id_hash' => 'visitor-a']);
         $this->event($profile, $chat, ProfileInsightEventType::MediaShown, 'ig-shown', ['provider' => 'instagram', 'media_type' => 'image']);
         $this->event($profile, $chat, ProfileInsightEventType::MediaExternalClicked, 'ig-click', ['provider' => 'instagram', 'media_type' => 'image']);
+        $this->event($profile, $chat, ProfileInsightEventType::MediaShown, 'yt-shown', ['provider' => 'youtube', 'media_type' => 'video']);
+        $this->event($profile, $chat, ProfileInsightEventType::MediaOpened, 'yt-opened', ['provider' => 'youtube', 'media_type' => 'video']);
+        $this->event($profile, $chat, ProfileInsightEventType::MediaExternalClicked, 'yt-video-click', [
+            'destination_type' => 'provider_video',
+            'provider' => 'youtube',
+            'media_type' => 'video',
+        ]);
+        $this->event($profile, $chat, ProfileInsightEventType::MediaExternalClicked, 'yt-channel-click', [
+            'destination_type' => 'provider_channel',
+            'provider' => 'youtube',
+            'media_type' => 'video',
+        ]);
         $this->event($profile, $chat, ProfileInsightEventType::ProductClicked, 'product-click');
         $token = $user->createToken('insights', ['insights:read'])->plainTextToken;
 
@@ -60,7 +72,15 @@ class ProfileInsightsControllerTest extends TestAPI
             ->assertJsonPath('data.summary.product_clicks', 1)
             ->assertJsonPath('data.summary.instagram_shown', 1)
             ->assertJsonPath('data.summary.instagram_external_clicks', 1)
+            ->assertJsonPath('data.summary.youtube_shown', 1)
+            ->assertJsonPath('data.summary.youtube_opened', 1)
+            ->assertJsonPath('data.summary.youtube_external_clicks', 2)
+            ->assertJsonPath('data.summary.youtube_video_clicks', 1)
+            ->assertJsonPath('data.summary.youtube_channel_clicks', 1)
             ->assertJsonPath('data.provider_funnel.0.ctr', 100)
+            ->assertJsonPath('data.provider_funnel.3.provider', 'youtube')
+            ->assertJsonPath('data.provider_funnel.3.video_clicks', 1)
+            ->assertJsonPath('data.provider_funnel.3.channel_clicks', 1)
             ->assertJsonPath('data.analysis_coverage.classified', 1);
     }
 

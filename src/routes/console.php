@@ -11,11 +11,13 @@ use App\Jobs\Payments\RecordPaymentQueueHeartbeat;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
 use App\Models\Message;
+use App\Models\ProfileIntegration;
 use App\Models\ProfileProduct;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Insights\ChatLifecycleService;
 use App\Services\Insights\ProfileInteractionRecorder;
+use App\Services\Integrations\YouTubeIntegrationService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Products\ProfileProductImageService;
 use Database\Seeders\LocalTestUserSeeder;
@@ -311,8 +313,40 @@ Artisan::command('insights:backfill-media-shown {--profile_id=}', function (Prof
     return Command::SUCCESS;
 })->purpose('Backfill server-owned media shown events from persisted answer payloads');
 
+Artisan::command('integrations:refresh-youtube', function (YouTubeIntegrationService $youtube): int {
+    $refreshBefore = now()->subDays(max(1, (int) config('youtube.metadata_refresh_days', 25)));
+    $refreshed = 0;
+    $failed = 0;
+
+    ProfileIntegration::query()
+        ->where('provider', ProfileIntegration::PROVIDER_YOUTUBE)
+        ->where(fn ($query) => $query->whereNull('last_synced_at')->orWhere('last_synced_at', '<=', $refreshBefore))
+        ->orderBy('id')
+        ->eachById(function (ProfileIntegration $integration) use ($youtube, &$failed, &$refreshed): void {
+            try {
+                $youtube->refresh($integration);
+                $refreshed++;
+            } catch (Throwable $exception) {
+                $integration->forceFill([
+                    'status' => ProfileIntegration::STATUS_ERROR,
+                    'metadata' => [
+                        ...($integration->metadata ?? []),
+                        'last_error' => $exception->getMessage(),
+                        'last_error_at' => now()->toIso8601String(),
+                    ],
+                ])->save();
+                $failed++;
+            }
+        });
+
+    $this->info("YouTube integrations refreshed: {$refreshed}; failed: {$failed}");
+
+    return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Refresh stored YouTube metadata before its 30-day retention limit');
+
 Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('insights:close-inactive-chats')->everyFiveMinutes()->withoutOverlapping(5)->onOneServer();
+Schedule::command('integrations:refresh-youtube')->dailyAt('02:20')->withoutOverlapping(60)->onOneServer();
 Schedule::command('subscriptions:bill-recurring')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:renew-free')->dailyAt('00:05')->withoutOverlapping(60)->onOneServer();

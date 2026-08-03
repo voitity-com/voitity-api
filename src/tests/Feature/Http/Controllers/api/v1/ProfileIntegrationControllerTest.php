@@ -728,6 +728,114 @@ class ProfileIntegrationControllerTest extends TestAPI
         $this->assertDatabaseMissing('profile_integrations', ['id' => $integration->id]);
     }
 
+    public function test_youtube_channel_and_video_are_available_to_admin_and_chat(): void
+    {
+        config([
+            'youtube.drivers.google.api_key' => 'youtube-test-key',
+            'youtube.drivers.google.base_url' => 'https://www.googleapis.com/youtube/v3',
+        ]);
+
+        Http::fake([
+            'https://www.googleapis.com/youtube/v3/channels*' => Http::response([
+                'items' => [[
+                    'id' => 'UC1234567890123456789012',
+                    'snippet' => [
+                        'customUrl' => '@bigmelo',
+                        'title' => 'Bigmelo',
+                        'thumbnails' => ['high' => ['url' => 'https://example.com/channel.jpg']],
+                    ],
+                ]],
+            ]),
+            'https://www.googleapis.com/youtube/v3/videos*' => Http::response([
+                'items' => [[
+                    'id' => 'dQw4w9WgXcQ',
+                    'snippet' => [
+                        'channelId' => 'UC1234567890123456789012',
+                        'channelTitle' => 'Bigmelo',
+                        'publishedAt' => '2026-08-01T12:00:00Z',
+                        'title' => 'Bigmelo demo',
+                        'thumbnails' => ['maxres' => ['url' => 'https://example.com/video.jpg']],
+                    ],
+                    'status' => ['embeddable' => true, 'privacyStatus' => 'public'],
+                ]],
+            ]),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('test-token', ['profile:read', 'profile:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson("/api/profile/{$profile->id}/integrations/youtube", [
+                'channel_url' => 'https://www.youtube.com/@bigmelo',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.integration.provider', ProfileIntegration::PROVIDER_YOUTUBE)
+            ->assertJsonPath('data.integration.metadata.channel_url', 'https://www.youtube.com/@bigmelo');
+
+        $response = $this->withToken($token)
+            ->postJson("/api/profile/{$profile->id}/integrations/youtube/media", [
+                'description' => 'Presentación oficial para recomendar cuando pregunten por Bigmelo.',
+                'selected' => true,
+                'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.media.caption', 'Bigmelo demo')
+            ->assertJsonPath('data.media.channel_url', 'https://www.youtube.com/@bigmelo')
+            ->assertJsonPath('data.media.thumbnail_url', 'https://example.com/video.jpg')
+            ->assertJsonPath('data.media.observation', 'Presentación oficial para recomendar cuando pregunten por Bigmelo.')
+            ->assertJsonPath('data.media.selected', true);
+
+        $payload = app(ProfileMediaPromptService::class)->selectedMediaForPrompt($profile);
+
+        $this->assertCount(1, $payload);
+        $this->assertSame('youtube', $payload[0]['provider_key']);
+        $this->assertSame('https://www.youtube.com/@bigmelo', $payload[0]['channel_url']);
+        $this->assertSame('https://example.com/video.jpg', $payload[0]['thumbnail_url']);
+        $this->assertSame('Presentación oficial para recomendar cuando pregunten por Bigmelo.', $payload[0]['observation']);
+
+        Http::assertSent(fn ($request): bool => $request->hasHeader('X-Goog-Api-Key', 'youtube-test-key'));
+    }
+
+    public function test_youtube_write_route_enforces_ability(): void
+    {
+        $owner = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($owner)->create();
+
+        $this->withToken($owner->createToken('read-only', ['profile:read'])->plainTextToken)
+            ->postJson("/api/profile/{$profile->id}/integrations/youtube", [
+                'channel_url' => 'https://www.youtube.com/@bigmelo',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_youtube_write_route_enforces_ownership(): void
+    {
+        $owner = User::factory()->create(['role' => 'user']);
+        $other = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($owner)->create();
+
+        $this->withToken($other->createToken('other', ['profile:write'])->plainTextToken)
+            ->postJson("/api/profile/{$profile->id}/integrations/youtube", [
+                'channel_url' => 'https://www.youtube.com/@bigmelo',
+            ])
+            ->assertNotFound();
+    }
+
+    public function test_youtube_add_video_requires_a_description(): void
+    {
+        $owner = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($owner)->create();
+
+        $this->withToken($owner->createToken('owner', ['profile:write'])->plainTextToken)
+            ->postJson("/api/profile/{$profile->id}/integrations/youtube/media", [
+                'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['description']);
+    }
+
     private function createInstagramIntegration(Profile $profile, User $user): ProfileIntegration
     {
         return ProfileIntegration::query()->create([

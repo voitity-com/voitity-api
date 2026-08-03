@@ -145,6 +145,12 @@ Route::prefix('/profile')->group(function () {
     Route::put('/{profile}/integrations/onlyfans/media-selection', [ProfileIntegrationController::class, 'onlyFansUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::delete('/{profile}/integrations/onlyfans/media/{media}', [ProfileIntegrationController::class, 'onlyFansDeleteMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::delete('/{profile}/integrations/onlyfans', [ProfileIntegrationController::class, 'onlyFansDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/integrations/youtube', [ProfileIntegrationController::class, 'youtubeConnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/integrations/youtube/media', [ProfileIntegrationController::class, 'youtubeMedia'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/integrations/youtube/media', [ProfileIntegrationController::class, 'youtubeAddMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::put('/{profile}/integrations/youtube/media-selection', [ProfileIntegrationController::class, 'youtubeUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/youtube/media/{media}', [ProfileIntegrationController::class, 'youtubeDeleteMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/youtube', [ProfileIntegrationController::class, 'youtubeDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/products', [ProfileProductController::class, 'index'])->middleware(['auth:sanctum', 'ability:products:read,profile:read']);
     Route::post('/{profile}/products', [ProfileProductController::class, 'store'])->middleware(['auth:sanctum', 'ability:products:write,profile:write']);
     Route::patch('/{profile}/products/settings', [ProfileProductController::class, 'settings'])->middleware(['auth:sanctum', 'ability:products:write,profile:write']);

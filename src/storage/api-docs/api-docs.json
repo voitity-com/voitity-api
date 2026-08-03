@@ -2673,6 +2673,14 @@
                                         "type": "string",
                                         "nullable": true
                                     },
+                                    "destination_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "provider_video",
+                                            "provider_channel"
+                                        ],
+                                        "nullable": true
+                                    },
                                     "surface": {
                                         "type": "string"
                                     }

@@ -5,6 +5,7 @@ namespace App\Services\Integrations;
 use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Services\Features\FeatureService;
 
@@ -129,6 +130,7 @@ class ProfileMediaPromptService
                 return $profile->integrationMedia()
                     ->where('provider', $provider)
                     ->where('selected', true)
+                    ->with('integration')
                     ->orderByDesc('taken_at')
                     ->orderByDesc('id')
                     ->limit($this->capabilities->selectedMediaPerProfile($profile, $provider))
@@ -156,6 +158,9 @@ class ProfileMediaPromptService
                 'observation' => filled($media->observation) ? $media->observation : $media->caption,
                 'age_restricted' => $media->age_restricted,
                 'taken_at' => $media->taken_at?->toDateString(),
+                'channel_url' => $media->provider === ProfileIntegration::PROVIDER_YOUTUBE
+                    ? data_get($media->integration?->metadata, 'channel_url')
+                    : null,
             ])
             ->filter(fn (array $media): bool => filled($media['media_url'] ?? null) || filled($media['permalink'] ?? null))
             ->values()
@@ -319,6 +324,8 @@ class ProfileMediaPromptService
             'onlyfans',
             'only fans',
             'tiktok',
+            'youtube',
+            'you tube',
             'photo',
             'picture',
             'image',

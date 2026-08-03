@@ -4635,6 +4635,116 @@
                   "response": []
                 }
               ]
+            },
+            {
+              "name": "YouTube",
+              "item": [
+                {
+                  "name": "YouTube - Save Channel",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      { "key": "Accept", "value": "application/json" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"channel_url\": \"{{youtube_channel_url}}\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube"]
+                    },
+                    "description": "Validates and stores a public YouTube channel using YouTube Data API v3. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "YouTube - List Videos",
+                  "request": {
+                    "method": "GET",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube/media",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube", "media"]
+                    },
+                    "description": "Lists YouTube videos, thumbnails, descriptions, selection state, and channel URL. Requires profile:read."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "YouTube - Add Video",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      { "key": "Accept", "value": "application/json" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"video_url\": \"{{youtube_video_url}}\",\n  \"description\": \"Video recomendado para presentar el perfil.\",\n  \"selected\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube/media",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube", "media"]
+                    },
+                    "description": "Validates ownership, visibility and embed availability before storing a YouTube video. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "YouTube - Update Video Selection",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      { "key": "Accept", "value": "application/json" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": \"{{youtube_media_id}}\",\n      \"selected\": true,\n      \"observation\": \"Video recomendado para presentar el perfil.\"\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube/media-selection",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube", "media-selection"]
+                    },
+                    "description": "Updates selected YouTube videos and their conversation descriptions. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "YouTube - Delete Video",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube/media/{{youtube_media_id}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube", "media", "{{youtube_media_id}}"]
+                    },
+                    "description": "Deletes one YouTube video from the profile integration. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "YouTube - Disconnect",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/youtube",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube"]
+                    },
+                    "description": "Disconnects YouTube and removes its stored video records. Requires profile:write."
+                  },
+                  "response": []
+                }
+              ]
             }
           ]
         },
@@ -7069,6 +7179,21 @@
     {
       "key": "anonymous_visitor_id",
       "value": "20000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "youtube_channel_url",
+      "value": "https://www.youtube.com/@bigmelo",
+      "type": "string"
+    },
+    {
+      "key": "youtube_video_url",
+      "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "type": "string"
+    },
+    {
+      "key": "youtube_media_id",
+      "value": "",
       "type": "string"
     },
     {
