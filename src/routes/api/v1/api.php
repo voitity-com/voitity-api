@@ -173,6 +173,7 @@ Route::prefix('/profile')->group(function () {
     Route::get('/{profile}/insights/products', [ProfileInsightsController::class, 'products'])->middleware(['auth:sanctum', 'abilities:insights:read']);
     Route::post('/{profile}/activate', [ProfileController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/deactivate', [ProfileController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::patch('/{profile}/voice-settings', [ProfileController::class, 'updateVoiceSettings'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);

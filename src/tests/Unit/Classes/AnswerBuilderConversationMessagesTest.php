@@ -125,6 +125,94 @@ class AnswerBuilderConversationMessagesTest extends TestCase
         $this->assertNull($answer->audio);
         $this->assertNull($responsePayload['audio_url']);
     }
+
+    public function test_profile_voice_setting_prevents_generated_answer_audio(): void
+    {
+        $user = User::factory()->create();
+        $profile = Profile::factory()->create([
+            'data' => ['voice_enabled' => false, 'voice_autoplay_enabled' => false],
+            'user_id' => $user->id,
+        ]);
+        Voice::factory()->create([
+            'active' => true,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+            'source_voice_id' => 'voice-123',
+            'user_id' => $user->id,
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'chat_id' => $chat->id,
+            'data' => ['request' => ['audio_response_enabled' => true]],
+            'profile_id' => $profile->id,
+            'source' => 'api',
+            'text' => 'Hola',
+            'type' => 'question',
+        ]);
+
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+        $builder = new AnswerBuilder(
+            new FakeNoAnswerChatClient(new ChatAIAnswer(
+                source: 'openai',
+                answer: 'Respuesta solo texto.',
+                status: 'completed'
+            )),
+            $voiceManager,
+            new ProfileConversationMessageService($voiceManager)
+        );
+
+        $responsePayload = $builder->getAnswer($profile, $question)->toArray();
+        $answer = Message::findOrFail($responsePayload['message_id']);
+
+        $this->assertSame('Respuesta solo texto.', $answer->text);
+        $this->assertNull($answer->audio);
+        $this->assertNull($responsePayload['audio_url']);
+    }
+
+    public function test_muted_request_prevents_generated_answer_audio(): void
+    {
+        $user = User::factory()->create();
+        $profile = Profile::factory()->create([
+            'data' => ['voice_enabled' => true, 'voice_autoplay_enabled' => true],
+            'user_id' => $user->id,
+        ]);
+        Voice::factory()->create([
+            'active' => true,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+            'source_voice_id' => 'voice-123',
+            'user_id' => $user->id,
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'chat_id' => $chat->id,
+            'data' => ['request' => ['audio_response_enabled' => false]],
+            'profile_id' => $profile->id,
+            'source' => 'api',
+            'text' => 'Hola',
+            'type' => 'question',
+        ]);
+
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+        $builder = new AnswerBuilder(
+            new FakeNoAnswerChatClient(new ChatAIAnswer(
+                source: 'openai',
+                answer: 'Respuesta sin audio por mute.',
+                status: 'completed'
+            )),
+            $voiceManager,
+            new ProfileConversationMessageService($voiceManager)
+        );
+
+        $responsePayload = $builder->getAnswer($profile, $question)->toArray();
+        $answer = Message::findOrFail($responsePayload['message_id']);
+
+        $this->assertSame('Respuesta sin audio por mute.', $answer->text);
+        $this->assertNull($answer->audio);
+        $this->assertNull($responsePayload['audio_url']);
+    }
 }
 
 class FakeNoAnswerChatClient implements ChatAIClient

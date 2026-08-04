@@ -8,6 +8,7 @@ use App\Models\Profile;
 use App\Models\Voice;
 use App\Services\Features\FeatureService;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileVoiceSettings;
 
 class ProfileResponse
 {
@@ -16,6 +17,7 @@ class ProfileResponse
     public function toArray(): array
     {
         $activeVoice = $this->activeVoice();
+        $voiceSettings = app(ProfileVoiceSettings::class);
 
         return [
             'id' => $this->profile->id,
@@ -34,6 +36,8 @@ class ProfileResponse
             'voice_id' => $activeVoice?->id,
             'voice_name' => $activeVoice?->name,
             'voice_description' => $activeVoice?->description,
+            'voice_enabled' => $voiceSettings->voiceEnabled($this->profile),
+            'voice_autoplay_enabled' => $voiceSettings->voiceAutoplayEnabled($this->profile),
             'voice_language_code' => $activeVoice?->language_code,
             'publication' => app(ProfilePublicationReadinessService::class)->evaluate($this->profile),
             'conversation_messages' => app(ProfileConversationMessageService::class)->resolvedMessages($this->profile),

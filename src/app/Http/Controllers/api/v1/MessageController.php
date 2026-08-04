@@ -132,6 +132,9 @@ class MessageController extends Controller
                 visitorIdHash: $publicRequest
                     ? $this->anonymousVisitors->hash($request->header('X-Bigmelo-Visitor-Id'))
                     : null,
+                audioResponseEnabled: array_key_exists('audio_response_enabled', $payload)
+                    ? $request->boolean('audio_response_enabled')
+                    : true,
             );
         } catch (SubscriptionEntitlementException $e) {
             return $this->entitlementErrorResponse($e, $profile, $capabilities);
@@ -446,6 +449,9 @@ class MessageController extends Controller
                 visitorIdHash: $publicRequest
                     ? $this->anonymousVisitors->hash($request->header('X-Bigmelo-Visitor-Id'))
                     : null,
+                audioResponseEnabled: array_key_exists('audio_response_enabled', $payload)
+                    ? $request->boolean('audio_response_enabled')
+                    : true,
             );
         } catch (SubscriptionEntitlementException $e) {
             if ($audioUsageKey && ! $audioUsageFinalized) {
@@ -510,6 +516,7 @@ class MessageController extends Controller
         bool $publicRequest = false,
         ?string $chatSessionToken = null,
         ?string $visitorIdHash = null,
+        bool $audioResponseEnabled = true,
     ): JsonResponse {
         $targetError = $this->validateMessageTarget(
             $actor,
@@ -544,7 +551,10 @@ class MessageController extends Controller
                 throw new RuntimeException('Unable to resolve chat for the provided profile.');
             }
 
-            $requestPayload = array_merge(['message' => $text], $requestData);
+            $requestPayload = array_merge([
+                'message' => $text,
+                'audio_response_enabled' => $audioResponseEnabled,
+            ], $requestData);
 
             $message = $chat->messages()->create([
                 'profile_id' => $profile->id,

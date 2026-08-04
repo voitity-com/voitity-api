@@ -847,6 +847,100 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($new_data, $new_profile->data);
     }
 
+    public function test_user_can_update_profile_voice_settings(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'data' => ['existing' => 'value'],
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'name' => $this->faker->name,
+            'personality' => $this->faker->text(100),
+            'user_id' => $user->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => false,
+                'voice_enabled' => false,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('message', 'Profile voice settings updated successfully.');
+        $response->assertJsonPath('data.voice_enabled', false);
+        $response->assertJsonPath('data.voice_autoplay_enabled', false);
+
+        $profile->refresh();
+        $this->assertSame('value', $profile->data['existing']);
+        $this->assertFalse($profile->data['voice_enabled']);
+        $this->assertFalse($profile->data['voice_autoplay_enabled']);
+    }
+
+    public function test_profile_voice_settings_requires_booleans(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'name' => $this->faker->name,
+            'personality' => $this->faker->text(100),
+            'user_id' => $user->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => 'maybe',
+                'voice_enabled' => 'maybe',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['voice_autoplay_enabled', 'voice_enabled']);
+    }
+
+    public function test_user_without_profile_write_ability_can_not_update_profile_voice_settings(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::create([
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'name' => $this->faker->name,
+            'personality' => $this->faker->text(100),
+            'user_id' => $user->id,
+        ]);
+        $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => true,
+                'voice_enabled' => true,
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_can_not_update_profile_voice_settings_if_he_is_not_owner(): void
+    {
+        $owner = User::factory()->create(['role' => 'user']);
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::create([
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'name' => $this->faker->name,
+            'personality' => $this->faker->text(100),
+            'user_id' => $owner->id,
+        ]);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => true,
+                'voice_enabled' => true,
+            ]);
+
+        $response->assertStatus(404);
+        $response->assertJsonPath('message', 'Profile not found.');
+    }
+
     public function test_social_networks_config_contains_supported_networks_with_s3_icons()
     {
         $networks = config('social-networks.networks');

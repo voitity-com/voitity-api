@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreProfileDataRequest;
 use App\Http\Requests\Profile\StoreProfileRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Http\Requests\Profile\UpdateProfileVoiceSettingsRequest;
 use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
@@ -20,6 +21,7 @@ use App\Models\User;
 use App\Models\Voice;
 use App\Services\Features\FeatureService;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\ProfileVoiceSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -633,6 +635,47 @@ class ProfileController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function updateVoiceSettings(
+        UpdateProfileVoiceSettingsRequest $request,
+        Profile $profile,
+        ProfileVoiceSettings $voiceSettings,
+    ): JsonResponse {
+        try {
+            $user = $request->user();
+
+            if (! $user) {
+                return response()->json(['message' => 'User not found.'], 404);
+            }
+
+            if (! $profile || $profile->user_id !== $user->id) {
+                return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            $profile->forceFill([
+                'data' => $voiceSettings->mergedData(
+                    $profile,
+                    $request->boolean('voice_enabled'),
+                    $request->boolean('voice_autoplay_enabled'),
+                ),
+            ])->save();
+
+            $this->loadProfileResponseRelations($profile);
+
+            app(NotificationDispatcher::class)->sendInApp(
+                $user,
+                'profile_updated',
+                $this->profileNotificationData($profile)
+            );
+
+            return response()->json([
+                'message' => 'Profile voice settings updated successfully.',
+                'data' => (new ProfileResponse($profile))->toArray(),
+            ], 200);
+        } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
