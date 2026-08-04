@@ -6,6 +6,7 @@ use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
 use App\Models\Profile;
 use App\Services\Features\FeatureService;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileVoiceSettings;
 
 class PublicProfileResponse
 {
@@ -13,6 +14,8 @@ class PublicProfileResponse
 
     public function toArray(): array
     {
+        $voiceSettings = app(ProfileVoiceSettings::class);
+
         return [
             'id' => $this->profile->id,
             'alias' => $this->profile->alias,
@@ -27,6 +30,8 @@ class PublicProfileResponse
             'data' => $this->profile->data,
             'networks' => (object) ($this->profile->networks ?? []),
             'products_enabled' => (bool) $this->profile->products_enabled,
+            'voice_enabled' => $voiceSettings->voiceEnabled($this->profile),
+            'voice_autoplay_enabled' => $voiceSettings->voiceAutoplayEnabled($this->profile),
             'feature_settings' => app(FeatureService::class)
                 ->profileFeatureRows($this->profile),
             'messaging_capabilities' => app(ProfileMessagingCapabilitiesService::class)

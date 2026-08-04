@@ -21,6 +21,7 @@ class StoreAudioMessageRequest extends FormRequest
                 'max:'.max(1, (int) config('subscriptions.audio_message_max_size_kb', 10240)),
             ],
             'chat_id' => ['nullable', 'integer', 'exists:chats,id'],
+            'audio_response_enabled' => ['sometimes', 'boolean'],
         ];
     }
 }

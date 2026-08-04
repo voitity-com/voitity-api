@@ -18,6 +18,7 @@ use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Products\ProfileProductPromptService;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileVoiceSettings;
 use Illuminate\Support\Facades\Log;
 
 class AnswerBuilder
@@ -204,7 +205,9 @@ class AnswerBuilder
                 );
                 $answerText = (string) $fallback['text'];
                 $source = 'profile_conversation_message';
-                $audioPayload = $this->preconfiguredAudioPayload($fallback);
+                $audioPayload = $this->shouldUseResponseAudio($profile, $question)
+                    ? $this->preconfiguredAudioPayload($fallback)
+                    : null;
                 $usesPreconfiguredAnswer = true;
             }
         }
@@ -216,7 +219,7 @@ class AnswerBuilder
         );
         $audioText = $this->spokenTextForAnswer($displayAnswerText);
 
-        if ($audioPayload === null && ! $usesPreconfiguredAnswer) {
+        if ($audioPayload === null && ! $usesPreconfiguredAnswer && $this->shouldUseResponseAudio($profile, $question)) {
             $audio = $this->getAudio($profile, $audioText);
             $audioUrl = $audio?->getAudioUrl();
 
@@ -613,6 +616,11 @@ class AnswerBuilder
     private function conversationMessages(): ProfileConversationMessageService
     {
         return $this->conversationMessages ?? app(ProfileConversationMessageService::class);
+    }
+
+    private function shouldUseResponseAudio(Profile $profile, Message $question): bool
+    {
+        return app(ProfileVoiceSettings::class)->shouldGenerateResponseAudio($profile, $question);
     }
 
     /**
