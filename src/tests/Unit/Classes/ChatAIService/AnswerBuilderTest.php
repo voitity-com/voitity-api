@@ -2533,6 +2533,139 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame($ageRestricted, $response['media'][0]['age_restricted']);
     }
 
+    #[DataProvider('socialLinkLocaleProvider')]
+    public function test_get_answer_exposes_localized_social_link_cta(
+        string $locale,
+        string $questionText,
+        string $answerText,
+        string $expectedActionLabel
+    ): void {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => $locale,
+            'networks' => [
+                'github' => 'https://github.com/aosmorac',
+            ],
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => $questionText,
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => $answerText,
+                    'media_request' => false,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([
+            [
+                'provider_key' => 'github',
+                'provider_label' => 'GitHub',
+                'action_label' => $expectedActionLabel,
+                'url' => 'https://github.com/aosmorac',
+            ],
+        ], $response['social_links']);
+        $this->assertSame($response['social_links'], $response['data']['social_links']);
+        $this->assertStringNotContainsString('https://', $response['text']);
+    }
+
+    public function test_get_answer_recovers_matching_other_media_when_model_marks_request_without_selection(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+            'networks' => [
+                'github' => 'https://github.com/aosmorac',
+            ],
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_user_id' => (string) $profile->id,
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_media_id' => 'other-github-code',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/github-code.jpg',
+            'permalink' => 'https://github.com/tike-football/tike-api',
+            'caption' => 'Código de perfiles',
+            'observation' => 'Código del proyecto de perfiles construido en Laravel y React.',
+            'selected' => true,
+            'taken_at' => now(),
+            'metadata' => [
+                'action_type' => 'view_on',
+                'destination_type' => 'github',
+                'source_type' => 'manual_upload',
+            ],
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Algo de código que me muestres?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'Puedes ver mi código en GitHub: https://github.com/aosmorac.',
+                    'media_request' => true,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success'
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('github', $response['media'][0]['destination_type']);
+        $this->assertSame([], $response['social_links']);
+    }
+
     public function test_get_answer_handles_voice_driver_failure(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);
@@ -2678,6 +2811,27 @@ class AnswerBuilderTest extends TestCase
                 'Video promocional en ropa interior con tanga roja.',
                 'VIDEO',
                 true,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string, string, string, string}>
+     */
+    public static function socialLinkLocaleProvider(): array
+    {
+        return [
+            'spanish' => [
+                'es',
+                '¿Qué tienes en GitHub?',
+                'Puedes ver mis proyectos en GitHub: https://github.com/aosmorac.',
+                'Ir a GitHub',
+            ],
+            'english' => [
+                'en',
+                'What do you have on GitHub?',
+                'You can see my projects on GitHub: https://github.com/aosmorac.',
+                'Go to GitHub',
             ],
         ];
     }

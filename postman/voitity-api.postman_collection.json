@@ -2852,6 +2852,7 @@
                   "pm.test('Scoped chat token is returned', function () {",
                   "  pm.expect(json.data.chat_token).to.be.a('string').and.not.empty;",
                   "});",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "pm.collectionVariables.set('public_chat_id', json.data.chat_id);",
                   "pm.collectionVariables.set('public_chat_token', json.data.chat_token);"
                 ]
@@ -2894,7 +2895,7 @@
                 "messages"
               ]
             },
-            "description": "Creates a visitor chat. The returned chat ID is not sufficient to continue it; clients must also retain the encrypted chat token."
+            "description": "Creates a visitor chat. The returned chat ID is not sufficient to continue it; clients must also retain the encrypted chat token. When the answer discusses a configured social profile, social_links contains localized CTA labels and authoritative URLs."
           },
           "response": []
         },
@@ -2908,6 +2909,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "pm.test('Public chat continues', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "if (json.data && json.data.chat_token) {",
                   "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
                   "}"
@@ -2969,6 +2971,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "pm.test('Public audio message succeeds', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "if (json.data && json.data.chat_token) {",
                   "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
                   "}"

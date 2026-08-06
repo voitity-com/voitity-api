@@ -11,7 +11,8 @@ class AnswerResponse
         private readonly ChatAIAnswer $chatAIAnswer,
         private readonly ?array $audioPayload = null,
         private readonly array $mediaPayload = [],
-        private readonly array $productPayload = []
+        private readonly array $productPayload = [],
+        private readonly array $socialLinkPayload = []
     ) {}
 
     public function toArray(): array
@@ -27,6 +28,7 @@ class AnswerResponse
             'source' => $this->answerMessage->source,
             'media' => $this->mediaPayload,
             'products' => $this->productPayload,
+            'social_links' => $this->socialLinkPayload,
             'data' => $payload,
         ];
     }

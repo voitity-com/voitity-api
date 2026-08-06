@@ -139,10 +139,27 @@ class AnswerBuilder
                 ($structuredAnswer['media_action'] ?? null) === 'show'
                 || $this->answerIndicatesNoAnswer($answerText)
                 || $this->looksLikeSpecificMediaShowRequest($question)
+                || (
+                    ($structuredAnswer['media_request'] ?? false)
+                    && $this->hasMediaShowIntent($question->text)
+                )
             )
         ) {
             $mediaPayload = $this->targetedMediaPayloadForQuestion($question, $mediaContext, $answerText);
             $mediaPayloadWasReplaced = $mediaPayload !== [];
+
+            if (
+                $mediaPayload !== []
+                && ($structuredAnswer['media_request'] ?? false)
+                && ($structuredAnswer['media_action'] ?? null) === 'none'
+            ) {
+                Log::info('Recovered relevant profile media after incomplete AI media selection.', [
+                    'profile_id' => $profile->id,
+                    'chat_id' => $question->chat_id,
+                    'question_message_id' => $question->id,
+                    'media_ids' => collect($mediaPayload)->pluck('id')->filter()->values()->all(),
+                ]);
+            }
         }
 
         if (
@@ -217,6 +234,12 @@ class AnswerBuilder
             $this->appendMediaHint($answerText, $mediaPayload, $profile),
             $productPayload === [] ? self::MAX_ANSWER_CHARACTERS : self::MAX_PRODUCT_ANSWER_CHARACTERS
         );
+        $socialLinkPayload = $this->socialLinkPayload(
+            $profile,
+            $question->text,
+            $answerText,
+            $mediaPayload
+        );
         $audioText = $this->spokenTextForAnswer($displayAnswerText);
 
         if ($audioPayload === null && ! $usesPreconfiguredAnswer && $this->shouldUseResponseAudio($profile, $question)) {
@@ -246,6 +269,7 @@ class AnswerBuilder
                 'audio' => $audioPayload,
                 'media' => $mediaPayload,
                 'products' => $productPayload,
+                'social_links' => $socialLinkPayload,
             ],
         ]);
 
@@ -253,7 +277,14 @@ class AnswerBuilder
         $interactionRecorder->recordShownMedia($profile, $answerMessage, $mediaPayload);
         $interactionRecorder->recordShownProducts($profile, $answerMessage, $productPayload);
 
-        return new AnswerResponse($answerMessage, $chatAIAnswer, $audioPayload, $mediaPayload, $productPayload);
+        return new AnswerResponse(
+            $answerMessage,
+            $chatAIAnswer,
+            $audioPayload,
+            $mediaPayload,
+            $productPayload,
+            $socialLinkPayload
+        );
     }
 
     /**
@@ -842,7 +873,7 @@ class AnswerBuilder
     {
         $normalized = mb_strtolower($text);
 
-        return preg_match('/\b(muestra|mu[eé]strame|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
+        return preg_match('/\b(muestra|mu[eé]strame|muestres|mostrar|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
     }
 
     private function looksLikeMediaRequest(string $text): bool
@@ -1432,6 +1463,154 @@ class AnswerBuilder
     private function profileLocale(Profile $profile): string
     {
         return in_array($profile->locale, ['en', 'es'], true) ? $profile->locale : 'es';
+    }
+
+    /**
+     * Build chat CTA buttons only for configured social links discussed in the
+     * current answer. Media cards with the same destination already own the CTA.
+     *
+     * @param  array<int, array<string, mixed>>  $mediaPayload
+     * @return array<int, array<string, string>>
+     */
+    private function socialLinkPayload(
+        Profile $profile,
+        string $questionText,
+        string $answerText,
+        array $mediaPayload
+    ): array {
+        $networks = (array) ($profile->networks ?? []);
+
+        if ($networks === []) {
+            return [];
+        }
+
+        $genericSocialRequest = $this->looksLikeGenericSocialLinkRequest($questionText);
+        $mediaDestinations = collect($mediaPayload)
+            ->filter(fn (array $media): bool => filled($media['permalink'] ?? null) || filled($media['channel_url'] ?? null))
+            ->flatMap(fn (array $media): array => [
+                $this->normalizeSocialProvider((string) ($media['provider_key'] ?? '')),
+                $this->normalizeSocialProvider((string) ($media['destination_type'] ?? '')),
+            ])
+            ->filter()
+            ->unique()
+            ->all();
+        $locale = $this->profileLocale($profile);
+        $links = [];
+
+        foreach ($networks as $provider => $url) {
+            if (! is_scalar($url)) {
+                continue;
+            }
+
+            $provider = $this->normalizeSocialProvider((string) $provider);
+            $url = trim((string) $url);
+
+            if ($provider === '' || ! $this->isSafeSocialUrl($url)) {
+                continue;
+            }
+
+            if (in_array($provider, $mediaDestinations, true)) {
+                continue;
+            }
+
+            $label = $this->socialNetworkLabel($provider);
+            $answerMentionsUrl = $this->answerMentionsSocialUrl($answerText, $url);
+            $answerMentionsProvider = $this->textMentionsSocialProvider($answerText, $provider, $label);
+            $questionMentionsProvider = $this->textMentionsSocialProvider($questionText, $provider, $label);
+
+            if (! $genericSocialRequest && ! $answerMentionsUrl && ! ($answerMentionsProvider && $questionMentionsProvider)) {
+                continue;
+            }
+
+            $links[] = [
+                'provider_key' => $provider,
+                'provider_label' => $label,
+                'action_label' => $locale === 'en' ? "Go to {$label}" : "Ir a {$label}",
+                'url' => $url,
+            ];
+        }
+
+        return $links;
+    }
+
+    private function looksLikeGenericSocialLinkRequest(string $text): bool
+    {
+        $normalized = $this->normalizeSearchText($text);
+
+        return preg_match(
+            '/\b(redes?\s+sociales|tus\s+redes|donde\s+(?:puedo\s+)?seguirte|social\s+(?:media|networks?)|your\s+socials|where\s+can\s+i\s+follow)\b/u',
+            $normalized
+        ) === 1;
+    }
+
+    private function textMentionsSocialProvider(string $text, string $provider, string $label): bool
+    {
+        $normalizedText = $this->normalizeSearchText($text);
+        $aliases = array_filter([
+            $provider,
+            $label,
+            ...match ($provider) {
+                'x' => ['twitter', 'x.com'],
+                'github' => ['git hub'],
+                'linkedin' => ['linked in'],
+                'tiktok' => ['tik tok'],
+                'youtube' => ['you tube'],
+                'onlyfans' => ['only fans'],
+                default => [],
+            },
+        ]);
+
+        foreach ($aliases as $alias) {
+            $normalizedAlias = $this->normalizeSearchText((string) $alias);
+
+            if ($normalizedAlias === '') {
+                continue;
+            }
+
+            $pattern = str_replace('\\ ', '\\s+', preg_quote($normalizedAlias, '/'));
+
+            if (preg_match('/(?<![\pL\pN])'.$pattern.'(?![\pL\pN])/u', $normalizedText) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function answerMentionsSocialUrl(string $answerText, string $configuredUrl): bool
+    {
+        $normalizedConfiguredUrl = rtrim($configuredUrl, '/');
+
+        if ($normalizedConfiguredUrl === '') {
+            return false;
+        }
+
+        return str_contains(rtrim($answerText, '/'), $normalizedConfiguredUrl);
+    }
+
+    private function normalizeSocialProvider(string $provider): string
+    {
+        return trim(mb_strtolower(str_replace([' ', '-'], '_', $provider)), '_');
+    }
+
+    private function socialNetworkLabel(string $provider): string
+    {
+        $definition = config("social-networks.networks.{$provider}", []);
+
+        if (is_array($definition) && filled($definition['name'] ?? null)) {
+            return trim((string) $definition['name']);
+        }
+
+        return $provider === 'x' ? 'X' : ucwords(str_replace('_', ' ', $provider));
+    }
+
+    private function isSafeSocialUrl(string $url): bool
+    {
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        return in_array(mb_strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
     }
 
     private function spokenTextForAnswer(string $answerText): string
