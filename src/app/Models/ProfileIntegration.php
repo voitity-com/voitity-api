@@ -17,6 +17,8 @@ class ProfileIntegration extends Model
 
     public const PROVIDER_ONLYFANS = 'onlyfans';
 
+    public const PROVIDER_OTHER = 'other';
+
     public const PROVIDER_YOUTUBE = 'youtube';
 
     public const STATUS_CONNECTED = 'connected';

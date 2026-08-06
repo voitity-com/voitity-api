@@ -16,13 +16,17 @@ use App\Services\Products\ProfileProductService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Tests\Support\EnablesFeaturesForTestProfiles;
 
 class ProfileProductControllerTest extends TestAPI
 {
+    use EnablesFeaturesForTestProfiles;
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->enableFeaturesForTestProfiles();
         config(['app.key' => 'base64:'.base64_encode(str_repeat('a', 32))]);
         $this->app->forgetInstance('encrypter');
         Storage::fake('profiles');

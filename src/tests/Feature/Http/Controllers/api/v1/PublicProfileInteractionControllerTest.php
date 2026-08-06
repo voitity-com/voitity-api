@@ -145,4 +145,31 @@ class PublicProfileInteractionControllerTest extends TestAPI
             'subject_id' => (string) $media->id,
         ]);
     }
+
+    public function test_chat_social_link_click_is_recorded_for_configured_network(): void
+    {
+        $profile = Profile::factory()->for(User::factory())->create([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+            'networks' => [
+                'github' => 'https://github.com/aosmorac',
+            ],
+        ]);
+
+        $this->postJson("/api/public/profiles/{$profile->id}/interactions", [
+            'event_id' => (string) Str::uuid(),
+            'visitor_id' => (string) Str::uuid(),
+            'event_type' => 'social_link_clicked',
+            'provider' => 'github',
+            'surface' => 'chat_social_link',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('profile_interaction_events', [
+            'event_type' => 'social_link_clicked',
+            'profile_id' => $profile->id,
+            'provider' => 'github',
+            'subject_type' => 'social_network',
+            'surface' => 'chat_social_link',
+        ]);
+    }
 }

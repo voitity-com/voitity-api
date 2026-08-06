@@ -21,6 +21,7 @@ use App\Http\Controllers\api\v1\ProfileInsightsController;
 use App\Http\Controllers\api\v1\ProfileIntegrationController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
+use App\Http\Controllers\api\v1\ProfileOtherIntegrationController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
 use App\Http\Controllers\api\v1\PublicProfileController;
@@ -117,6 +118,7 @@ Route::prefix('/profile')->group(function () {
     Route::get('/chats', [ProfileChatController::class, 'listChats'])->middleware(['auth:sanctum', 'abilities:chat:read']);
     Route::get('/chats/messages', [ProfileChatController::class, 'getChatMessages'])->middleware(['auth:sanctum', 'abilities:chat:read']);
     Route::get('/social-networks', [ProfileController::class, 'socialNetworks'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::get('/integration-destinations', [ProfileOtherIntegrationController::class, 'destinations'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/alias/{alias}', [ProfileController::class, 'getProfileByAlias'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/transcriptions/audio', [ProfileAudioTranscriptionController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:transcribe']);
     Route::get('/{profile}/conversation-messages', [ProfileConversationMessageController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
@@ -153,6 +155,12 @@ Route::prefix('/profile')->group(function () {
     Route::put('/{profile}/integrations/youtube/media-selection', [ProfileIntegrationController::class, 'youtubeUpdateMediaSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::delete('/{profile}/integrations/youtube/media/{media}', [ProfileIntegrationController::class, 'youtubeDeleteMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::delete('/{profile}/integrations/youtube', [ProfileIntegrationController::class, 'youtubeDisconnect'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/integrations/other/media', [ProfileOtherIntegrationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/integrations/other/media', [ProfileOtherIntegrationController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::patch('/{profile}/integrations/other/media/{media}', [ProfileOtherIntegrationController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::put('/{profile}/integrations/other/media-selection', [ProfileOtherIntegrationController::class, 'updateSelection'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/other/media/{media}', [ProfileOtherIntegrationController::class, 'destroyMedia'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/integrations/other', [ProfileOtherIntegrationController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/products', [ProfileProductController::class, 'index'])->middleware(['auth:sanctum', 'ability:products:read,profile:read']);
     Route::post('/{profile}/products', [ProfileProductController::class, 'store'])->middleware(['auth:sanctum', 'ability:products:write,profile:write']);
     Route::patch('/{profile}/products/settings', [ProfileProductController::class, 'settings'])->middleware(['auth:sanctum', 'ability:products:write,profile:write']);

@@ -2852,6 +2852,7 @@
                   "pm.test('Scoped chat token is returned', function () {",
                   "  pm.expect(json.data.chat_token).to.be.a('string').and.not.empty;",
                   "});",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "pm.collectionVariables.set('public_chat_id', json.data.chat_id);",
                   "pm.collectionVariables.set('public_chat_token', json.data.chat_token);"
                 ]
@@ -2894,7 +2895,7 @@
                 "messages"
               ]
             },
-            "description": "Creates a visitor chat. The returned chat ID is not sufficient to continue it; clients must also retain the encrypted chat token."
+            "description": "Creates a visitor chat. The returned chat ID is not sufficient to continue it; clients must also retain the encrypted chat token. When the answer discusses a configured social profile, social_links contains localized CTA labels and authoritative URLs."
           },
           "response": []
         },
@@ -2908,6 +2909,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "pm.test('Public chat continues', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "if (json.data && json.data.chat_token) {",
                   "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
                   "}"
@@ -2969,6 +2971,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "pm.test('Public audio message succeeds', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Structured social links are returned', function () { pm.expect(json.data.social_links).to.be.an('array'); });",
                   "if (json.data && json.data.chat_token) {",
                   "  pm.collectionVariables.set('public_chat_token', json.data.chat_token);",
                   "}"
@@ -4770,6 +4773,185 @@
                       "path": ["api", "profile", "{{profile_id}}", "integrations", "youtube"]
                     },
                     "description": "Disconnects YouTube and removes its stored video records. Requires profile:write."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Other",
+              "description": "Manual image/video integration with a localized destination catalog. Files use the profiles disk: local storage in development and S3 in production.",
+              "item": [
+                {
+                  "name": "Other - List Destinations",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Destination catalog succeeds', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "pm.test('Catalog exposes stable destination and action codes', function () {",
+                          "  pm.expect(json.data.destinations).to.be.an('array').and.not.empty;",
+                          "  pm.expect(json.data.destinations[0]).to.have.all.keys('value', 'label', 'action_type', 'action_label');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/integration-destinations?locale={{language_code}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "integration-destinations"],
+                      "query": [{ "key": "locale", "value": "{{language_code}}" }]
+                    },
+                    "description": "Returns the localized catalog used by the Other form. Requires profile:read. Persist value/action_type, never the translated labels."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - List Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Other media list succeeds', function () { pm.response.to.have.status(200); });",
+                          "const json = pm.response.json();",
+                          "if (json.data.media && json.data.media.length) pm.collectionVariables.set('other_media_id', json.data.media[0].id);"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other/media?locale={{language_code}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other", "media"],
+                      "query": [{ "key": "locale", "value": "{{language_code}}" }]
+                    },
+                    "description": "Lists Other media with localized destination_label/action_label and the profile selection limit. Requires profile:read."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - Upload Media",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Other media is uploaded', function () { pm.response.to.have.status(201); });",
+                          "const json = pm.response.json();",
+                          "pm.test('Localized action is returned', function () {",
+                          "  pm.expect(json.data.media.action_label).to.be.a('string').and.not.empty;",
+                          "});",
+                          "pm.collectionVariables.set('other_media_id', json.data.media.id);"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        { "key": "file", "type": "file", "src": "{{other_media_file_path}}" },
+                        { "key": "description", "type": "text", "value": "{{other_media_description}}" },
+                        { "key": "link", "type": "text", "value": "{{other_media_link}}" },
+                        { "key": "destination_type", "type": "text", "value": "{{other_destination_type}}" },
+                        { "key": "custom_destination_label", "type": "text", "value": "{{other_custom_destination_label}}" },
+                        { "key": "selected", "type": "text", "value": "true" },
+                        { "key": "rights_confirmed", "type": "text", "value": "true" }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other/media?locale={{language_code}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other", "media"],
+                      "query": [{ "key": "locale", "value": "{{language_code}}" }]
+                    },
+                    "description": "Uploads JPG/PNG/WEBP/GIF (10 MB) or MP4/MOV/WEBM (100 MB). The first upload creates the integration. The profiles disk writes locally in development and to S3 in production. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - Update Media",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      { "key": "Accept", "value": "application/json" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"description\": \"{{other_media_description}}\",\n  \"link\": \"{{other_media_link}}\",\n  \"destination_type\": \"{{other_destination_type}}\",\n  \"custom_destination_label\": \"{{other_custom_destination_label}}\",\n  \"selected\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other/media/{{other_media_id}}?locale={{language_code}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other", "media", "{{other_media_id}}"],
+                      "query": [{ "key": "locale", "value": "{{language_code}}" }]
+                    },
+                    "description": "Updates description, link, destination codes, optional custom label and selection without replacing the stored file. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - Update Media Selection",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      { "key": "Accept", "value": "application/json" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"media\": [\n    {\n      \"id\": \"{{other_media_id}}\",\n      \"selected\": true\n    }\n  ]\n}"
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other/media-selection",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other", "media-selection"]
+                    },
+                    "description": "Updates selected Other media while enforcing the subscription selection limit. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - Delete Media",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other/media/{{other_media_id}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other", "media", "{{other_media_id}}"]
+                    },
+                    "description": "Deletes one media record and its configured local/S3 object. Requires profile:write."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Other - Disconnect",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [{ "key": "Accept", "value": "application/json" }],
+                    "url": {
+                      "raw": "{{base_url}}/api/profile/{{profile_id}}/integrations/other",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "profile", "{{profile_id}}", "integrations", "other"]
+                    },
+                    "description": "Disconnects Other and removes all database media plus configured local/S3 objects. Requires profile:write."
                   },
                   "response": []
                 }
@@ -7222,6 +7404,36 @@
     },
     {
       "key": "youtube_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_media_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_media_description",
+      "value": "Contenido recomendado desde Postman.",
+      "type": "string"
+    },
+    {
+      "key": "other_media_link",
+      "value": "https://example.com/contenido",
+      "type": "string"
+    },
+    {
+      "key": "other_destination_type",
+      "value": "website",
+      "type": "string"
+    },
+    {
+      "key": "other_custom_destination_label",
       "value": "",
       "type": "string"
     },

@@ -268,7 +268,7 @@ class ProfileInsightsReportService
     private function providerFunnel(Profile $profile, ProfileInsightsRange $range): array
     {
         $rows = $this->eventRangeQuery($profile, $range)
-            ->whereIn('provider', ['instagram', 'tiktok', 'onlyfans', 'youtube'])
+            ->whereIn('provider', ['instagram', 'tiktok', 'onlyfans', 'other', 'youtube'])
             ->groupBy('provider')
             ->select('provider')
             ->selectRaw("SUM(CASE WHEN event_type = 'media_shown' THEN 1 ELSE 0 END) AS shown")
@@ -279,7 +279,7 @@ class ProfileInsightsReportService
             ->get()
             ->keyBy('provider');
 
-        return collect(['instagram', 'tiktok', 'onlyfans', 'youtube'])->map(function (string $provider) use ($rows): array {
+        return collect(['instagram', 'tiktok', 'onlyfans', 'other', 'youtube'])->map(function (string $provider) use ($rows): array {
             $row = $rows->get($provider);
             $shown = (int) ($row->shown ?? 0);
             $clicks = (int) ($row->external_clicks ?? 0);

@@ -38,6 +38,7 @@ class ProfileFeatureController extends Controller
             'features.integrations.instagram' => ['nullable', 'boolean'],
             'features.integrations.tiktok' => ['nullable', 'boolean'],
             'features.integrations.onlyfans' => ['nullable', 'boolean'],
+            'features.integrations.other' => ['nullable', 'boolean'],
             'features.integrations.youtube' => ['nullable', 'boolean'],
         ]);
 
