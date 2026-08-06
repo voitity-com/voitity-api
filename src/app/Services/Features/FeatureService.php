@@ -18,6 +18,8 @@ class FeatureService
 
     public const INTEGRATIONS_ONLYFANS = 'integrations.onlyfans';
 
+    public const INTEGRATIONS_OTHER = 'integrations.other';
+
     public const INTEGRATIONS_YOUTUBE = 'integrations.youtube';
 
     /**
@@ -48,6 +50,12 @@ class FeatureService
                 'key' => self::INTEGRATIONS_ONLYFANS,
                 'name' => 'OnlyFans',
                 'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            ],
+            self::INTEGRATIONS_OTHER => [
+                'group' => 'integrations',
+                'key' => self::INTEGRATIONS_OTHER,
+                'name' => 'Other',
+                'provider' => ProfileIntegration::PROVIDER_OTHER,
             ],
             self::INTEGRATIONS_YOUTUBE => [
                 'group' => 'integrations',
@@ -118,7 +126,7 @@ class FeatureService
             return (bool) $stored->enabled;
         }
 
-        return $this->defaultProfileFeatureEnabled($key);
+        return $this->defaultProfileFeatureEnabled();
     }
 
     public function isProfileIntegrationEnabled(Profile $profile, string $provider): bool
@@ -172,7 +180,7 @@ class FeatureService
                 $stored = $settings->get($key);
                 $enabled = $stored instanceof ProfileFeatureSetting
                     ? (bool) $stored->enabled
-                    : $this->defaultProfileFeatureEnabled($key);
+                    : $this->defaultProfileFeatureEnabled();
 
                 return [
                     ...$feature,
@@ -216,6 +224,7 @@ class FeatureService
             ProfileIntegration::PROVIDER_INSTAGRAM => self::INTEGRATIONS_INSTAGRAM,
             ProfileIntegration::PROVIDER_TIKTOK => self::INTEGRATIONS_TIKTOK,
             ProfileIntegration::PROVIDER_ONLYFANS => self::INTEGRATIONS_ONLYFANS,
+            ProfileIntegration::PROVIDER_OTHER => self::INTEGRATIONS_OTHER,
             ProfileIntegration::PROVIDER_YOUTUBE => self::INTEGRATIONS_YOUTUBE,
             default => null,
         };
@@ -241,8 +250,8 @@ class FeatureService
         return array_intersect_key($features, $this->catalog());
     }
 
-    private function defaultProfileFeatureEnabled(string $key): bool
+    private function defaultProfileFeatureEnabled(): bool
     {
-        return array_key_exists($key, $this->catalog());
+        return false;
     }
 }

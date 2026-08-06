@@ -737,6 +737,10 @@ class AnswerBuilder
             'age_restricted' => (bool) ($item['age_restricted'] ?? false),
             'taken_at' => $item['taken_at'] ?? null,
             'channel_url' => $item['channel_url'] ?? null,
+            'destination_type' => $item['destination_type'] ?? null,
+            'destination_label' => $item['destination_label'] ?? null,
+            'action_type' => $item['action_type'] ?? null,
+            'action_label' => $item['action_label'] ?? null,
         ];
     }
 
@@ -1360,6 +1364,19 @@ class AnswerBuilder
 
         if (! isset($media['permalink']) || ! is_string($media['permalink']) || trim($media['permalink']) === '') {
             return '';
+        }
+
+        if (
+            ($media['provider_key'] ?? null) === ProfileIntegration::PROVIDER_OTHER
+            && is_string($media['action_label'] ?? null)
+            && trim($media['action_label']) !== ''
+        ) {
+            $actionLabel = trim($media['action_label']);
+            $actionLabel = mb_strtolower(mb_substr($actionLabel, 0, 1)).mb_substr($actionLabel, 1);
+
+            return $locale === 'en'
+                ? "You can {$actionLabel}."
+                : "Puedes {$actionLabel}.";
         }
 
         $providerLabel = $this->mediaProviderLabel($media);

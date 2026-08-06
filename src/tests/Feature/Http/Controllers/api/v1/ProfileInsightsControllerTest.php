@@ -18,9 +18,19 @@ use App\Models\ProfileInteractionEvent;
 use App\Models\ProfileProduct;
 use App\Models\User;
 use Illuminate\Support\Str;
+use Tests\Support\EnablesFeaturesForTestProfiles;
 
 class ProfileInsightsControllerTest extends TestAPI
 {
+    use EnablesFeaturesForTestProfiles;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableFeaturesForTestProfiles();
+    }
+
     public function test_owner_can_reconcile_chat_message_visitor_and_provider_metrics(): void
     {
         $user = User::factory()->create();
@@ -78,9 +88,10 @@ class ProfileInsightsControllerTest extends TestAPI
             ->assertJsonPath('data.summary.youtube_video_clicks', 1)
             ->assertJsonPath('data.summary.youtube_channel_clicks', 1)
             ->assertJsonPath('data.provider_funnel.0.ctr', 100)
-            ->assertJsonPath('data.provider_funnel.3.provider', 'youtube')
-            ->assertJsonPath('data.provider_funnel.3.video_clicks', 1)
-            ->assertJsonPath('data.provider_funnel.3.channel_clicks', 1)
+            ->assertJsonPath('data.provider_funnel.3.provider', 'other')
+            ->assertJsonPath('data.provider_funnel.4.provider', 'youtube')
+            ->assertJsonPath('data.provider_funnel.4.video_clicks', 1)
+            ->assertJsonPath('data.provider_funnel.4.channel_clicks', 1)
             ->assertJsonPath('data.analysis_coverage.classified', 1);
     }
 

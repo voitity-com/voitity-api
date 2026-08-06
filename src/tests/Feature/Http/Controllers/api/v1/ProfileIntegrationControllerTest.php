@@ -14,9 +14,19 @@ use App\Services\Integrations\TikTokIntegrationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\EnablesFeaturesForTestProfiles;
 
 class ProfileIntegrationControllerTest extends TestAPI
 {
+    use EnablesFeaturesForTestProfiles;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableFeaturesForTestProfiles();
+    }
+
     public function test_instagram_connect_url_uses_instagram_login_parameters(): void
     {
         config([

@@ -29,10 +29,20 @@ use Illuminate\Support\Facades\Event;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\EnablesFeaturesForTestProfiles;
 use Tests\TestCase;
 
 class AnswerBuilderTest extends TestCase
 {
+    use EnablesFeaturesForTestProfiles;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableFeaturesForTestProfiles();
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();
@@ -212,11 +222,13 @@ class AnswerBuilderTest extends TestCase
             'products_enabled' => true,
             'locale' => 'es',
         ]);
-        ProfileFeatureSetting::query()->create([
-            'profile_id' => $profile->id,
-            'feature_key' => FeatureService::PRODUCTS,
-            'enabled' => false,
-        ]);
+        ProfileFeatureSetting::query()->updateOrCreate(
+            [
+                'profile_id' => $profile->id,
+                'feature_key' => FeatureService::PRODUCTS,
+            ],
+            ['enabled' => false],
+        );
         $product = app(ProfileProductService::class)->create($profile, $user, [
             'name' => 'Proteína Whey',
             'description' => 'Proteína para complementar la recuperación deportiva.',
@@ -523,11 +535,13 @@ class AnswerBuilderTest extends TestCase
             'personality' => 'friendly',
             'locale' => 'es',
         ]);
-        ProfileFeatureSetting::query()->create([
-            'profile_id' => $profile->id,
-            'feature_key' => FeatureService::INTEGRATIONS_INSTAGRAM,
-            'enabled' => false,
-        ]);
+        ProfileFeatureSetting::query()->updateOrCreate(
+            [
+                'profile_id' => $profile->id,
+                'feature_key' => FeatureService::INTEGRATIONS_INSTAGRAM,
+            ],
+            ['enabled' => false],
+        );
         $chat = Chat::create(['profile_id' => $profile->id]);
         $question = Message::create([
             'profile_id' => $profile->id,
@@ -2367,6 +2381,80 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame('youtube', $response['media'][0]['provider_key']);
         $this->assertStringContainsString('Puedes crear un perfil', $response['text']);
         $this->assertStringContainsString('Puedes verlo en YouTube', $response['text']);
+    }
+
+    public function test_get_answer_exposes_localized_other_integration_action_label(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Abel Developer',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_user_id' => (string) $profile->id,
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_media_id' => 'other-interview',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/interview.jpg',
+            'permalink' => 'https://diario.example.com/interview',
+            'caption' => 'Entrevista completa',
+            'observation' => 'Entrevista sobre el lanzamiento del perfil.',
+            'selected' => true,
+            'taken_at' => now(),
+            'metadata' => [
+                'action_type' => 'read_on',
+                'destination_type' => 'news_media',
+                'source_type' => 'manual_upload',
+            ],
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame la entrevista completa',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'Aquí tienes la entrevista.',
+                    'media_request' => true,
+                    'media_action' => 'show',
+                    'media_ids' => [$media->id],
+                    'constraints' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success',
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame($media->id, $response['media'][0]['id']);
+        $this->assertSame('other', $response['media'][0]['provider_key']);
+        $this->assertSame('Diario / Medio', $response['media'][0]['provider_label']);
+        $this->assertSame('news_media', $response['media'][0]['destination_type']);
+        $this->assertSame('read_on', $response['media'][0]['action_type']);
+        $this->assertSame('Leer en el medio', $response['media'][0]['action_label']);
+        $this->assertStringContainsString('Puedes leer en el medio', $response['text']);
     }
 
     #[DataProvider('implicitIntegrationMediaProvider')]

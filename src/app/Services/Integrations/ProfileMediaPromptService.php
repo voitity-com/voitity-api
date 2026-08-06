@@ -14,6 +14,7 @@ class ProfileMediaPromptService
     public function __construct(
         private readonly FeatureService $features,
         private readonly SubscriptionPlanCapabilityService $capabilities,
+        private readonly IntegrationDestinationCatalog $destinations,
     ) {}
 
     /**
@@ -142,26 +143,34 @@ class ProfileMediaPromptService
                 $media->id
             ))
             ->values()
-            ->map(fn (ProfileIntegrationMedia $media): array => [
-                'id' => $media->id,
-                'provider' => $this->providerLabel($media->provider),
-                'provider_key' => $media->provider,
-                'provider_label' => $this->providerLabel($media->provider),
-                'source_type' => $this->sourceTypeForProvider($media->provider),
-                'media_type' => $media->media_type,
-                'image_url' => $media->thumbnail_url
-                    ?: (str_contains(strtoupper((string) $media->media_type), 'VIDEO') ? null : $media->media_url),
-                'media_url' => $media->media_url,
-                'thumbnail_url' => $media->thumbnail_url,
-                'permalink' => $media->permalink,
-                'caption' => $media->caption,
-                'observation' => filled($media->observation) ? $media->observation : $media->caption,
-                'age_restricted' => $media->age_restricted,
-                'taken_at' => $media->taken_at?->toDateString(),
-                'channel_url' => $media->provider === ProfileIntegration::PROVIDER_YOUTUBE
-                    ? data_get($media->integration?->metadata, 'channel_url')
-                    : null,
-            ])
+            ->map(function (ProfileIntegrationMedia $media) use ($profile): array {
+                $destination = $this->destinations->labelsForMedia($media->metadata, $profile->locale);
+                $providerLabel = $media->provider === ProfileIntegration::PROVIDER_OTHER
+                    ? ($destination['destination_label'] ?: $this->providerLabel($media->provider))
+                    : $this->providerLabel($media->provider);
+
+                return [
+                    'id' => $media->id,
+                    'provider' => $providerLabel,
+                    'provider_key' => $media->provider,
+                    'provider_label' => $providerLabel,
+                    'source_type' => $this->sourceTypeForProvider($media->provider),
+                    'media_type' => $media->media_type,
+                    'image_url' => $media->thumbnail_url
+                        ?: (str_contains(strtoupper((string) $media->media_type), 'VIDEO') ? null : $media->media_url),
+                    'media_url' => $media->media_url,
+                    'thumbnail_url' => $media->thumbnail_url,
+                    'permalink' => $media->permalink,
+                    'caption' => $media->caption,
+                    'observation' => filled($media->observation) ? $media->observation : $media->caption,
+                    'age_restricted' => $media->age_restricted,
+                    'taken_at' => $media->taken_at?->toDateString(),
+                    'channel_url' => $media->provider === ProfileIntegration::PROVIDER_YOUTUBE
+                        ? data_get($media->integration?->metadata, 'channel_url')
+                        : null,
+                    ...$destination,
+                ];
+            })
             ->filter(fn (array $media): bool => filled($media['media_url'] ?? null) || filled($media['permalink'] ?? null))
             ->values()
             ->all();

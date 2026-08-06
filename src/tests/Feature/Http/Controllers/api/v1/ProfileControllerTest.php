@@ -100,20 +100,18 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.publication.is_published', false);
         $settings = collect($response->json('data.feature_settings'))->keyBy('key');
 
-        foreach ([
-            FeatureService::PRODUCTS,
-            FeatureService::INTEGRATIONS_INSTAGRAM,
-            FeatureService::INTEGRATIONS_TIKTOK,
-            FeatureService::INTEGRATIONS_ONLYFANS,
-        ] as $featureKey) {
+        $featureKeys = array_keys(app(FeatureService::class)->catalog());
+        $this->assertCount(count($featureKeys), $settings);
+
+        foreach ($featureKeys as $featureKey) {
             $this->assertTrue($settings->has($featureKey));
             $this->assertTrue($settings[$featureKey]['available']);
-            $this->assertTrue($settings[$featureKey]['enabled']);
-            $this->assertTrue($settings[$featureKey]['effective']);
+            $this->assertFalse($settings[$featureKey]['enabled']);
+            $this->assertFalse($settings[$featureKey]['effective']);
             $this->assertDatabaseHas('profile_feature_settings', [
                 'profile_id' => $new_profile->id,
                 'feature_key' => $featureKey,
-                'enabled' => true,
+                'enabled' => false,
             ]);
         }
         $this->assertDatabaseHas('subscription_uses', [

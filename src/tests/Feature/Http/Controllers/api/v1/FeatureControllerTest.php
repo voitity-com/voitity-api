@@ -37,6 +37,7 @@ class FeatureControllerTest extends TestAPI
                         'instagram' => true,
                         'tiktok' => false,
                         'onlyfans' => true,
+                        'other' => true,
                     ],
                 ],
             ])
@@ -47,6 +48,7 @@ class FeatureControllerTest extends TestAPI
         $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_INSTAGRAM)['enabled']);
         $this->assertFalse($this->feature($features, FeatureService::INTEGRATIONS_TIKTOK)['enabled']);
         $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_ONLYFANS)['enabled']);
+        $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_OTHER)['enabled']);
         $this->assertDatabaseHas('feature_flags', [
             'key' => FeatureService::PRODUCTS,
             'enabled' => false,
@@ -80,8 +82,16 @@ class FeatureControllerTest extends TestAPI
 
         $products = $this->feature($response->json('data.features'), FeatureService::PRODUCTS);
         $this->assertFalse($products['available']);
-        $this->assertTrue($products['enabled']);
+        $this->assertFalse($products['enabled']);
         $this->assertFalse($products['effective']);
+
+        $instagram = $this->feature(
+            $response->json('data.features'),
+            FeatureService::INTEGRATIONS_INSTAGRAM,
+        );
+        $this->assertTrue($instagram['available']);
+        $this->assertFalse($instagram['enabled']);
+        $this->assertFalse($instagram['effective']);
 
         $response = $this->withToken($token)
             ->patchJson("/api/profile/{$profile->id}/features", [
@@ -101,6 +111,32 @@ class FeatureControllerTest extends TestAPI
             'profile_id' => $profile->id,
             'feature_key' => FeatureService::PRODUCTS,
             'enabled' => false,
+        ]);
+    }
+
+    public function test_existing_settings_are_preserved_and_missing_features_are_not_backfilled(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        ProfileFeatureSetting::query()->create([
+            'profile_id' => $profile->id,
+            'feature_key' => FeatureService::INTEGRATIONS_INSTAGRAM,
+            'enabled' => true,
+        ]);
+        $token = $user->createToken('features', ['profile:read'])->plainTextToken;
+
+        $response = $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/features")
+            ->assertOk();
+
+        $features = $response->json('data.features');
+        $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_INSTAGRAM)['effective']);
+        $this->assertFalse($this->feature($features, FeatureService::INTEGRATIONS_TIKTOK)['effective']);
+        $this->assertDatabaseCount('profile_feature_settings', 1);
+        $this->assertDatabaseHas('profile_feature_settings', [
+            'profile_id' => $profile->id,
+            'feature_key' => FeatureService::INTEGRATIONS_INSTAGRAM,
+            'enabled' => true,
         ]);
     }
 

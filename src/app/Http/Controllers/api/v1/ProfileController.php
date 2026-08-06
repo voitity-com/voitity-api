@@ -177,7 +177,7 @@ class ProfileController extends Controller
                     'active' => false,
                     'status' => ProfileStatus::Draft,
                 ]));
-                $features->initializeProfileFeatures($profile, true);
+                $features->initializeProfileFeatures($profile, false);
                 $voice = $this->createBaseVoiceForProfile($profile);
 
                 $usageRecorder->record(
