@@ -257,9 +257,9 @@ class ProfileKnowledgeControllerTest extends TestAPI
 
         $approveResponse->assertStatus(200);
         $approveResponse->assertJsonPath('message', 'Profile source approved successfully.');
-        $approveResponse->assertJsonPath('data.status', ProfileSourceStatus::Indexed->value);
+        $approveResponse->assertJsonPath('data.status', ProfileSourceStatus::Approved->value);
         $approveResponse->assertJsonPath('data.items.0.approved', true);
-        $approveResponse->assertJsonPath('data.items.0.indexed', true);
+        $approveResponse->assertJsonPath('data.items.0.indexed', false);
 
         $profile->refresh();
         $this->assertStringContainsString('Built and operated production Laravel APIs.', $profile->data['work'][0]['description']);

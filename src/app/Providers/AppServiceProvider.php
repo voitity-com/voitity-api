@@ -3,6 +3,12 @@
 namespace App\Providers;
 
 use App\Models\Profile;
+use App\Models\ProfileFact;
+use App\Models\ProfileIntegrationMedia;
+use App\Models\ProfileProduct;
+use App\Models\ProfileSource;
+use App\Models\ProfileSourceItem;
+use App\Observers\ProfileKnowledgeSourceObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -23,6 +29,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        foreach ([
+            Profile::class,
+            ProfileSource::class,
+            ProfileSourceItem::class,
+            ProfileFact::class,
+            ProfileIntegrationMedia::class,
+            ProfileProduct::class,
+        ] as $model) {
+            $model::observe(ProfileKnowledgeSourceObserver::class);
+        }
+
         RateLimiter::for('contact-submissions', function (Request $request) {
             return Limit::perMinute((int) config('contact.rate_limit_per_minute', 5))
                 ->by((string) $request->ip());

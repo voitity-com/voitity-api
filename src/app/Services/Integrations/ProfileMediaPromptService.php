@@ -323,6 +323,10 @@ class ProfileMediaPromptService
             'fotos',
             'imagen',
             'imágenes',
+            'infografía',
+            'infografías',
+            'infographic',
+            'infographics',
             'post',
             'publicación',
             'video',
@@ -574,6 +578,8 @@ class ProfileMediaPromptService
         $sourceType = str_replace([' ', '-'], '_', $sourceType);
         $sourceType = match ($sourceType) {
             'social', 'social_media', 'social_networks', 'redes_sociales' => 'social_network',
+            'facebook', 'instagram', 'linkedin', 'onlyfans', 'tiktok', 'x', 'youtube' => 'social_network',
+            'manual', 'manual_upload', 'other', 'otro' => 'integration',
             default => $sourceType,
         };
 

@@ -50,6 +50,16 @@ class AnswerBuilder
         $structuredAnswer = $this->parseStructuredAnswer($rawAnswerText);
         $productService = app(ProfileProductPromptService::class);
         $availableProducts = $productService->productsForPrompt($profile);
+        $usesKnowledgeRetrieval = data_get($chatAIAnswer->response, '_bigmelo.knowledge.mode') === 'rag';
+        $retrievedProductIds = $this->knowledgeSourceIds($chatAIAnswer, 'product');
+
+        if ($usesKnowledgeRetrieval) {
+            $availableProducts = collect($availableProducts)
+                ->filter(fn (array $product): bool => in_array((int) ($product['id'] ?? 0), $retrievedProductIds, true))
+                ->values()
+                ->all();
+        }
+
         $mediaService = app(ProfileMediaPromptService::class);
         if ($structuredAnswer !== null) {
             $mediaContext = $this->mergeStructuredMediaContextWithText(
@@ -88,6 +98,13 @@ class AnswerBuilder
             $mediaContext,
             $question->text
         );
+        $retrievedMediaIds = $this->knowledgeSourceIds($chatAIAnswer, 'integration_media');
+        $mediaContext = $this->constrainMediaContextToRetrievedIds(
+            $mediaService,
+            $mediaContext,
+            $retrievedMediaIds,
+            $usesKnowledgeRetrieval,
+        );
         $hasNoAnswerMarker = str_contains($rawAnswerText, '[[BIGMELO_NO_ANSWER]]');
         $source = $chatAIAnswer->source;
         $audioPayload = null;
@@ -107,8 +124,24 @@ class AnswerBuilder
 
         if (
             $mediaPayload === []
+            && ($mediaContext['wants_media'] ?? false)
+            && ($mediaContext['candidate_media'] ?? []) !== []
+            && $this->looksLikeExplicitMediaShowRequest($question->text)
+        ) {
+            $mediaPayload = $this->targetedMediaPayloadForQuestion($question, $mediaContext, $answerText);
+
+            if ($mediaPayload === []) {
+                $mediaPayload = [$this->mediaItemToPayload($mediaContext['candidate_media'][0])];
+            }
+
+            $mediaPayloadWasReplaced = true;
+        }
+
+        if (
+            $mediaPayload === []
             && ! ($mediaContext['wants_media'] ?? false)
             && ($mediaContext['candidate_media'] ?? []) !== []
+            && config('ai-knowledge.retrieval.proactive_media_enabled', false)
         ) {
             $mediaPayload = $this->stronglyRelevantMediaPayloadForQuestion(
                 $question,
@@ -288,6 +321,39 @@ class AnswerBuilder
     }
 
     /**
+     * RAG exposes the authoritative records selected during retrieval. Keep
+     * media fallback deterministic by using only those records and preserving
+     * their ranking order.
+     *
+     * @param  array<int, int>  $retrievedIds
+     * @return array<string, mixed>
+     */
+    private function constrainMediaContextToRetrievedIds(
+        ProfileMediaPromptService $mediaService,
+        array $mediaContext,
+        array $retrievedIds,
+        bool $usesRetrieval,
+    ): array {
+        if (! $usesRetrieval) {
+            return $mediaContext;
+        }
+
+        $byId = collect($mediaContext['candidate_media'] ?? [])
+            ->keyBy(fn (array $media): int => (int) ($media['id'] ?? 0));
+        $candidateMedia = collect($retrievedIds)
+            ->map(fn (int $id) => $byId->get($id))
+            ->filter(fn ($media): bool => is_array($media))
+            ->values()
+            ->all();
+
+        return array_merge($mediaContext, [
+            'candidate_media' => $candidateMedia,
+            'candidate_provider_labels' => $mediaService->providerLabels($candidateMedia),
+            'retrieved_media_ids' => $retrievedIds,
+        ]);
+    }
+
+    /**
      * @param  array<string, mixed>  $structuredContext
      * @param  array<string, mixed>  $textContext
      * @return array<string, mixed>
@@ -417,7 +483,7 @@ class AnswerBuilder
     private function requestedMediaType(string $question): ?string
     {
         $normalized = $this->normalizeSearchText($question);
-        $asksForImage = preg_match('/\b(foto|fotos|imagen|imagenes|photo|photos|picture|pictures|image|images)\b/u', $normalized) === 1;
+        $asksForImage = preg_match('/\b(foto|fotos|imagen|imagenes|infografia|infografias|photo|photos|picture|pictures|image|images|infographic|infographics)\b/u', $normalized) === 1;
         $asksForVideo = preg_match('/\b(video|videos|clip|clips)\b/u', $normalized) === 1;
 
         if ($asksForImage === $asksForVideo) {
@@ -454,6 +520,10 @@ class AnswerBuilder
             'images',
             'imagen',
             'imagenes',
+            'infografia',
+            'infografias',
+            'infographic',
+            'infographics',
             'instagram',
             'media',
             'mostrar',
@@ -885,6 +955,10 @@ class AnswerBuilder
             'fotos',
             'imagen',
             'imágenes',
+            'infografía',
+            'infografías',
+            'infographic',
+            'infographics',
             'instagram',
             'post',
             'publicación',
@@ -1484,7 +1558,8 @@ class AnswerBuilder
             return [];
         }
 
-        $genericSocialRequest = $this->looksLikeGenericSocialLinkRequest($questionText);
+        $genericSocialRequest = $this->looksLikeGenericSocialLinkRequest($questionText)
+            && ! $this->looksLikeMediaRequest($questionText);
         $mediaDestinations = collect($mediaPayload)
             ->filter(fn (array $media): bool => filled($media['permalink'] ?? null) || filled($media['channel_url'] ?? null))
             ->flatMap(fn (array $media): array => [
@@ -1531,6 +1606,24 @@ class AnswerBuilder
         }
 
         return $links;
+    }
+
+    /** @return array<int, int> */
+    private function knowledgeSourceIds(ChatAIAnswer $answer, string $sourceType): array
+    {
+        $mode = data_get($answer->response, '_bigmelo.knowledge.mode');
+
+        if ($mode !== 'rag') {
+            return [];
+        }
+
+        return collect(data_get($answer->response, '_bigmelo.knowledge.retrieved_sources', []))
+            ->filter(fn ($source): bool => is_array($source) && ($source['source_type'] ?? null) === $sourceType)
+            ->map(fn (array $source): int => (int) ($source['source_id'] ?? 0))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function looksLikeGenericSocialLinkRequest(string $text): bool

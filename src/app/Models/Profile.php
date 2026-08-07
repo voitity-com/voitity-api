@@ -6,6 +6,7 @@ use App\Enums\ProfileStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Profile extends Model
@@ -110,6 +111,16 @@ class Profile extends Model
     public function facts(): HasMany
     {
         return $this->hasMany(ProfileFact::class);
+    }
+
+    public function knowledgeIndex(): HasOne
+    {
+        return $this->hasOne(ProfileKnowledgeIndex::class);
+    }
+
+    public function knowledgeChunks(): HasMany
+    {
+        return $this->hasMany(ProfileKnowledgeChunk::class);
     }
 
     public function featureSettings(): HasMany

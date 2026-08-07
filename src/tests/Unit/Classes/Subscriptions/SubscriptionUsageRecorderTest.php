@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Classes\Subscriptions;
 
+use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
@@ -280,12 +281,11 @@ class SubscriptionUsageRecorderTest extends TestCase
         );
     }
 
-    public function test_it_resets_annual_monthly_limits_before_recording_usage(): void
+    public function test_it_resets_annual_monthly_limits_before_profile_creation_and_records_usage(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-02-16 10:00:00'));
 
         $user = User::factory()->create();
-        $profile = $this->profileFor($user);
         $subscription = $this->createActiveSubscriptionFor(
             $user,
             plan: SubscriptionPlan::StarterAnnual,
@@ -294,6 +294,16 @@ class SubscriptionUsageRecorderTest extends TestCase
             periodRenewsAt: Carbon::parse('2026-02-15 10:00:00'),
             profilesRemaining: 0
         );
+
+        app(SubscriptionEntitlementService::class)->assertCanUse($user, ['profiles' => 1]);
+
+        $resetLimit = $subscription->limit()->firstOrFail();
+
+        $this->assertTrue($resetLimit->period_started_at->isSameDay(Carbon::parse('2026-02-15')));
+        $this->assertTrue($resetLimit->period_renews_at->isSameDay(Carbon::parse('2026-03-15')));
+        $this->assertSame(1, $resetLimit->profiles_remaining);
+
+        $profile = $this->profileFor($user);
 
         (new SubscriptionUsageRecorder)->record(
             userId: $user->id,

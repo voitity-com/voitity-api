@@ -346,6 +346,7 @@ Artisan::command('integrations:refresh-youtube', function (YouTubeIntegrationSer
 
 Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('insights:close-inactive-chats')->everyFiveMinutes()->withoutOverlapping(5)->onOneServer();
+Schedule::command('ai-knowledge:index --pending')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('integrations:refresh-youtube')->dailyAt('02:20')->withoutOverlapping(60)->onOneServer();
 Schedule::command('subscriptions:bill-recurring')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();

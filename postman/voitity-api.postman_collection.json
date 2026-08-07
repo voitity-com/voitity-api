@@ -1248,6 +1248,139 @@
       ]
     },
     {
+      "name": "Feature Flags",
+      "item": [
+        {
+          "name": "List Global Feature Flags",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/features",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "features"
+              ]
+            },
+            "description": "Lists global product and integration feature flags. AI knowledge always uses embedding retrieval and is not exposed as a configurable feature."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Global Feature Flags",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"features\": {\n    \"products\": true,\n    \"integrations\": {\n      \"instagram\": true,\n      \"tiktok\": true,\n      \"onlyfans\": true,\n      \"other\": true,\n      \"youtube\": true\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/features",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "features"
+              ]
+            },
+            "description": "Updates one or more global product or integration feature flags. AI knowledge retrieval is controlled only by technical configuration and index health."
+          },
+          "response": []
+        },
+        {
+          "name": "List Profile Feature Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/features",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "features"
+              ]
+            },
+            "description": "Lists per-profile configurable feature settings. AI embedding retrieval is global and is intentionally not returned here."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Feature Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"features\": {\n    \"products\": false,\n    \"integrations\": {\n      \"instagram\": false,\n      \"tiktok\": false,\n      \"onlyfans\": false,\n      \"other\": false,\n      \"youtube\": false\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/features",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "features"
+              ]
+            },
+            "description": "Updates per-profile feature settings. New profiles initialize these settings explicitly as false."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Protected Test",
       "item": [
         {

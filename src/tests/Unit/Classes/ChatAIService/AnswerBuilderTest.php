@@ -2339,6 +2339,7 @@ class AnswerBuilderTest extends TestCase
     public function test_get_answer_recommends_youtube_video_when_question_matches_admin_description(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);
+        config()->set('ai-knowledge.retrieval.proactive_media_enabled', true);
 
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
@@ -2467,6 +2468,7 @@ class AnswerBuilderTest extends TestCase
         bool $ageRestricted
     ): void {
         Event::fake([SubscriptionUsageRequested::class]);
+        config()->set('ai-knowledge.retrieval.proactive_media_enabled', true);
 
         $user = User::factory()->create(['role' => 'admin']);
         $profile = Profile::create([
@@ -2664,6 +2666,254 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame($media->id, $response['media'][0]['id']);
         $this->assertSame('github', $response['media'][0]['destination_type']);
         $this->assertSame([], $response['social_links']);
+    }
+
+    public function test_rag_attaches_only_the_retrieved_media_for_an_explicit_request(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create(['locale' => 'es']);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_user_id' => 'creator',
+            'username' => 'creator',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $retrieved = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'paris-session',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/paris.jpg',
+            'observation' => 'Sesión editorial del Proyecto Aurora en París.',
+            'age_restricted' => true,
+            'selected' => true,
+        ]);
+        $notRetrieved = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_ONLYFANS,
+            'provider_media_id' => 'beach-session',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/beach.jpg',
+            'observation' => 'Sesión de playa.',
+            'age_restricted' => true,
+            'selected' => true,
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame contenido de OnlyFans.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Aquí tienes contenido disponible.',
+                'media_request' => true,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => ['include_providers' => ['onlyfans']],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'integration_media',
+                            'source_id' => (string) $retrieved->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$retrieved->id], collect($response['media'])->pluck('id')->all());
+        $this->assertNotContains($notRetrieved->id, collect($response['media'])->pluck('id')->all());
+    }
+
+    public function test_rag_rejects_a_product_card_that_was_not_retrieved(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create(['products_enabled' => true]);
+        $retrieved = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Puma Orbita',
+            'description' => 'Balón referencia 61385.',
+            'image_url' => 'https://cdn.example.com/puma.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/puma',
+            'status' => 'published',
+        ]);
+        $notRetrieved = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Adidas Tiro',
+            'description' => 'Otro balón.',
+            'image_url' => 'https://cdn.example.com/adidas.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/adidas',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame el balón 61385.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Este es el balón solicitado.',
+                'media_action' => 'none',
+                'media_ids' => [],
+                'product_request' => true,
+                'product_action' => 'show',
+                'product_ids' => [$retrieved->id, $notRetrieved->id],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'product',
+                            'source_id' => (string) $retrieved->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$retrieved->id], collect($response['products'])->pluck('id')->all());
+    }
+
+    public function test_default_rag_behavior_does_not_attach_media_without_a_media_request(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create(['locale' => 'es']);
+        $media = $this->createSelectedYouTubeVideo($profile, $user);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Cómo creo un perfil?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Puedes crearlo desde el panel.',
+                'media_request' => false,
+                'media_action' => 'none',
+                'media_ids' => [],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'integration_media',
+                            'source_id' => (string) $media->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+    }
+
+    public function test_rag_recognizes_an_infographic_as_an_explicit_other_media_request(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create(['locale' => 'es']);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_user_id' => (string) $profile->id,
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_OTHER,
+            'provider_media_id' => 'prisma-infographic',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://cdn.example.com/prisma.jpg',
+            'caption' => 'Infografía del Proyecto Prisma sobre pgvector.',
+            'observation' => 'Arquitectura con Laravel, React, PostgreSQL, pgvector y AWS.',
+            'selected' => true,
+            'metadata' => ['destination_type' => 'blog'],
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame la infografía del Proyecto Prisma sobre pgvector.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Tengo una infografía relacionada.',
+                'media_request' => false,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'constraints' => ['include_source_types' => ['other']],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'integration_media',
+                            'source_id' => (string) $media->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$media->id], collect($response['media'])->pluck('id')->all());
+        $this->assertSame('other', $response['media'][0]['provider_key']);
     }
 
     public function test_get_answer_handles_voice_driver_failure(): void

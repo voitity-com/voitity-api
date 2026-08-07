@@ -162,19 +162,19 @@ class ProfileKnowledgeController extends Controller
             $now = now();
 
             $source->update([
-                'status' => ProfileSourceStatus::Indexed,
+                'status' => ProfileSourceStatus::Approved,
                 'approved_at' => $now,
-                'indexed_at' => $now,
+                'indexed_at' => null,
             ]);
 
             $source->items()->update([
                 'approved' => true,
-                'indexed' => true,
+                'indexed' => false,
             ]);
 
             $source->facts()->update([
                 'approved' => true,
-                'indexed' => true,
+                'indexed' => false,
             ]);
 
             $synchronizer->syncApprovedSource($profile, $source->fresh(['items']));

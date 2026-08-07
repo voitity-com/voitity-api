@@ -23,7 +23,7 @@ class FeatureService
     public const INTEGRATIONS_YOUTUBE = 'integrations.youtube';
 
     /**
-     * @return array<string, array{group: string, key: string, name: string, provider?: string}>
+     * @return array<string, array{group: string, key: string, name: string, provider?: string, profile_configurable?: bool}>
      */
     public function catalog(): array
     {
@@ -98,6 +98,9 @@ class FeatureService
                     'metadata' => [
                         'group' => $definition['group'],
                         ...(isset($definition['provider']) ? ['provider' => $definition['provider']] : []),
+                        ...(array_key_exists('profile_configurable', $definition)
+                            ? ['profile_configurable' => $definition['profile_configurable']]
+                            : []),
                     ],
                     'name' => $definition['name'],
                 ]
@@ -174,7 +177,7 @@ class FeatureService
             ->get()
             ->keyBy('feature_key');
 
-        return collect($this->catalog())
+        return collect($this->profileCatalog())
             ->map(function (array $feature, string $key) use ($flags, $settings): array {
                 $globallyEnabled = (bool) ($flags->get($key)?->enabled ?? false);
                 $stored = $settings->get($key);
@@ -200,7 +203,7 @@ class FeatureService
      */
     public function updateProfileFeatures(Profile $profile, array $features): array
     {
-        foreach ($this->onlyCatalogKeys($features) as $key => $enabled) {
+        foreach ($this->onlyProfileCatalogKeys($features) as $key => $enabled) {
             ProfileFeatureSetting::query()->updateOrCreate(
                 ['feature_key' => $key, 'profile_id' => $profile->id],
                 ['enabled' => (bool) $enabled]
@@ -214,7 +217,7 @@ class FeatureService
     {
         $this->updateProfileFeatures(
             $profile,
-            array_fill_keys(array_keys($this->catalog()), $enabled)
+            array_fill_keys(array_keys($this->profileCatalog()), $enabled)
         );
     }
 
@@ -248,6 +251,26 @@ class FeatureService
     private function onlyCatalogKeys(array $features): array
     {
         return array_intersect_key($features, $this->catalog());
+    }
+
+    /**
+     * @return array<string, array{group: string, key: string, name: string, provider?: string, profile_configurable?: bool}>
+     */
+    private function profileCatalog(): array
+    {
+        return array_filter(
+            $this->catalog(),
+            fn (array $feature): bool => (bool) ($feature['profile_configurable'] ?? true)
+        );
+    }
+
+    /**
+     * @param  array<string, bool>  $features
+     * @return array<string, bool>
+     */
+    private function onlyProfileCatalogKeys(array $features): array
+    {
+        return array_intersect_key($features, $this->profileCatalog());
     }
 
     private function defaultProfileFeatureEnabled(): bool
