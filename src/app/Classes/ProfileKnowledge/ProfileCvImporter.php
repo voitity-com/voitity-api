@@ -15,6 +15,7 @@ use App\Services\ProfileKnowledge\ProfileKnowledgeSourceDeduplicator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Smalot\PdfParser\Parser as PdfParser;
@@ -34,9 +35,12 @@ class ProfileCvImporter
      */
     public function import(Profile $profile, User $user, ?UploadedFile $file, ?string $text, ?string $name, array $metadata = []): ProfileSource
     {
-        $storedFile = $file ? $this->storeSourceFile($profile, $file) : null;
+        $providedText = $this->normalizeText((string) ($text ?? ''));
+        $storedFile = $file
+            ? $this->storeSourceFile($profile, $file)
+            : ($providedText !== '' ? $this->storeTextSourceFile($profile, $providedText, $name) : null);
         $fileText = $file ? $this->extractTextFromFile($file) : '';
-        $extractedText = $this->normalizeText($text ?: $fileText);
+        $extractedText = $providedText !== '' ? $providedText : $this->normalizeText($fileText);
         $contentHash = $this->sourceDeduplicator->normalizedContentHash($extractedText);
         $this->sourceDeduplicator->synchronize($profile);
         $duplicate = $contentHash !== null
@@ -54,9 +58,9 @@ class ProfileCvImporter
                 'profile_id' => $profile->id,
                 'user_id' => $user->id,
                 'type' => ProfileSourceType::Cv,
-                'name' => $name ?: ($file?->getClientOriginalName() ?: 'CV'),
-                'original_filename' => $file?->getClientOriginalName(),
-                'mime_type' => $file?->getClientMimeType(),
+                'name' => $name ?: ($file?->getClientOriginalName() ?: 'Source'),
+                'original_filename' => $file?->getClientOriginalName() ?: ($storedFile['original_filename'] ?? null),
+                'mime_type' => $file?->getClientMimeType() ?: ($storedFile['mime_type'] ?? null),
                 'storage_path' => $storedFile['path'] ?? null,
                 'status' => $status,
                 'extracted_text' => $extractedText !== '' ? $extractedText : null,
@@ -116,6 +120,47 @@ class ProfileCvImporter
             'mime_type' => $file->getClientMimeType(),
             'size' => $file->getSize(),
         ];
+    }
+
+    /**
+     * @return array{disk: string, path: string, folder: string, visibility: string, original_filename: string, mime_type: string, size: int}
+     */
+    private function storeTextSourceFile(Profile $profile, string $text, ?string $name): array
+    {
+        $diskName = $this->sourceFilesDisk();
+        $visibility = $this->sourceFilesVisibility();
+        $folder = trim($this->sourceFilesFolder().'/'.$profile->id, '/');
+        $path = $folder.'/'.Str::uuid().'.txt';
+        $stored = Storage::disk($diskName)->put($path, $text, [
+            'visibility' => $visibility,
+        ]);
+
+        if (! $stored) {
+            throw new RuntimeException('Unable to store profile source text file.');
+        }
+
+        return [
+            'disk' => $diskName,
+            'path' => $path,
+            'folder' => $folder,
+            'visibility' => $visibility,
+            'original_filename' => $this->textSourceFileName($name),
+            'mime_type' => 'text/plain',
+            'size' => strlen($text),
+        ];
+    }
+
+    private function textSourceFileName(?string $name): string
+    {
+        $fileName = trim((string) $name);
+        $fileName = preg_replace('/[\\/\\\\\x00-\x1F\x7F]+/u', '-', $fileName) ?? '';
+        $fileName = trim($fileName, ". \t\n\r\0\x0B");
+
+        if ($fileName === '') {
+            $fileName = 'profile-source';
+        }
+
+        return Str::endsWith(Str::lower($fileName), '.txt') ? $fileName : $fileName.'.txt';
     }
 
     private function sourceFilesDisk(): string

@@ -6134,7 +6134,7 @@
               "response": []
             },
             {
-              "name": "Import CV Source",
+              "name": "Add Profile Source",
               "request": {
                 "method": "POST",
                 "header": [
@@ -6176,7 +6176,7 @@
                     "cv"
                   ]
                 },
-                "description": "Imports a CV file and/or pasted CV text as a profile knowledge source. Requires token ability: profile:write. If the parser cannot extract PDF text, paste profile_cv_text so facts can be created immediately."
+                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. When only text is provided, the API stores it as a downloadable TXT file. If a document cannot be parsed automatically, paste profile_cv_text so facts can be created immediately."
               },
               "response": [],
               "event": [
@@ -6187,6 +6187,9 @@
                     "exec": [
                       "let json = {};",
                       "try { json = pm.response.json(); } catch (e) {}",
+                      "pm.test('Profile source has a downloadable file', function () {",
+                      "  pm.expect(json.data && json.data.file && json.data.file.available).to.eql(true);",
+                      "});",
                       "if (json.data && json.data.id) {",
                       "  pm.environment.set('profile_source_id', json.data.id);",
                       "}",
