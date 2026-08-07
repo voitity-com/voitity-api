@@ -7,20 +7,32 @@ namespace Tests\Unit\Classes\ChatAIService\OpenAI;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Classes\ChatAIService\OpenAI\OpenAIClient;
+use App\Classes\EmbeddingService\EmbeddingClient;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\Features\FeatureService;
 use App\Services\Products\ProfileProductService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\FakeEmbeddingClient;
 use Tests\TestCase;
 
 class OpenAIClientTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('ai-knowledge.embedding.dimensions', 3);
+        config()->set('ai-knowledge.retrieval.minimum_score', 0.1);
+        $this->app->instance(EmbeddingClient::class, new FakeEmbeddingClient(fn (): array => [1.0, 0.0, 0.0]));
+    }
+
     private function makeClient(int $retryAttempts = 1, int $retryDelayMs = 0): OpenAIClient
     {
         return new OpenAIClient(
@@ -35,21 +47,20 @@ class OpenAIClientTest extends TestCase
 
     private function makeProfile(): Profile
     {
-        $profile = new Profile;
-        $profile->name = 'Lex';
-        $profile->description = 'Lawyer assistant';
-        $profile->genre = 'legal';
-        $profile->personality = 'friendly';
-        $profile->data = [
-            'me' => [
-                'bio' => 'Legal assistant profile for tests.',
+        return Profile::factory()->for(User::factory())->create([
+            'name' => 'Lex',
+            'description' => 'Lawyer assistant',
+            'genre' => 'legal',
+            'personality' => 'friendly',
+            'data' => [
+                'me' => [
+                    'bio' => 'Legal assistant profile for tests.',
+                ],
+                'work' => [
+                    'company' => 'Voitity',
+                ],
             ],
-            'work' => [
-                'company' => 'Voitity',
-            ],
-        ];
-
-        return $profile;
+        ]);
     }
 
     #[Test]
@@ -100,8 +111,10 @@ class OpenAIClientTest extends TestCase
                 && str_starts_with($systemPrompt, 'Your name is: '.$profile->name)
                 && str_contains($systemPrompt, '. '.$profile->description)
                 && str_contains($systemPrompt, 'Your personality is '.$profile->personality)
-                && str_contains($systemPrompt, 'Profile data:')
-                && str_contains($systemPrompt, '"company":"Voitity"')
+                && str_contains($systemPrompt, 'Retrieved profile knowledge relevant to this question')
+                && str_contains($systemPrompt, 'Profile section work:')
+                && str_contains($systemPrompt, 'Voitity')
+                && ! str_contains($systemPrompt, 'Profile data:')
                 && str_contains($systemPrompt, 'Only answer using the information in this prompt')
                 && str_contains($systemPrompt, 'you do not have that information at this moment')
                 && str_contains($systemPrompt, 'Make the conversation feel natural and progressive')
@@ -207,6 +220,7 @@ class OpenAIClientTest extends TestCase
             'products_enabled' => true,
             'product_recommendation_guidance' => 'Si habla de fútbol, ofrece ayudarle a elegir un balón.',
         ]);
+        app(FeatureService::class)->updateProfileFeatures($profile, [FeatureService::PRODUCTS => true]);
         $service = app(ProfileProductService::class);
         $published = $service->create($profile, $user, [
             'name' => 'Creatina Monohidratada',
@@ -291,6 +305,9 @@ class OpenAIClientTest extends TestCase
             'genre' => 'legal',
             'personality' => 'friendly',
         ]);
+        app(FeatureService::class)->updateProfileFeatures($profile, [
+            FeatureService::INTEGRATIONS_INSTAGRAM => true,
+        ]);
         $chat = Chat::create(['profile_id' => $profile->id]);
         $integration = ProfileIntegration::create([
             'profile_id' => $profile->id,
@@ -367,7 +384,7 @@ class OpenAIClientTest extends TestCase
     }
 
     #[Test]
-    public function it_includes_all_selected_media_and_structured_media_constraints_in_the_system_prompt(): void
+    public function it_includes_only_retrieved_media_and_structured_media_constraints_in_the_system_prompt(): void
     {
         Log::spy();
 
@@ -394,6 +411,9 @@ class OpenAIClientTest extends TestCase
             'description' => 'Lawyer assistant',
             'genre' => 'legal',
             'personality' => 'friendly',
+        ]);
+        app(FeatureService::class)->updateProfileFeatures($profile, [
+            FeatureService::INTEGRATIONS_INSTAGRAM => true,
         ]);
         $instagram = ProfileIntegration::create([
             'profile_id' => $profile->id,
@@ -448,8 +468,7 @@ class OpenAIClientTest extends TestCase
                 && str_contains($systemPrompt, '"id":'.$facebookMedia->id)
                 && str_contains($systemPrompt, '"provider_label":"Facebook"')
                 && str_contains($systemPrompt, '"source_type":"social_network"')
-                && str_contains($systemPrompt, '"id":'.$instagramMedia->id)
-                && str_contains($systemPrompt, '"provider_label":"Instagram"')
+                && ! str_contains($systemPrompt, '"id":'.$instagramMedia->id)
                 && str_contains($systemPrompt, 'fill constraints from the meaning of the request')
                 && str_contains($systemPrompt, 'Apply constraints before choosing media_ids')
                 && str_contains($systemPrompt, 'never invent, intensify, or add sexual details')
@@ -460,7 +479,7 @@ class OpenAIClientTest extends TestCase
     }
 
     #[Test]
-    public function it_includes_authoritative_profile_networks_in_the_system_prompt(): void
+    public function it_includes_retrieved_authoritative_profile_networks(): void
     {
         Log::spy();
 

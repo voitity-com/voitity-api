@@ -3,6 +3,7 @@
 use App\Providers\AppServiceProvider;
 use App\Providers\ChatAIServiceProvider;
 use App\Providers\ConversationInsightsServiceProvider;
+use App\Providers\EmbeddingServiceProvider;
 use App\Providers\EventServiceProvider;
 use App\Providers\PaymentServiceProvider;
 use App\Providers\ProfileKnowledgeAIServiceProvider;
@@ -17,6 +18,7 @@ return [
     EventServiceProvider::class,
     ChatAIServiceProvider::class,
     ConversationInsightsServiceProvider::class,
+    EmbeddingServiceProvider::class,
     ProfileKnowledgeAIServiceProvider::class,
     VoiceSampleServiceProvider::class,
     VoiceServiceProvider::class,

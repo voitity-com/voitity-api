@@ -83,7 +83,7 @@ services:
       - RUN_QUEUE_WORKER=false
 
   db:
-    image: ankane/pgvector
+    image: pgvector/pgvector:0.8.6-pg15
     container_name: voitity-pgvector-db
     restart: unless-stopped
     environment:

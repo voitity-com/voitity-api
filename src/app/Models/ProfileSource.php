@@ -24,6 +24,8 @@ class ProfileSource extends Model
         'status',
         'extracted_text',
         'parser_version',
+        'content_hash',
+        'duplicate_of_source_id',
         'metadata',
         'last_synced_at',
         'approved_at',
@@ -47,6 +49,11 @@ class ProfileSource extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function duplicateOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicate_of_source_id');
     }
 
     public function items(): HasMany

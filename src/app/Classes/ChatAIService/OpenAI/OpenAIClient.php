@@ -8,6 +8,8 @@ use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Models\Profile;
 use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Products\ProfileProductPromptService;
+use App\Services\ProfileKnowledge\ProfileKnowledgePromptContext;
+use App\Services\ProfileKnowledge\ProfileKnowledgePromptContextService;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -79,8 +81,15 @@ class OpenAIClient implements ChatAIClient
         $requestUrl = $this->baseUrl.'/chat/completions';
 
         try {
-            // Build the system prompt based on profile data
-            $systemPrompt = $this->buildSystemPrompt($profile, $message, $chatId, $currentMessageId);
+            $knowledgeContext = app(ProfileKnowledgePromptContextService::class)
+                ->build($profile, $message, $chatId, $currentMessageId);
+            $systemPrompt = $this->buildSystemPrompt(
+                $profile,
+                $message,
+                $chatId,
+                $currentMessageId,
+                $knowledgeContext,
+            );
 
             $response = $this->postJsonWithRetry($requestUrl, [
                 'model' => $this->defaultModel,
@@ -100,6 +109,10 @@ class OpenAIClient implements ChatAIClient
             ]);
 
             $responseData = $response->json();
+
+            if (is_array($responseData)) {
+                $responseData['_bigmelo']['knowledge'] = $knowledgeContext->metadata();
+            }
 
             if ($response->successful() && isset($responseData['choices'][0]['message']['content'])) {
                 $answer = $responseData['choices'][0]['message']['content'];
@@ -289,8 +302,13 @@ class OpenAIClient implements ChatAIClient
     /**
      * Build a system prompt based on profile data.
      */
-    private function buildSystemPrompt(Profile $profile, string $message, ?int $chatId = null, ?int $currentMessageId = null): string
-    {
+    private function buildSystemPrompt(
+        Profile $profile,
+        string $message,
+        ?int $chatId,
+        ?int $currentMessageId,
+        ProfileKnowledgePromptContext $knowledgeContext,
+    ): string {
         $prompt = $profile->name
             ? "Your name is: {$profile->name}"
             : 'You are an AI assistant';
@@ -313,15 +331,13 @@ class OpenAIClient implements ChatAIClient
         $profileLanguage = $profileLocale === 'en' ? 'English' : 'Spanish';
         $prompt .= ". Profile language: {$profileLanguage} ({$profileLocale}). Always answer in {$profileLanguage}, regardless of the visitor's language.";
 
-        if (! empty($profile->data)) {
-            $profileData = json_encode($profile->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $retrievedKnowledge = $this->buildRetrievedKnowledgePrompt($knowledgeContext);
 
-            if ($profileData !== false) {
-                $prompt .= ". Profile data: {$profileData}";
-            }
+        if ($retrievedKnowledge !== null) {
+            $prompt .= ". Retrieved profile knowledge relevant to this question: {$retrievedKnowledge}";
         }
 
-        $publicSocialLinks = $this->buildPublicSocialLinksPrompt($profile);
+        $publicSocialLinks = $this->buildPublicSocialLinksPrompt($profile, $knowledgeContext);
 
         if ($publicSocialLinks !== null) {
             $prompt .= ". Public social links (authoritative): {$publicSocialLinks}";
@@ -330,13 +346,33 @@ class OpenAIClient implements ChatAIClient
 
         $recentMessages = $this->getRecentChatMessages($profile, $chatId, $currentMessageId);
         $mediaService = app(ProfileMediaPromptService::class);
-        $selectedMedia = $this->buildSelectedMediaPrompt($mediaService->selectedMediaForPrompt($profile));
+        $mediaAnalysis = $mediaService->analyze($profile, $message, $chatId, $currentMessageId);
+        $availableMedia = ($mediaAnalysis['wants_media'] ?? false)
+            && $this->hasMediaRetrievalConstraints($mediaAnalysis)
+                ? $mediaAnalysis['candidate_media']
+                : $mediaAnalysis['available_media'];
+
+        $mediaIds = array_map('intval', $knowledgeContext->retrieval->sourceIds('integration_media'));
+        $availableMedia = collect($availableMedia)
+            ->filter(fn (array $media): bool => in_array((int) ($media['id'] ?? 0), $mediaIds, true))
+            ->values()
+            ->all();
+
+        $selectedMedia = $this->buildSelectedMediaPrompt($availableMedia);
         $productService = app(ProfileProductPromptService::class);
         $availableProducts = $productService->productsForPrompt($profile);
+
+        $productIds = array_map('intval', $knowledgeContext->retrieval->sourceIds('product'));
+        $availableProducts = collect($availableProducts)
+            ->filter(fn (array $product): bool => in_array((int) ($product['id'] ?? 0), $productIds, true))
+            ->values()
+            ->all();
+
         $productsPrompt = $availableProducts !== []
             ? json_encode($availableProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : null;
         $productRecommendationGuidance = is_string($productsPrompt)
+            && $knowledgeContext->retrieval->hasSourceType('product_guidance')
             ? $productService->recommendationGuidanceForPrompt($profile)
             : null;
 
@@ -385,12 +421,19 @@ class OpenAIClient implements ChatAIClient
         return $prompt;
     }
 
-    private function buildPublicSocialLinksPrompt(Profile $profile): ?string
-    {
+    private function buildPublicSocialLinksPrompt(
+        Profile $profile,
+        ProfileKnowledgePromptContext $knowledgeContext,
+    ): ?string {
         $networks = (array) ($profile->networks ?? []);
         $links = [];
+        $retrievedNetworks = $knowledgeContext->retrieval->sourceIds('social_link');
 
         foreach ($networks as $network => $url) {
+            if (! in_array((string) $network, $retrievedNetworks, true)) {
+                continue;
+            }
+
             if (! is_scalar($url)) {
                 continue;
             }
@@ -409,6 +452,33 @@ class OpenAIClient implements ChatAIClient
         }
 
         return implode('; ', $links);
+    }
+
+    private function buildRetrievedKnowledgePrompt(ProfileKnowledgePromptContext $context): ?string
+    {
+        $items = collect($context->retrieval->items)
+            ->reject(fn (array $item): bool => in_array($item['source_type'], [
+                'integration_media',
+                'product',
+                'product_guidance',
+                'social_link',
+                'profile_identity',
+            ], true))
+            ->map(fn (array $item): array => [
+                'source_type' => $item['source_type'],
+                'source_id' => $item['source_id'],
+                'content' => $item['content'],
+            ])
+            ->values()
+            ->all();
+
+        if ($items === []) {
+            return null;
+        }
+
+        $json = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $json !== false ? $json : null;
     }
 
     /**
@@ -436,6 +506,17 @@ class OpenAIClient implements ChatAIClient
         $json = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $json !== false ? $json : null;
+    }
+
+    /** @param array<string, mixed> $analysis */
+    private function hasMediaRetrievalConstraints(array $analysis): bool
+    {
+        return collect([
+            ...($analysis['included_providers'] ?? []),
+            ...($analysis['excluded_providers'] ?? []),
+            ...($analysis['included_source_types'] ?? []),
+            ...($analysis['excluded_source_types'] ?? []),
+        ])->isNotEmpty();
     }
 
     private function normalizeProfileLocale(?string $locale): string

@@ -9,6 +9,7 @@ use App\Models\Profile;
 use App\Models\ProfileProduct;
 use App\Models\ProfileProductImport;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileKnowledgeIndexScheduler;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,7 @@ class ProfileProductService
     public function __construct(
         private readonly ProfileProductImageService $images,
         private readonly SubscriptionPlanCapabilityService $capabilities,
+        private readonly ProfileKnowledgeIndexScheduler $knowledgeIndex,
     ) {}
 
     /**
@@ -206,7 +208,13 @@ class ProfileProductService
             'updated_at' => now(),
         ];
 
-        return $profile->products()->whereKey($ids)->update($attributes);
+        $updated = $profile->products()->whereKey($ids)->update($attributes);
+
+        if ($updated > 0) {
+            $this->knowledgeIndex->schedule((int) $profile->id);
+        }
+
+        return $updated;
     }
 
     /**
@@ -217,10 +225,16 @@ class ProfileProductService
     {
         $destination = $this->normalizeDestination($destination);
 
-        return $profile->products()->whereKey($ids)->update([
+        $updated = $profile->products()->whereKey($ids)->update([
             ...$destination,
             'updated_at' => now(),
         ]);
+
+        if ($updated > 0) {
+            $this->knowledgeIndex->schedule((int) $profile->id);
+        }
+
+        return $updated;
     }
 
     public function delete(ProfileProduct $product): void

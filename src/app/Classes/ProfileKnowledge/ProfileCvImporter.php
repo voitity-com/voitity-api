@@ -11,6 +11,7 @@ use App\Models\Profile;
 use App\Models\ProfileSource;
 use App\Models\ProfileSourceItem;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileKnowledgeSourceDeduplicator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,10 @@ class ProfileCvImporter
 {
     private const PARSER_VERSION = 'cv-text-v3';
 
-    public function __construct(private readonly ProfileKnowledgeAIService $profileKnowledgeAIService) {}
+    public function __construct(
+        private readonly ProfileKnowledgeAIService $profileKnowledgeAIService,
+        private readonly ProfileKnowledgeSourceDeduplicator $sourceDeduplicator,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $metadata
@@ -33,12 +37,19 @@ class ProfileCvImporter
         $storedFile = $file ? $this->storeSourceFile($profile, $file) : null;
         $fileText = $file ? $this->extractTextFromFile($file) : '';
         $extractedText = $this->normalizeText($text ?: $fileText);
-        $status = $extractedText !== '' ? ProfileSourceStatus::Parsed : ProfileSourceStatus::NeedsReview;
-        $structure = $extractedText !== ''
+        $contentHash = $this->sourceDeduplicator->normalizedContentHash($extractedText);
+        $this->sourceDeduplicator->synchronize($profile);
+        $duplicate = $contentHash !== null
+            ? $profile->sources()->where('content_hash', $contentHash)->oldest('id')->first()
+            : null;
+        $status = $duplicate
+            ? ProfileSourceStatus::NeedsReview
+            : ($extractedText !== '' ? ProfileSourceStatus::Parsed : ProfileSourceStatus::NeedsReview);
+        $structure = $extractedText !== '' && ! $duplicate
             ? $this->profileKnowledgeAIService->structureCv($profile, $extractedText)
             : null;
 
-        return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $status, $name, $metadata, $structure): ProfileSource {
+        return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $contentHash, $duplicate, $status, $name, $metadata, $structure): ProfileSource {
             $source = ProfileSource::create([
                 'profile_id' => $profile->id,
                 'user_id' => $user->id,
@@ -50,6 +61,8 @@ class ProfileCvImporter
                 'status' => $status,
                 'extracted_text' => $extractedText !== '' ? $extractedText : null,
                 'parser_version' => self::PARSER_VERSION,
+                'content_hash' => $contentHash,
+                'duplicate_of_source_id' => $duplicate?->id,
                 'metadata' => array_filter([
                     ...$metadata,
                     'text_provided' => filled($extractedText),
@@ -61,11 +74,15 @@ class ProfileCvImporter
                         'confidence' => $structure->confidence,
                         'request_url' => $structure->requestUrl,
                     ] : null,
+                    'knowledge_index' => array_filter([
+                        'content_available' => $contentHash !== null,
+                        'duplicate_of_source_id' => $duplicate?->id,
+                    ], fn ($value) => $value !== null),
                 ], fn ($value) => $value !== null),
                 'last_synced_at' => now(),
             ]);
 
-            if ($extractedText !== '') {
+            if ($extractedText !== '' && ! $duplicate) {
                 $this->createItemsAndFacts($source, $extractedText, $structure);
             }
 

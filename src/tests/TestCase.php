@@ -2,9 +2,13 @@
 
 namespace Tests;
 
+use App\Jobs\ProfileKnowledge\IndexProfileKnowledge;
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 
 abstract class TestCase extends BaseTestCase
@@ -20,6 +24,8 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Queue::fake([IndexProfileKnowledge::class]);
 
         // CRITICAL: Abort tests if we're not in testing environment
         if ($this->app->environment() !== 'testing') {
@@ -134,7 +140,7 @@ abstract class TestCase extends BaseTestCase
     /**
      * Creates the application.
      *
-     * @return \Illuminate\Foundation\Application
+     * @return Application
      */
     public function createApplication()
     {
@@ -151,7 +157,7 @@ abstract class TestCase extends BaseTestCase
 
         $app = require __DIR__.'/../bootstrap/app.php';
 
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $app->make(Kernel::class)->bootstrap();
 
         // Force database configuration after bootstrap
         $app['config']['database.default'] = 'sqlite';

@@ -28,6 +28,7 @@ class ProfileSourceResponse
             'status' => $this->source->status?->value,
             'extracted_text' => $this->source->extracted_text,
             'parser_version' => $this->source->parser_version,
+            'duplicate_of_source_id' => $this->source->duplicate_of_source_id,
             'metadata' => $this->source->metadata,
             'last_synced_at' => $this->source->last_synced_at?->toJSON(),
             'approved_at' => $this->source->approved_at?->toJSON(),
