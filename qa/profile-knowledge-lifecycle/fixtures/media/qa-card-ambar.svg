@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#1d1238"/>
+  <circle cx="1030" cy="140" r="220" fill="#f5a623" opacity="0.9"/>
+  <rect x="90" y="110" width="860" height="500" rx="36" fill="#ffffff" opacity="0.94"/>
+  <text x="150" y="275" font-family="Arial, sans-serif" font-size="76" font-weight="700" fill="#1d1238">QA AMBAR-58</text>
+  <text x="150" y="380" font-family="Arial, sans-serif" font-size="46" fill="#4b3869">Fixture propio para pruebas</text>
+  <text x="150" y="465" font-family="Arial, sans-serif" font-size="38" fill="#6c5b7b">Bigmelo · 2026</text>
+</svg>

@@ -56,7 +56,6 @@ class ProfileKnowledgeDocumentBuilder
             filled($profile->description) ? "Description: {$profile->description}" : null,
             filled($profile->genre) ? "Gender: {$profile->genre}" : null,
             filled($profile->personality) ? "Personality: {$profile->personality}" : null,
-            filled($profile->profession_key) ? "Profession: {$profile->profession_key}" : null,
         ]);
 
         return [new ProfileKnowledgeDocument(
@@ -82,7 +81,7 @@ class ProfileKnowledgeDocumentBuilder
             $items = is_array($value) && array_is_list($value) ? $value : [$value];
 
             foreach ($items as $index => $item) {
-                if ($this->emptyValue($item)) {
+                if ($this->emptyValue($item) || $this->isSourceGeneratedProfileData($item)) {
                     continue;
                 }
 
@@ -407,5 +406,15 @@ class ProfileKnowledgeDocumentBuilder
     private function emptyValue(mixed $value): bool
     {
         return $value === null || $value === '' || $value === [];
+    }
+
+    private function isSourceGeneratedProfileData(mixed $value): bool
+    {
+        if (! is_array($value)) {
+            return false;
+        }
+
+        return ($value['source'] ?? null) === 'cv'
+            || ($value['description_source'] ?? null) === 'cv';
     }
 }

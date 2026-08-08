@@ -7,6 +7,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileIntegrationKnowledgeLifecycle;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
@@ -21,7 +22,10 @@ class InstagramIntegrationService
 {
     private const STATE_CACHE_PREFIX = 'instagram_oauth_state:';
 
-    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
+    public function __construct(
+        private readonly SubscriptionPlanCapabilityService $capabilities,
+        private readonly ProfileIntegrationKnowledgeLifecycle $knowledgeLifecycle,
+    ) {}
 
     public function connectUrl(Profile $profile, User $user): string
     {
@@ -216,7 +220,17 @@ class InstagramIntegrationService
             }
         });
 
+        $this->knowledgeLifecycle->selectionChanged($integration);
+
         return $integration->fresh(['media']);
+    }
+
+    public function disconnect(ProfileIntegration $integration): void
+    {
+        $mediaIds = $integration->media()->pluck('id')->all();
+        $profileId = (int) $integration->profile_id;
+        $integration->deleteQuietly();
+        $this->knowledgeLifecycle->forgetMedia($profileId, $mediaIds, ProfileIntegration::PROVIDER_INSTAGRAM);
     }
 
     /**

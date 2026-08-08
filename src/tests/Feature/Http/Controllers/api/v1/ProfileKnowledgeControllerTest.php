@@ -6,6 +6,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileFactVisibility;
 use App\Enums\ProfileSourceStatus;
+use App\Jobs\ProfileKnowledge\SynchronizeProfileSource;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileSource;
@@ -13,6 +14,7 @@ use App\Models\ProfileSourceItem;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileKnowledgeControllerTest extends TestAPI
@@ -75,9 +77,10 @@ class ProfileKnowledgeControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('message', 'CV source imported successfully.');
+        $response->assertJsonPath('message', 'Profile source uploaded and queued for synchronization.');
         $response->assertJsonPath('data.type', 'cv');
-        $response->assertJsonPath('data.status', ProfileSourceStatus::Parsed->value);
+        $response->assertJsonPath('data.status', ProfileSourceStatus::PendingSync->value);
+        $response->assertJsonPath('data.processing_stage', 'pending_sync');
         $response->assertJsonPath('data.name', 'LinkedIn CV');
         $this->assertContains('experience', collect($response->json('data.items'))->pluck('type')->all());
 
@@ -86,6 +89,10 @@ class ProfileKnowledgeControllerTest extends TestAPI
         $this->assertStringStartsWith('sources/'.$profile->id.'/', $storagePath);
         $response->assertJsonPath('data.file.available', true);
         Storage::disk('profiles')->assertExists($storagePath);
+        Queue::assertPushed(
+            SynchronizeProfileSource::class,
+            fn (SynchronizeProfileSource $job): bool => $job->sourceId === $response->json('data.id')
+        );
 
         $sourcesResponse = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources');
@@ -120,7 +127,7 @@ class ProfileKnowledgeControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('data.status', ProfileSourceStatus::Parsed->value);
+        $response->assertJsonPath('data.status', ProfileSourceStatus::PendingSync->value);
 
         $categories = collect($response->json('data.items'))->pluck('type')->all();
 
@@ -161,6 +168,46 @@ class ProfileKnowledgeControllerTest extends TestAPI
             (string) $fileResponse->headers->get('content-disposition')
         );
         $this->assertStringContainsString('Source CV file contents', $fileResponse->streamedContent());
+    }
+
+    public function test_text_only_source_is_stored_as_txt_and_can_be_previewed(): void
+    {
+        $this->fakeProfileSourcesDisk();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create(['profession_key' => 'developer']);
+        $token = $user->createToken('test-token', ['profile:read', 'profile:write'])->plainTextToken;
+        $sourceText = "Profile summary\nBuilds Laravel APIs and React applications.";
+
+        $importResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'Profile notes',
+                'text' => $sourceText,
+            ]);
+
+        $importResponse->assertStatus(201);
+        $importResponse->assertJsonPath('data.original_filename', 'Profile notes.txt');
+        $importResponse->assertJsonPath('data.mime_type', 'text/plain');
+        $importResponse->assertJsonPath('data.file.available', true);
+        $importResponse->assertJsonPath('data.file.name', 'Profile notes.txt');
+        $importResponse->assertJsonPath('data.file.size', strlen($sourceText));
+
+        $storagePath = $importResponse->json('data.storage_path');
+        $this->assertStringStartsWith('sources/'.$profile->id.'/', $storagePath);
+        $this->assertStringEndsWith('.txt', $storagePath);
+        Storage::disk('profiles')->assertExists($storagePath);
+        $this->assertSame($sourceText, Storage::disk('profiles')->get($storagePath));
+
+        $fileResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->get(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/'.$importResponse->json('data.id').'/file');
+
+        $fileResponse->assertStatus(200);
+        $this->assertStringContainsString(
+            'Profile notes.txt',
+            (string) $fileResponse->headers->get('content-disposition')
+        );
+        $this->assertStringStartsWith('text/plain', (string) $fileResponse->headers->get('content-type'));
+        $this->assertSame($sourceText, $fileResponse->streamedContent());
     }
 
     public function test_cv_import_validation_requires_file_or_text(): void

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bigmelo profile knowledge QA results",
+  "type": "object",
+  "required": ["run_id", "started_at", "results"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": ["string", "null"]},
+    "environment": {"const": "local"},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"enum": ["PASS", "FAIL", "BLOCKED"]},
+          "response": {"type": ["string", "null"]},
+          "area": {"type": "string"},
+          "key": {"type": "string"},
+          "question": {"type": "string"},
+          "must_include": {"type": "array", "items": {"type": "string"}},
+          "require_attachment": {"type": ["boolean", "null"]},
+          "automated_status": {"enum": ["PASS", "FAIL", "BLOCKED"]},
+          "expected_ui": {"type": ["string", "null"]},
+          "evidence": {"type": ["object", "null"]},
+          "notes": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

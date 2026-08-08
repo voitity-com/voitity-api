@@ -15,8 +15,8 @@ class ProfileQualityAnalyzer
     public function analyze(Profile $profile): array
     {
         $templates = config('profile-professions.templates', []);
-        $professionKey = $profile->profession_key ?: config('profile-professions.default', 'custom');
-        $template = $templates[$professionKey] ?? $templates['custom'] ?? [];
+        $professionKey = 'custom';
+        $template = $templates['custom'] ?? [];
         $checks = collect($template['quality_rules'] ?? [])
             ->map(fn (array $rule) => $this->evaluateRule($profile, $rule))
             ->values();
@@ -30,8 +30,8 @@ class ProfileQualityAnalyzer
             'profile_id' => $profile->id,
             'profession' => [
                 'key' => $professionKey,
-                'label' => $template['label'] ?? $professionKey,
-                'template_version' => $profile->profession_template_version ?: config('profile-professions.version'),
+                'label' => $template['label'] ?? 'General',
+                'template_version' => config('profile-professions.version'),
             ],
             'score' => (int) round(($completedWeight / $totalWeight) * 100),
             'completed_weight' => $completedWeight,

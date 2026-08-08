@@ -17,11 +17,11 @@ class ProfileKnowledgeQueryIntentAnalyzer
     /** @var array<string, array<int, string>> */
     private const PROVIDER_ALIASES = [
         'instagram' => ['instagram'],
-        'tiktok' => ['tiktok', 'tik tok'],
+        'tiktok' => ['tiktok', 'tik tok', 'videos cortos', 'video corto', 'short videos', 'short-form videos'],
         'facebook' => ['facebook'],
-        'youtube' => ['youtube', 'you tube'],
-        'linkedin' => ['linkedin', 'linked in'],
-        'github' => ['github', 'git hub'],
+        'youtube' => ['youtube', 'you tube', 'videos largos', 'videos extensos', 'long videos', 'long-form videos'],
+        'linkedin' => ['linkedin', 'linked in', 'red profesional', 'perfil profesional', 'professional network', 'professional profile'],
+        'github' => ['github', 'git hub', 'repositorio', 'repositorios', 'perfil de codigo', 'codigo fuente', 'repository', 'repositories', 'code profile', 'source code'],
         'onlyfans' => ['onlyfans', 'only fans'],
         'x' => ['twitter', 'x.com'],
         'blog' => ['blog'],
@@ -46,23 +46,35 @@ class ProfileKnowledgeQueryIntentAnalyzer
             'muestra', 'muestrame', 'mostrar', 'ensename', 'comparte', 'comparteme', 'quiero ver',
             'show', 'show me', 'share', 'send me', 'let me see',
         ]);
-        $media = $hasMediaNoun || ($hasMediaShowVerb && $this->containsAny($normalized, [
+        $providerContentQuery = collect($providers)->intersect([
+            'instagram', 'tiktok', 'youtube', 'onlyfans',
+        ])->isNotEmpty() && $this->containsAny($normalized, [
+            'sobre', 'acerca de', 'relacionado con', 'about', 'related to',
+        ]) && $this->containsAny($normalized, [
+            'tienes', 'tiene', 'hay', 'have', 'do you have',
+        ]);
+        $media = $hasMediaNoun || $providerContentQuery || ($hasMediaShowVerb && $this->containsAny($normalized, [
             'instagram', 'tiktok', 'youtube', 'onlyfans', 'blog', 'sitio web', 'website',
         ]));
         $explicitMediaShow = $media && $hasMediaShowVerb;
         $hasSocialRoutingLanguage = $this->containsAny($normalized, [
-            'link', 'enlace', 'perfil', 'profile', 'usuario', 'username', 'seguirte', 'follow',
+            'link', 'enlace', 'perfil', 'profile', 'cuenta', 'account', 'usuario', 'username', 'seguirte', 'follow',
             'red social', 'redes sociales', 'social network', 'social media', 'canal', 'channel',
-            'llevame', 'ir a', 'go to',
+            'llevame', 'ir a', 'go to', 'donde puedo ver', 'where can i watch', 'where can i see',
         ]);
-        $socialLink = $providers !== [] && ($hasSocialRoutingLanguage || ! $media);
+        $genericSocialRequest = $this->containsAny($normalized, [
+            'red social', 'redes sociales', 'social network', 'social networks', 'social media',
+            'tus redes', 'your socials', 'donde seguirte', 'where can i follow',
+        ]);
+        $socialLink = ($providers !== [] && ($hasSocialRoutingLanguage || ! $media)) || $genericSocialRequest;
         $product = $this->containsAny($normalized, [
             'producto', 'productos', 'product', 'products', 'comprar', 'compra', 'buy', 'precio',
             'price', 'tienda', 'store', 'balon', 'balones', 'proteina', 'creatina', 'referencia',
         ]);
         $productRecommendation = $product || $this->containsAny($normalized, [
             'recomienda', 'recomendacion', 'recommend', 'recommendation', 'cual me conviene',
-            'que me recomiendas', 'what do you recommend',
+            'que me recomiendas', 'what do you recommend', 'que elegirias', 'cual elegirias',
+            'elegir', 'choose', 'which option',
         ]);
         $sourceTypes = [];
 
@@ -79,7 +91,9 @@ class ProfileKnowledgeQueryIntentAnalyzer
             $sourceTypes[] = 'product_guidance';
         }
 
-        $excludedSourceTypes = $socialLink && ! $media ? ['integration_media'] : [];
+        $excludedSourceTypes = $socialLink && ! $explicitMediaShow && ! $providerContentQuery
+            ? ['integration_media']
+            : [];
         $terms = $this->terms($normalized);
         $identifiers = collect($terms)
             ->filter(fn (string $term): bool => preg_match('/\d/u', $term) === 1)

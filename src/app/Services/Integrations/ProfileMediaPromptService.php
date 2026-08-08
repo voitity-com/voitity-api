@@ -583,6 +583,8 @@ class ProfileMediaPromptService
             default => $sourceType,
         };
 
-        return $sourceType !== '' ? $sourceType : null;
+        return in_array($sourceType, ['social_network', 'integration'], true)
+            ? $sourceType
+            : null;
     }
 }

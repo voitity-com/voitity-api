@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Jobs\ProfileKnowledge\IndexProfileKnowledge;
+use App\Jobs\ProfileKnowledge\SynchronizeProfileSource;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -25,7 +26,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
-        Queue::fake([IndexProfileKnowledge::class]);
+        Queue::fake([IndexProfileKnowledge::class, SynchronizeProfileSource::class]);
 
         // CRITICAL: Abort tests if we're not in testing environment
         if ($this->app->environment() !== 'testing') {

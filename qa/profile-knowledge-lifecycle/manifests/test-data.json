@@ -1,0 +1,43 @@
+{
+  "profile": {
+    "name": "QA Embeddings <run-id>",
+    "alias": "qa-embeddings-<run-id>",
+    "description": "Consultora de conocimiento verificable. El distintivo general es PERFIL-03 y atiende desde Medellín.",
+    "personality": "Clara, prudente y directa; separa hechos verificados de información no disponible.",
+    "locale": "es"
+  },
+  "social_links": {
+    "tiktok": "https://www.tiktok.com/@qa_big_melo",
+    "youtube": "https://www.youtube.com/@qa-big-melo",
+    "facebook": "https://www.facebook.com/qa.big.melo",
+    "linkedin": "https://www.linkedin.com/in/qa-big-melo",
+    "github": "https://github.com/qa-big-melo"
+  },
+  "integrations": {
+    "tiktok": [
+      {"key": "tiktok_1", "description": "TIKTOK-CORAL-14 explica tres reglas para validar una idea antes de construirla.", "url": "TIKTOK_VIDEO_URL_1"},
+      {"key": "tiktok_2", "description": "TIKTOK-LUNA-25 muestra una rutina de planificación de siete minutos.", "url": "TIKTOK_VIDEO_URL_2"}
+    ],
+    "youtube": {
+      "channel_url": "YOUTUBE_CHANNEL_URL",
+      "items": [
+        {"key": "youtube_1", "description": "YOUTUBE-CEDRO-36 presenta un método de cinco pasos para documentar decisiones.", "url": "YOUTUBE_VIDEO_URL_1"},
+        {"key": "youtube_2", "description": "YOUTUBE-NORTE-47 compara entrevistas abiertas y encuestas cerradas.", "url": "YOUTUBE_VIDEO_URL_2"}
+      ]
+    },
+    "onlyfans": [
+      {"key": "onlyfans_1", "file": "fixtures/media/qa-card-ambar.png", "description": "ONLYFANS-AMBAR-58 es una lámina privada sobre composición visual.", "link": "https://onlyfans.com/qa-big-melo"},
+      {"key": "onlyfans_2", "file": "fixtures/media/qa-motion-selva.mp4", "description": "ONLYFANS-SELVA-69 es un clip privado con una secuencia de cuatro colores.", "link": "https://onlyfans.com/qa-big-melo"}
+    ],
+    "other": [
+      {"key": "other_1", "file": "fixtures/media/qa-card-ambar.png", "description": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.", "destination": "blog", "link": "https://example.com/blog/rio-70"},
+      {"key": "other_2", "file": "fixtures/media/qa-motion-selva.mp4", "description": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones.", "destination": "website", "link": "https://example.com/mapa-81"}
+    ]
+  },
+  "products": [
+    {"key": "product_1", "name": "Kit Horizonte 92", "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29."},
+    {"key": "product_2", "name": "Guía Brújula 13", "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15."},
+    {"key": "product_3", "name": "Sesión Prisma 24", "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60."}
+  ],
+  "product_guidance": "Recomienda Guía Brújula 13 para aprender de forma autónoma, Kit Horizonte 92 para planificación y Sesión Prisma 24 cuando pidan acompañamiento personalizado. No inventes descuentos ni resultados."
+}

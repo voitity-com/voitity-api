@@ -67,7 +67,8 @@ class OpenAIProfileKnowledgeClientTest extends TestCase
                 && $payload['max_tokens'] === 1200
                 && $payload['temperature'] === 0.2
                 && str_contains($payload['messages'][0]['content'], 'Return only valid JSON')
-                && str_contains($payload['messages'][1]['content'], 'Profile profession: developer');
+                && $payload['messages'][1]['content'] === "CV text:\n\nExperience text"
+                && ! str_contains($payload['messages'][1]['content'], 'profession');
         });
     }
 

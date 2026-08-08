@@ -13,11 +13,13 @@ use App\Http\Responses\ProfileKnowledge\ProfileFactListResponse;
 use App\Http\Responses\ProfileKnowledge\ProfileFactResponse;
 use App\Http\Responses\ProfileKnowledge\ProfileSourceListResponse;
 use App\Http\Responses\ProfileKnowledge\ProfileSourceResponse;
+use App\Jobs\ProfileKnowledge\SynchronizeProfileSource;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileSource;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
+use App\Services\ProfileKnowledge\ProfileSourceLifecycleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -119,8 +121,14 @@ class ProfileKnowledgeController extends Controller
 
             $this->notifySourceImported($request->user(), $profile, $source);
 
+            if ($source->status === ProfileSourceStatus::PendingSync) {
+                SynchronizeProfileSource::dispatch((int) $source->id)->afterCommit();
+            }
+
             return response()->json([
-                'message' => 'CV source imported successfully.',
+                'message' => $source->status === ProfileSourceStatus::PendingSync
+                    ? 'Profile source uploaded and queued for synchronization.'
+                    : 'Profile source uploaded with attention required.',
                 'data' => (new ProfileSourceResponse($source))->toArray(),
             ], 201);
         } catch (\Throwable $e) {
@@ -199,6 +207,62 @@ class ProfileKnowledgeController extends Controller
             'message' => 'Profile source approved successfully.',
             'data' => (new ProfileSourceResponse($source))->toArray(),
         ]);
+    }
+
+    public function retrySource(Request $request, Profile $profile, ProfileSource $source): JsonResponse
+    {
+        if ($response = $this->authorizeProfileAccess($request, $profile)) {
+            return $response;
+        }
+
+        if ((int) $source->profile_id !== (int) $profile->id) {
+            return response()->json(['message' => 'Profile source not found.'], 404);
+        }
+
+        if ($source->status !== ProfileSourceStatus::Failed || ! filled($source->extracted_text)) {
+            return response()->json([
+                'message' => 'Only a failed synchronization with readable content can be retried.',
+            ], 422);
+        }
+
+        ProfileSource::query()->whereKey($source->id)->update([
+            'status' => ProfileSourceStatus::PendingSync->value,
+            'processing_stage' => 'pending_sync',
+            'last_error' => null,
+            'processing_started_at' => null,
+            'processing_completed_at' => null,
+        ]);
+        SynchronizeProfileSource::dispatch((int) $source->id)->afterCommit();
+
+        Log::info('Profile source synchronization retry queued.', [
+            'profile_id' => $profile->id,
+            'source_id' => $source->id,
+            'user_id' => $request->user()?->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Profile source synchronization queued successfully.',
+            'data' => (new ProfileSourceResponse($source->fresh(['items.facts'])))->toArray(),
+        ], 202);
+    }
+
+    public function deleteSource(
+        Request $request,
+        Profile $profile,
+        ProfileSource $source,
+        ProfileSourceLifecycleService $lifecycle,
+    ): JsonResponse {
+        if ($response = $this->authorizeProfileAccess($request, $profile)) {
+            return $response;
+        }
+
+        if ((int) $source->profile_id !== (int) $profile->id) {
+            return response()->json(['message' => 'Profile source not found.'], 404);
+        }
+
+        $lifecycle->delete($source);
+
+        return response()->json(['message' => 'Profile source deleted successfully.']);
     }
 
     public function facts(Request $request, Profile $profile): JsonResponse
@@ -321,10 +385,6 @@ class ProfileKnowledgeController extends Controller
         $dispatcher->sendInApp($user, 'source_uploaded', $data);
         $dispatcher->sendInApp($user, 'source_processing_started', $data);
 
-        if ($source->items()->exists()) {
-            $dispatcher->sendInApp($user, 'source_data_extracted_ready_to_review', $data);
-            $dispatcher->sendInApp($user, 'ai_suggested_profile_changes_ready_to_approve', $data);
-        }
     }
 
     /**
