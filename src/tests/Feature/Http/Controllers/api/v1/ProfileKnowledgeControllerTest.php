@@ -6,6 +6,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Enums\ProfileFactVisibility;
 use App\Enums\ProfileSourceStatus;
+use App\Jobs\ProfileKnowledge\SynchronizeProfileSource;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileSource;
@@ -13,6 +14,7 @@ use App\Models\ProfileSourceItem;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileKnowledgeControllerTest extends TestAPI
@@ -75,9 +77,10 @@ class ProfileKnowledgeControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('message', 'CV source imported successfully.');
+        $response->assertJsonPath('message', 'Profile source uploaded and queued for synchronization.');
         $response->assertJsonPath('data.type', 'cv');
-        $response->assertJsonPath('data.status', ProfileSourceStatus::Parsed->value);
+        $response->assertJsonPath('data.status', ProfileSourceStatus::PendingSync->value);
+        $response->assertJsonPath('data.processing_stage', 'pending_sync');
         $response->assertJsonPath('data.name', 'LinkedIn CV');
         $this->assertContains('experience', collect($response->json('data.items'))->pluck('type')->all());
 
@@ -86,6 +89,10 @@ class ProfileKnowledgeControllerTest extends TestAPI
         $this->assertStringStartsWith('sources/'.$profile->id.'/', $storagePath);
         $response->assertJsonPath('data.file.available', true);
         Storage::disk('profiles')->assertExists($storagePath);
+        Queue::assertPushed(
+            SynchronizeProfileSource::class,
+            fn (SynchronizeProfileSource $job): bool => $job->sourceId === $response->json('data.id')
+        );
 
         $sourcesResponse = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources');
@@ -120,7 +127,7 @@ class ProfileKnowledgeControllerTest extends TestAPI
             ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('data.status', ProfileSourceStatus::Parsed->value);
+        $response->assertJsonPath('data.status', ProfileSourceStatus::PendingSync->value);
 
         $categories = collect($response->json('data.items'))->pluck('type')->all();
 

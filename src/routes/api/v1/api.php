@@ -130,6 +130,8 @@ Route::prefix('/profile')->group(function () {
     Route::post('/{profile}/sources/cv', [ProfileKnowledgeController::class, 'storeCv'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/sources/{source}/file', [ProfileKnowledgeController::class, 'sourceFile'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/sources/{source}/approve', [ProfileKnowledgeController::class, 'approveSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/sources/{source}/retry', [ProfileKnowledgeController::class, 'retrySource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::delete('/{profile}/sources/{source}', [ProfileKnowledgeController::class, 'deleteSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/features', [ProfileFeatureController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/features', [ProfileFeatureController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/integrations', [ProfileIntegrationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);

@@ -693,8 +693,12 @@ class ProfileIntegrationController extends Controller
         ]);
     }
 
-    public function instagramDisconnect(Request $request, Profile $profile, FeatureService $features): JsonResponse
-    {
+    public function instagramDisconnect(
+        Request $request,
+        Profile $profile,
+        InstagramIntegrationService $instagram,
+        FeatureService $features,
+    ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
         }
@@ -703,7 +707,11 @@ class ProfileIntegrationController extends Controller
             return $response;
         }
 
-        $this->instagramIntegration($profile)?->delete();
+        $integration = $this->instagramIntegration($profile);
+
+        if ($integration) {
+            $instagram->disconnect($integration);
+        }
 
         return response()->json([
             'message' => 'Instagram disconnected successfully.',
@@ -727,8 +735,7 @@ class ProfileIntegrationController extends Controller
         $integration = $this->tiktokIntegration($profile);
 
         if ($integration) {
-            $tiktok->revoke($integration);
-            $integration->delete();
+            $tiktok->disconnect($integration);
         }
 
         return response()->json([

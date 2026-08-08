@@ -23,7 +23,52 @@ class ProfileDataSynchronizer
         }
 
         $profile->data = $data;
-        $profile->save();
+        $profile->saveQuietly();
+
+        return $profile->fresh();
+    }
+
+    public function removeSource(Profile $profile, ProfileSource $source): Profile
+    {
+        $source->loadMissing(['items']);
+        $data = is_array($profile->data) ? $profile->data : [];
+        $sourceId = (int) $source->id;
+
+        foreach ($data as $section => $value) {
+            if ($section === 'me') {
+                $data[$section] = $this->removeSourceSummary($value, $source);
+
+                if ($data[$section] === []) {
+                    unset($data[$section]);
+                }
+
+                continue;
+            }
+
+            if (! is_array($value)) {
+                continue;
+            }
+
+            if (array_is_list($value)) {
+                $data[$section] = collect($value)
+                    ->reject(fn (mixed $item): bool => $this->itemBelongsToSource($item, $sourceId))
+                    ->values()
+                    ->all();
+
+                if ($data[$section] === []) {
+                    unset($data[$section]);
+                }
+
+                continue;
+            }
+
+            if ($this->itemBelongsToSource($value, $sourceId)) {
+                unset($data[$section]);
+            }
+        }
+
+        $profile->data = $data;
+        $profile->saveQuietly();
 
         return $profile->fresh();
     }
@@ -54,6 +99,9 @@ class ProfileDataSynchronizer
         $me = $this->objectSection($data['me'] ?? []);
         $structured = $this->structuredData($item);
         $me['description'] = $this->cleanText((string) ($structured['summary'] ?? $item->content));
+        $me['description_source'] = 'cv';
+        $me['description_source_id'] = $item->profile_source_id;
+        $me['description_source_item_id'] = $item->id;
         $data['me'] = $me;
 
         return $data;
@@ -272,6 +320,45 @@ class ProfileDataSynchronizer
         }
 
         return $sourceIds->contains((int) $item['source_id']);
+    }
+
+    /** @return array<string, mixed> */
+    private function removeSourceSummary(mixed $value, ProfileSource $source): array
+    {
+        $me = $this->objectSection($value);
+        $sourceId = (int) $source->id;
+        $hasProvenance = ($me['description_source'] ?? null) === 'cv'
+            && (int) ($me['description_source_id'] ?? 0) === $sourceId;
+
+        if (! $hasProvenance && isset($me['description'])) {
+            $description = $this->cleanText((string) $me['description']);
+            $hasProvenance = $source->items
+                ->where('type', 'summary')
+                ->contains(function (ProfileSourceItem $item) use ($description): bool {
+                    $structured = $this->structuredData($item);
+                    $summary = $this->cleanText((string) ($structured['summary'] ?? $item->content));
+
+                    return $summary !== '' && $summary === $description;
+                });
+        }
+
+        if ($hasProvenance) {
+            unset(
+                $me['description'],
+                $me['description_source'],
+                $me['description_source_id'],
+                $me['description_source_item_id'],
+            );
+        }
+
+        return $me;
+    }
+
+    private function itemBelongsToSource(mixed $item, int $sourceId): bool
+    {
+        return is_array($item)
+            && ($item['source'] ?? null) === 'cv'
+            && (int) ($item['source_id'] ?? 0) === $sourceId;
     }
 
     private function dataSectionForItem(ProfileSourceItem $item): string

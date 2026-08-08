@@ -7,6 +7,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileIntegrationKnowledgeLifecycle;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -15,7 +16,10 @@ use InvalidArgumentException;
 
 class OnlyFansIntegrationService
 {
-    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
+    public function __construct(
+        private readonly SubscriptionPlanCapabilityService $capabilities,
+        private readonly ProfileIntegrationKnowledgeLifecycle $knowledgeLifecycle,
+    ) {}
 
     /**
      * @param  array{username: string, profile_url: string}  $attributes
@@ -148,6 +152,8 @@ class OnlyFansIntegrationService
             });
         });
 
+        $this->knowledgeLifecycle->selectionChanged($integration);
+
         return $integration->fresh(['media']);
     }
 
@@ -164,13 +170,19 @@ class OnlyFansIntegrationService
             $disk = $media->storage_disk;
             $path = $media->storage_path;
 
-            $media->delete();
+            $media->deleteQuietly();
 
             if (filled($disk) && filled($path)) {
                 Storage::disk($disk)->delete($path);
                 Storage::disk($disk)->deleteDirectory(dirname($path));
             }
         });
+
+        $this->knowledgeLifecycle->forgetMedia(
+            (int) $integration->profile_id,
+            [$media->id],
+            ProfileIntegration::PROVIDER_ONLYFANS,
+        );
     }
 
     public function disconnect(ProfileIntegration $integration): void
@@ -178,8 +190,14 @@ class OnlyFansIntegrationService
         $media = $integration->media()->get(['id', 'storage_disk', 'storage_path']);
 
         DB::transaction(function () use ($integration): void {
-            $integration->delete();
+            $integration->deleteQuietly();
         });
+
+        $this->knowledgeLifecycle->forgetMedia(
+            (int) $integration->profile_id,
+            $media->pluck('id'),
+            ProfileIntegration::PROVIDER_ONLYFANS,
+        );
 
         foreach ($media as $item) {
             if (filled($item->storage_disk) && filled($item->storage_path)) {

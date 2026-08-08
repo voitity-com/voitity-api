@@ -1,0 +1,5372 @@
+{
+  "run_id": "20260807-after-deterministic",
+  "started_at": "2026-08-07T23:15:10Z",
+  "finished_at": "2026-08-07T23:21:15Z",
+  "environment": "local",
+  "summary": {
+    "total": 63,
+    "passed": 61,
+    "failed": 2,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "profile-01",
+      "area": "profile",
+      "key": "general",
+      "question": "¿Cuál es tu distintivo general?",
+      "status": "PASS",
+      "response": "Mi distintivo general es PERFIL-03.",
+      "expected_ui": "",
+      "must_include": [
+        "PERFIL-03"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.8,
+              "semantic_score": 0.3189,
+              "keyword_score": 1,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 9,
+          "context_tokens": 64,
+          "retrieval_latency_ms": 1063
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "profile-02",
+      "area": "profile",
+      "key": "general",
+      "question": "¿Desde qué ciudad atiendes y qué tipo de trabajo haces?",
+      "status": "PASS",
+      "response": "Atiendo desde Medellín y soy consultora de conocimiento verificable.",
+      "expected_ui": "",
+      "must_include": [
+        "Medellín",
+        "Consultora"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [],
+          "retrieved_sources": [],
+          "query_tokens": 16,
+          "context_tokens": 0,
+          "retrieval_latency_ms": 755
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "profile-03",
+      "area": "profile",
+      "key": "general",
+      "question": "Resume tu forma de comunicarte y dime el código que identifica tu perfil.",
+      "status": "PASS",
+      "response": "Me comunico de manera clara, prudente y directa, separando hechos verificados de información no disponible. Mi código de perfil es PERFIL-03.",
+      "expected_ui": "",
+      "must_include": [
+        "PERFIL-03"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.4084,
+              "semantic_score": 0.4084,
+              "keyword_score": 0.4,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 16,
+          "context_tokens": 64,
+          "retrieval_latency_ms": 565
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-orquidea-01",
+      "area": "source",
+      "key": "orquidea",
+      "question": "¿Cuál es el código de la conferencia principal?",
+      "status": "PASS",
+      "response": "El código de verificación de la conferencia principal es ORQUIDEA-41.",
+      "expected_ui": "",
+      "must_include": [
+        "ORQUIDEA-41"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            494,
+            493,
+            492,
+            491,
+            490,
+            488
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 494,
+              "source_type": "profile_fact",
+              "source_id": "111",
+              "score": 0.8,
+              "semantic_score": 0.561,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 493,
+              "source_type": "profile_fact",
+              "source_id": "112",
+              "score": 0.8,
+              "semantic_score": 0.5132,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 492,
+              "source_type": "profile_source_item",
+              "source_id": "112",
+              "score": 0.8,
+              "semantic_score": 0.4846,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.8,
+              "semantic_score": 0.558,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3804,
+              "semantic_score": 0.3804,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3712,
+              "semantic_score": 0.3712,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 450,
+          "retrieval_latency_ms": 1629
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-orquidea-02",
+      "area": "source",
+      "key": "orquidea",
+      "question": "¿A qué hora y en qué ciudad comienza la conferencia?",
+      "status": "PASS",
+      "response": "La conferencia comienza a las 09:17 en Cartagena.",
+      "expected_ui": "",
+      "must_include": [
+        "09:17",
+        "Cartagena"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            494,
+            491,
+            493,
+            492
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 494,
+              "source_type": "profile_fact",
+              "source_id": "111",
+              "score": 0.5145,
+              "semantic_score": 0.5145,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.5064,
+              "semantic_score": 0.5064,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 493,
+              "source_type": "profile_fact",
+              "source_id": "112",
+              "score": 0.4684,
+              "semantic_score": 0.4684,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 492,
+              "source_type": "profile_source_item",
+              "source_id": "112",
+              "score": 0.4235,
+              "semantic_score": 0.4235,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 325,
+          "retrieval_latency_ms": 658
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-orquidea-03",
+      "area": "source",
+      "key": "orquidea",
+      "question": "¿Quién está a cargo y cuál es el tema central de la conferencia ORQUIDEA?",
+      "status": "PASS",
+      "response": "La conferencia ORQUIDEA está a cargo de Valentina Ríos y el tema central es la inteligencia artificial confiable para equipos pequeños.",
+      "expected_ui": "",
+      "must_include": [
+        "Valentina Ríos",
+        "inteligencia artificial confiable"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            494,
+            493,
+            492,
+            491,
+            488,
+            490
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 494,
+              "source_type": "profile_fact",
+              "source_id": "111",
+              "score": 0.64,
+              "semantic_score": 0.6317,
+              "keyword_score": 0.8,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 493,
+              "source_type": "profile_fact",
+              "source_id": "112",
+              "score": 0.64,
+              "semantic_score": 0.5735,
+              "keyword_score": 0.8,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 492,
+              "source_type": "profile_source_item",
+              "source_id": "112",
+              "score": 0.64,
+              "semantic_score": 0.604,
+              "keyword_score": 0.8,
+              "lexical_score": 0.8,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.64,
+              "semantic_score": 0.6332,
+              "keyword_score": 0.8,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3655,
+              "semantic_score": 0.3655,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3538,
+              "semantic_score": 0.3538,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 22,
+          "context_tokens": 450,
+          "retrieval_latency_ms": 413
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-faro-01",
+      "area": "source",
+      "key": "faro",
+      "question": "¿Cuál es el identificador del proyecto de sensores solares?",
+      "status": "PASS",
+      "response": "El identificador inequívoco del proyecto de sensores solares es FARO-82.",
+      "expected_ui": "",
+      "must_include": [
+        "FARO-82"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            498,
+            497,
+            496,
+            495,
+            511,
+            491
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 498,
+              "source_type": "profile_fact",
+              "source_id": "113",
+              "score": 0.8,
+              "semantic_score": 0.6069,
+              "keyword_score": 1,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 497,
+              "source_type": "profile_fact",
+              "source_id": "114",
+              "score": 0.8,
+              "semantic_score": 0.5742,
+              "keyword_score": 1,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 496,
+              "source_type": "profile_source_item",
+              "source_id": "114",
+              "score": 0.8,
+              "semantic_score": 0.5718,
+              "keyword_score": 1,
+              "lexical_score": 0.8,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 495,
+              "source_type": "profile_source_item",
+              "source_id": "113",
+              "score": 0.8,
+              "semantic_score": 0.5876,
+              "keyword_score": 1,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.3625,
+              "semantic_score": 0.3625,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.3508,
+              "semantic_score": 0.3508,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 16,
+          "context_tokens": 453,
+          "retrieval_latency_ms": 434
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-faro-02",
+      "area": "source",
+      "key": "faro",
+      "question": "¿Qué reducción de agua logró el Proyecto Faro y dónde se probó?",
+      "status": "PASS",
+      "response": "El Proyecto Faro logró una reducción del consumo de agua del 28 por ciento durante la prueba controlada, que se realizó en Minca.",
+      "expected_ui": "",
+      "must_include": [
+        "28",
+        "Minca"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            496,
+            497,
+            498,
+            495
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 496,
+              "source_type": "profile_source_item",
+              "source_id": "114",
+              "score": 0.8,
+              "semantic_score": 0.5698,
+              "keyword_score": 0.6,
+              "lexical_score": 1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 497,
+              "source_type": "profile_fact",
+              "source_id": "114",
+              "score": 0.72,
+              "semantic_score": 0.5791,
+              "keyword_score": 0.6,
+              "lexical_score": 0.9,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 498,
+              "source_type": "profile_fact",
+              "source_id": "113",
+              "score": 0.6179,
+              "semantic_score": 0.6179,
+              "keyword_score": 0.6,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 495,
+              "source_type": "profile_source_item",
+              "source_id": "113",
+              "score": 0.5837,
+              "semantic_score": 0.5837,
+              "keyword_score": 0.6,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 20,
+          "context_tokens": 331,
+          "retrieval_latency_ms": 591
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-faro-03",
+      "area": "source",
+      "key": "faro",
+      "question": "¿Quién coordinó FARO-82 y para qué cultivo se usaron los sensores?",
+      "status": "PASS",
+      "response": "El Proyecto FARO-82 fue coordinado por Tomás León y se utilizaron sensores solares en cultivos de cacao.",
+      "expected_ui": "",
+      "must_include": [
+        "FARO-82"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            498,
+            497,
+            496,
+            495,
+            491
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 498,
+              "source_type": "profile_fact",
+              "source_id": "113",
+              "score": 1,
+              "semantic_score": 0.6345,
+              "keyword_score": 0.8,
+              "lexical_score": 0.5,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 497,
+              "source_type": "profile_fact",
+              "source_id": "114",
+              "score": 1,
+              "semantic_score": 0.579,
+              "keyword_score": 0.8,
+              "lexical_score": 0.6,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 496,
+              "source_type": "profile_source_item",
+              "source_id": "114",
+              "score": 1,
+              "semantic_score": 0.6001,
+              "keyword_score": 0.8,
+              "lexical_score": 0.7,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 495,
+              "source_type": "profile_source_item",
+              "source_id": "113",
+              "score": 1,
+              "semantic_score": 0.6258,
+              "keyword_score": 0.8,
+              "lexical_score": 0.5,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.3514,
+              "semantic_score": 0.3514,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 22,
+          "context_tokens": 414,
+          "retrieval_latency_ms": 400
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-nebula-01",
+      "area": "source",
+      "key": "nebula",
+      "question": "¿Cuál es la frase de control de las notas del taller?",
+      "status": "PASS",
+      "response": "La frase de control de las notas del taller es NEBULA-73.",
+      "expected_ui": "",
+      "must_include": [
+        "NEBULA-73"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            490,
+            489,
+            488,
+            487,
+            513,
+            491,
+            492
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.8,
+              "semantic_score": 0.5959,
+              "keyword_score": 1,
+              "lexical_score": 0.4,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.8,
+              "semantic_score": 0.5653,
+              "keyword_score": 1,
+              "lexical_score": 0.5,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.8,
+              "semantic_score": 0.5601,
+              "keyword_score": 1,
+              "lexical_score": 0.5,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.8,
+              "semantic_score": 0.5347,
+              "keyword_score": 1,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.3725,
+              "semantic_score": 0.3725,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.3601,
+              "semantic_score": 0.3601,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 492,
+              "source_type": "profile_source_item",
+              "source_id": "112",
+              "score": 0.3549,
+              "semantic_score": 0.3549,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 505,
+          "retrieval_latency_ms": 778
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-nebula-02",
+      "area": "source",
+      "key": "nebula",
+      "question": "¿Cuánto dura el taller, qué día se dicta y qué enseña?",
+      "status": "PASS",
+      "response": "El taller privado dura 47 minutos, se dicta los jueves y enseña a diseñar entrevistas de descubrimiento de producto.",
+      "expected_ui": "",
+      "must_include": [
+        "47",
+        "jueves",
+        "entrevistas"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            490,
+            489,
+            488,
+            487
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.64,
+              "semantic_score": 0.5303,
+              "keyword_score": 0.8,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.64,
+              "semantic_score": 0.4697,
+              "keyword_score": 0.8,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.64,
+              "semantic_score": 0.4946,
+              "keyword_score": 0.8,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.64,
+              "semantic_score": 0.4295,
+              "keyword_score": 0.8,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 19,
+          "context_tokens": 269,
+          "retrieval_latency_ms": 397
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "source-nebula-03",
+      "area": "source",
+      "key": "nebula",
+      "question": "¿Cómo se llama el material complementario del taller NEBULA?",
+      "status": "PASS",
+      "response": "El material complementario del taller NEBULA se llama Cuaderno Atlas.",
+      "expected_ui": "",
+      "must_include": [
+        "Cuaderno Atlas"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            490,
+            489,
+            488,
+            487,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.8,
+              "semantic_score": 0.6926,
+              "keyword_score": 1,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.8,
+              "semantic_score": 0.6404,
+              "keyword_score": 1,
+              "lexical_score": 0.7,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.8,
+              "semantic_score": 0.6646,
+              "keyword_score": 1,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.8,
+              "semantic_score": 0.636,
+              "keyword_score": 1,
+              "lexical_score": 0.8,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.3676,
+              "semantic_score": 0.3676,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 326,
+          "retrieval_latency_ms": 406
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "social-tiktok-01",
+      "area": "social_link",
+      "key": "tiktok",
+      "question": "¿Dónde puedo ver tu TikTok?",
+      "status": "PASS",
+      "response": "Puedes ver mi TikTok en la cuenta @qa_big_melo.",
+      "expected_ui": "Localized Go to TikTok button with the exact configured URL.",
+      "must_include": [
+        "TikTok"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            505
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 505,
+              "source_type": "social_link",
+              "source_id": "tiktok",
+              "score": 0.675,
+              "semantic_score": 0.4616,
+              "keyword_score": 0.5,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 10,
+          "context_tokens": 15,
+          "retrieval_latency_ms": 763
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "tiktok",
+            "provider_label": "TikTok",
+            "action_label": "Ir a TikTok",
+            "url": "https://www.tiktok.com/@qa_big_melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-tiktok-02",
+      "area": "social_link",
+      "key": "tiktok",
+      "question": "Compárteme tu enlace oficial de TikTok.",
+      "status": "PASS",
+      "response": "Puedes seguirme en TikTok a través de mi perfil oficial. Allí comparto contenido interesante y útil.",
+      "expected_ui": "Localized Go to TikTok button with the exact configured URL.",
+      "must_include": [
+        "TikTok"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            515,
+            514,
+            505,
+            500
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.625,
+              "semantic_score": 0.4895,
+              "keyword_score": 0.25,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.625,
+              "semantic_score": 0.4677,
+              "keyword_score": 0.25,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 505,
+              "source_type": "social_link",
+              "source_id": "tiktok",
+              "score": 0.6125,
+              "semantic_score": 0.4409,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.3531,
+              "semantic_score": 0.3531,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 176,
+          "retrieval_latency_ms": 432
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "tiktok",
+            "provider_label": "TikTok",
+            "action_label": "Ir a TikTok",
+            "url": "https://www.tiktok.com/@qa_big_melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-tiktok-03",
+      "area": "social_link",
+      "key": "tiktok",
+      "question": "Quiero ir a tu cuenta de videos cortos, ¿me ayudas?",
+      "status": "PASS",
+      "response": "Claro, puedes seguirme en TikTok para ver mis videos cortos. ¡Te espero allí!",
+      "expected_ui": "Localized Go to TikTok button with the exact configured URL.",
+      "must_include": [
+        "TikTok"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            505
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 505,
+              "source_type": "social_link",
+              "source_id": "tiktok",
+              "score": 0.55,
+              "semantic_score": 0.2331,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 16,
+          "context_tokens": 15,
+          "retrieval_latency_ms": 614
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "tiktok",
+            "provider_label": "TikTok",
+            "action_label": "Ir a TikTok",
+            "url": "https://www.tiktok.com/@qa_big_melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-youtube-01",
+      "area": "social_link",
+      "key": "youtube",
+      "question": "¿Cuál es tu canal de YouTube?",
+      "status": "PASS",
+      "response": "Puedes encontrar mi canal de YouTube como QA Big Melo. Allí comparto contenido relacionado con conocimiento verificable.",
+      "expected_ui": "Localized Go to YouTube button with the exact configured URL.",
+      "must_include": [
+        "YouTube"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            506
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 506,
+              "source_type": "social_link",
+              "source_id": "youtube",
+              "score": 0.675,
+              "semantic_score": 0.4129,
+              "keyword_score": 0.5,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 9,
+          "context_tokens": 15,
+          "retrieval_latency_ms": 1434
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "youtube",
+            "provider_label": "YouTube",
+            "action_label": "Ir a YouTube",
+            "url": "https://www.youtube.com/@qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-youtube-02",
+      "area": "social_link",
+      "key": "youtube",
+      "question": "Llévame a tu enlace oficial de YouTube.",
+      "status": "PASS",
+      "response": "Puedes seguirme en mi canal oficial de YouTube en el siguiente enlace",
+      "expected_ui": "Localized Go to YouTube button with the exact configured URL.",
+      "must_include": [
+        "YouTube"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            506
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 506,
+              "source_type": "social_link",
+              "source_id": "youtube",
+              "score": 0.6125,
+              "semantic_score": 0.3309,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 15,
+          "retrieval_latency_ms": 408
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "youtube",
+            "provider_label": "YouTube",
+            "action_label": "Ir a YouTube",
+            "url": "https://www.youtube.com/@qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-youtube-03",
+      "area": "social_link",
+      "key": "youtube",
+      "question": "¿Dónde puedo ver tus videos largos?",
+      "status": "PASS",
+      "response": "Puedes ver mis videos largos en mi canal de YouTube. Busca \"QA Big Melo\" allí.",
+      "expected_ui": "Localized Go to YouTube button with the exact configured URL.",
+      "must_include": [
+        "YouTube"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            506
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 506,
+              "source_type": "social_link",
+              "source_id": "youtube",
+              "score": 0.55,
+              "semantic_score": 0.3657,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 15,
+          "retrieval_latency_ms": 492
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "youtube",
+            "provider_label": "YouTube",
+            "action_label": "Ir a YouTube",
+            "url": "https://www.youtube.com/@qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-facebook-01",
+      "area": "social_link",
+      "key": "facebook",
+      "question": "¿Tienes Facebook oficial?",
+      "status": "PASS",
+      "response": "Sí, tengo una página oficial en Facebook. Puedes seguirme allí para más información y actualizaciones.",
+      "expected_ui": "Localized Go to Facebook button with the exact configured URL.",
+      "must_include": [
+        "Facebook"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            507
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 507,
+              "source_type": "social_link",
+              "source_id": "facebook",
+              "score": 0.675,
+              "semantic_score": 0.4074,
+              "keyword_score": 0.5,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 6,
+          "context_tokens": 16,
+          "retrieval_latency_ms": 574
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "facebook",
+            "provider_label": "Facebook",
+            "action_label": "Ir a Facebook",
+            "url": "https://www.facebook.com/qa.big.melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-facebook-02",
+      "area": "social_link",
+      "key": "facebook",
+      "question": "Dame el enlace para ir a tu Facebook.",
+      "status": "PASS",
+      "response": "Puedes seguirme en Facebook a través de mi perfil. Allí encontrarás más información y actualizaciones.",
+      "expected_ui": "Localized Go to Facebook button with the exact configured URL.",
+      "must_include": [
+        "Facebook"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            507
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 507,
+              "source_type": "social_link",
+              "source_id": "facebook",
+              "score": 0.675,
+              "semantic_score": 0.3111,
+              "keyword_score": 0.5,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 16,
+          "retrieval_latency_ms": 1592
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "facebook",
+            "provider_label": "Facebook",
+            "action_label": "Ir a Facebook",
+            "url": "https://www.facebook.com/qa.big.melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-facebook-03",
+      "area": "social_link",
+      "key": "facebook",
+      "question": "Quiero abrir tu página de Facebook.",
+      "status": "PASS",
+      "response": "Puedes visitar mi página de Facebook para más información. ¡Te espero allí!",
+      "expected_ui": "Localized Go to Facebook button with the exact configured URL.",
+      "must_include": [
+        "Facebook"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            507
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 507,
+              "source_type": "social_link",
+              "source_id": "facebook",
+              "score": 0.6333,
+              "semantic_score": 0.2965,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 8,
+          "context_tokens": 16,
+          "retrieval_latency_ms": 2732
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "facebook",
+            "provider_label": "Facebook",
+            "action_label": "Ir a Facebook",
+            "url": "https://www.facebook.com/qa.big.melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-linkedin-01",
+      "area": "social_link",
+      "key": "linkedin",
+      "question": "¿Cuál es tu LinkedIn?",
+      "status": "PASS",
+      "response": "Puedes encontrarme en LinkedIn como QA Big Melo. ¡Conéctate conmigo!",
+      "expected_ui": "Localized Go to LinkedIn button with the exact configured URL.",
+      "must_include": [
+        "LinkedIn"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            508,
+            390,
+            509
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 508,
+              "source_type": "social_link",
+              "source_id": "linkedin",
+              "score": 0.8,
+              "semantic_score": 0.4793,
+              "keyword_score": 1,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.3953,
+              "semantic_score": 0.3953,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 509,
+              "source_type": "social_link",
+              "source_id": "github",
+              "score": 0.3665,
+              "semantic_score": 0.3665,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 7,
+          "context_tokens": 94,
+          "retrieval_latency_ms": 398
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "linkedin",
+            "provider_label": "LinkedIn",
+            "action_label": "Ir a LinkedIn",
+            "url": "https://www.linkedin.com/in/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-linkedin-02",
+      "area": "social_link",
+      "key": "linkedin",
+      "question": "Quiero consultar tu perfil profesional en LinkedIn.",
+      "status": "PASS",
+      "response": "Puedes consultar mi perfil profesional en LinkedIn buscando mi nombre o accediendo a mi perfil directamente en la plataforma.",
+      "expected_ui": "Localized Go to LinkedIn button with the exact configured URL.",
+      "must_include": [
+        "LinkedIn"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            508,
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 508,
+              "source_type": "social_link",
+              "source_id": "linkedin",
+              "score": 0.6125,
+              "semantic_score": 0.3793,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.4227,
+              "semantic_score": 0.4227,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 9,
+          "context_tokens": 80,
+          "retrieval_latency_ms": 421
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "linkedin",
+            "provider_label": "LinkedIn",
+            "action_label": "Ir a LinkedIn",
+            "url": "https://www.linkedin.com/in/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-linkedin-03",
+      "area": "social_link",
+      "key": "linkedin",
+      "question": "¿Dónde encuentro tu red profesional oficial?",
+      "status": "PASS",
+      "response": "Puedes encontrar mi red profesional oficial en LinkedIn. Allí comparto información relevante sobre mi trabajo y experiencia.",
+      "expected_ui": "Localized Go to LinkedIn button with the exact configured URL.",
+      "must_include": [
+        "LinkedIn"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            508
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 508,
+              "source_type": "social_link",
+              "source_id": "linkedin",
+              "score": 0.55,
+              "semantic_score": 0.346,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 16,
+          "retrieval_latency_ms": 442
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "linkedin",
+            "provider_label": "LinkedIn",
+            "action_label": "Ir a LinkedIn",
+            "url": "https://www.linkedin.com/in/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-github-01",
+      "area": "social_link",
+      "key": "github",
+      "question": "¿Cuál es tu GitHub?",
+      "status": "PASS",
+      "response": "Puedes encontrar mi GitHub en la plataforma correspondiente. Allí comparto algunos proyectos interesantes.",
+      "expected_ui": "Localized Go to GitHub button with the exact configured URL.",
+      "must_include": [
+        "GitHub"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            509
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 509,
+              "source_type": "social_link",
+              "source_id": "github",
+              "score": 0.8,
+              "semantic_score": 0.4961,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 7,
+          "context_tokens": 14,
+          "retrieval_latency_ms": 672
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "github",
+            "provider_label": "GitHub",
+            "action_label": "Ir a GitHub",
+            "url": "https://github.com/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-github-02",
+      "area": "social_link",
+      "key": "github",
+      "question": "Compárteme tu repositorio oficial.",
+      "status": "PASS",
+      "response": "Puedes encontrar mi repositorio oficial en GitHub.",
+      "expected_ui": "Localized Go to GitHub button with the exact configured URL.",
+      "must_include": [
+        "GitHub"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            509
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 509,
+              "source_type": "social_link",
+              "source_id": "github",
+              "score": 0.55,
+              "semantic_score": 0.3212,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 9,
+          "context_tokens": 14,
+          "retrieval_latency_ms": 315
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "github",
+            "provider_label": "GitHub",
+            "action_label": "Ir a GitHub",
+            "url": "https://github.com/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "social-github-03",
+      "area": "social_link",
+      "key": "github",
+      "question": "Quiero ir a tu perfil de código, ¿qué enlace uso?",
+      "status": "PASS",
+      "response": "Puedes visitar mi perfil de código en GitHub.",
+      "expected_ui": "Localized Go to GitHub button with the exact configured URL.",
+      "must_include": [
+        "GitHub"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            509,
+            390,
+            512
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 509,
+              "source_type": "social_link",
+              "source_id": "github",
+              "score": 0.55,
+              "semantic_score": 0.3285,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.3562,
+              "semantic_score": 0.3562,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.351,
+              "semantic_score": 0.351,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 15,
+          "context_tokens": 119,
+          "retrieval_latency_ms": 627
+        },
+        "media": [],
+        "products": [],
+        "social_links": [
+          {
+            "provider_key": "github",
+            "provider_label": "GitHub",
+            "action_label": "Ir a GitHub",
+            "url": "https://github.com/qa-big-melo"
+          }
+        ]
+      },
+      "notes": null
+    },
+    {
+      "id": "tiktok-1-01",
+      "area": "integration",
+      "key": "tiktok_1",
+      "question": "¿Tienes un TikTok sobre validar ideas antes de construir?",
+      "status": "PASS",
+      "response": "Sí, tengo un TikTok que explica tres reglas para validar una idea antes de construirla. Puedes verlo para obtener más detalles. Puedes verlo en TikTok.",
+      "expected_ui": "TikTok media card for item 1 only.",
+      "must_include": [
+        "TIKTOK-CORAL-14"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            514,
+            515,
+            505
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.8,
+              "semantic_score": 0.7109,
+              "keyword_score": 1,
+              "lexical_score": 1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.625,
+              "semantic_score": 0.4235,
+              "keyword_score": 0.2,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 505,
+              "source_type": "social_link",
+              "source_id": "tiktok",
+              "score": 0.3525,
+              "semantic_score": 0.3525,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 115,
+          "retrieval_latency_ms": 491
+        },
+        "media": [
+          {
+            "id": 71,
+            "provider": "TikTok",
+            "provider_label": "TikTok",
+            "observation": "TIKTOK-CORAL-14 explica tres reglas para validar una idea antes de construirla.",
+            "caption": "Validar ideas antes de construir",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.tiktok.com/@qa_big_melo/video/7400000000000000001",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "tiktok-1-02",
+      "area": "integration",
+      "key": "tiktok_1",
+      "question": "Muéstrame las tres reglas del video CORAL.",
+      "status": "PASS",
+      "response": "Voy a mostrarte el video que explica las tres reglas para validar una idea antes de construirla. Puedes verlo en TikTok.",
+      "expected_ui": "TikTok media card for item 1 only.",
+      "must_include": [
+        "TIKTOK-CORAL-14"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            514,
+            515,
+            504,
+            503,
+            502,
+            500,
+            501,
+            499,
+            491,
+            494
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.8,
+              "semantic_score": 0.4947,
+              "keyword_score": 1,
+              "lexical_score": 0.4,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6,
+              "semantic_score": 0.3571,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.6,
+              "semantic_score": 0.3374,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6,
+              "semantic_score": 0.3606,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6,
+              "semantic_score": 0.365,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6,
+              "semantic_score": 0.3362,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.3321,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.2516,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 491,
+              "source_type": "profile_source_item",
+              "source_id": "111",
+              "score": 0.3624,
+              "semantic_score": 0.3624,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 494,
+              "source_type": "profile_fact",
+              "source_id": "111",
+              "score": 0.3614,
+              "semantic_score": 0.3614,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 601,
+          "retrieval_latency_ms": 638
+        },
+        "media": [
+          {
+            "id": 71,
+            "provider": "TikTok",
+            "provider_label": "TikTok",
+            "observation": "TIKTOK-CORAL-14 explica tres reglas para validar una idea antes de construirla.",
+            "caption": "Validar ideas antes de construir",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.tiktok.com/@qa_big_melo/video/7400000000000000001",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "tiktok-1-03",
+      "area": "integration",
+      "key": "tiktok_1",
+      "question": "¿Qué contenido corto recomiendas para probar una idea?",
+      "status": "PASS",
+      "response": "Te recomiendo el video de TikTok titulado \"Validar ideas antes de construir\", que explica tres reglas para validar una idea antes de llevarla a cabo. Puedes verlo en TikTok.",
+      "expected_ui": "TikTok media card for item 1 only.",
+      "must_include": [
+        "TIKTOK-CORAL-14"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            514,
+            513,
+            512,
+            511,
+            510,
+            489,
+            490,
+            488
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6,
+              "semantic_score": 0.4375,
+              "keyword_score": 0.2,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.55,
+              "semantic_score": 0.4375,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.3167,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.55,
+              "semantic_score": 0.2653,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.3033,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.354,
+              "semantic_score": 0.354,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3526,
+              "semantic_score": 0.3526,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3505,
+              "semantic_score": 0.3505,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 417,
+          "retrieval_latency_ms": 452
+        },
+        "media": [
+          {
+            "id": 71,
+            "provider": "TikTok",
+            "provider_label": "TikTok",
+            "observation": "TIKTOK-CORAL-14 explica tres reglas para validar una idea antes de construirla.",
+            "caption": "Validar ideas antes de construir",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.tiktok.com/@qa_big_melo/video/7400000000000000001",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "tiktok-2-01",
+      "area": "integration",
+      "key": "tiktok_2",
+      "question": "¿Tienes un video de una rutina de planificación?",
+      "status": "PASS",
+      "response": "Sí, tengo un video que muestra una rutina de planificación rápida de siete minutos. Te lo comparto a continuación. Puedes verlo en TikTok.",
+      "expected_ui": "TikTok media card for item 2 only.",
+      "must_include": [
+        "TIKTOK-LUNA-25"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            515,
+            514,
+            504,
+            503,
+            502,
+            500,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.8,
+              "semantic_score": 0.5661,
+              "keyword_score": 1,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6333,
+              "semantic_score": 0.3939,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.6333,
+              "semantic_score": 0.3715,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6333,
+              "semantic_score": 0.4282,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6333,
+              "semantic_score": 0.2903,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6333,
+              "semantic_score": 0.2855,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.4074,
+              "semantic_score": 0.4074,
+              "keyword_score": 0.3333,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 395,
+          "retrieval_latency_ms": 416
+        },
+        "media": [
+          {
+            "id": 72,
+            "provider": "TikTok",
+            "provider_label": "TikTok",
+            "observation": "TIKTOK-LUNA-25 muestra una rutina de planificación de siete minutos.",
+            "caption": "Planificación rápida",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.tiktok.com/@qa_big_melo/video/7400000000000000002",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "tiktok-2-02",
+      "area": "integration",
+      "key": "tiktok_2",
+      "question": "¿Cuántos minutos dura la rutina LUNA?",
+      "status": "FAIL",
+      "response": "",
+      "expected_ui": "TikTok media card for item 2 only.",
+      "must_include": [
+        "siete"
+      ],
+      "require_attachment": false,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            515,
+            490,
+            488
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.48,
+              "semantic_score": 0.4673,
+              "keyword_score": 0.6,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3683,
+              "semantic_score": 0.3683,
+              "keyword_score": 0.4,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3577,
+              "semantic_score": 0.3577,
+              "keyword_score": 0.4,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 172,
+          "retrieval_latency_ms": 438
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": "La respuesta no fue textual o no informó modo RAG."
+    },
+    {
+      "id": "tiktok-2-03",
+      "area": "integration",
+      "key": "tiktok_2",
+      "question": "Muéstrame tu contenido corto para planificar rápido.",
+      "status": "FAIL",
+      "response": "No tengo fotos disponibles en TikTok por ahora.",
+      "expected_ui": "TikTok media card for item 2 only.",
+      "must_include": [
+        "TIKTOK-LUNA-25"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            515,
+            514,
+            504,
+            503,
+            502,
+            501,
+            500,
+            499,
+            513,
+            488
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.55,
+              "semantic_score": 0.5297,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.55,
+              "semantic_score": 0.4009,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.55,
+              "semantic_score": 0.3718,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.55,
+              "semantic_score": 0.4004,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.55,
+              "semantic_score": 0.3164,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.288,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.55,
+              "semantic_score": 0.3689,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.2382,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.41,
+              "semantic_score": 0.41,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3591,
+              "semantic_score": 0.3591,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 575,
+          "retrieval_latency_ms": 512
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": "No aparecieron todos los términos centinela esperados."
+    },
+    {
+      "id": "youtube-1-01",
+      "area": "integration",
+      "key": "youtube_1",
+      "question": "¿Tienes un video sobre documentar decisiones?",
+      "status": "PASS",
+      "response": "Sí, tengo un video que presenta un método de cinco pasos para documentar decisiones. Puedes verlo en YouTube.",
+      "expected_ui": "YouTube video card for item 1 only.",
+      "must_include": [
+        "YOUTUBE-CEDRO-36"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            503,
+            515,
+            514,
+            504,
+            502,
+            500,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.8,
+              "semantic_score": 0.4693,
+              "keyword_score": 1,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6333,
+              "semantic_score": 0.3749,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6333,
+              "semantic_score": 0.4158,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.6333,
+              "semantic_score": 0.3995,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6333,
+              "semantic_score": 0.2666,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6333,
+              "semantic_score": 0.3104,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.3555,
+              "semantic_score": 0.3555,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 395,
+          "retrieval_latency_ms": 403
+        },
+        "media": [
+          {
+            "id": 69,
+            "provider": "YouTube",
+            "provider_label": "YouTube",
+            "observation": "YOUTUBE-CEDRO-36 presenta un método de cinco pasos para documentar decisiones.",
+            "caption": "How to Schedule a Weekly Metrics Report With ChatGPT Work",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.youtube.com/watch?v=p_slDAvPjv0",
+            "channel_url": "https://www.youtube.com/@openai",
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "youtube-1-02",
+      "area": "integration",
+      "key": "youtube_1",
+      "question": "¿Cuántos pasos tiene el método CEDRO?",
+      "status": "PASS",
+      "response": "El método CEDRO tiene cinco pasos para documentar decisiones.",
+      "expected_ui": "YouTube video card for item 1 only.",
+      "must_include": [
+        "cinco"
+      ],
+      "require_attachment": false,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            503
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6,
+              "semantic_score": 0.3209,
+              "keyword_score": 0.75,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 59,
+          "retrieval_latency_ms": 405
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "youtube-1-03",
+      "area": "integration",
+      "key": "youtube_1",
+      "question": "Muéstrame el video que usarías para ordenar decisiones de equipo.",
+      "status": "PASS",
+      "response": "Te muestro un video que presenta un método de cinco pasos para documentar decisiones. Es útil para organizar decisiones en equipo. Puedes verlo en YouTube.",
+      "expected_ui": "YouTube video card for item 1 only.",
+      "must_include": [
+        "YOUTUBE-CEDRO-36"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            503,
+            515,
+            514,
+            504,
+            502,
+            500,
+            501,
+            499,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.65,
+              "semantic_score": 0.4825,
+              "keyword_score": 0.4,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6,
+              "semantic_score": 0.4329,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6,
+              "semantic_score": 0.4405,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.6,
+              "semantic_score": 0.4172,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6,
+              "semantic_score": 0.2965,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6,
+              "semantic_score": 0.3742,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.2372,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.2084,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.4162,
+              "semantic_score": 0.4162,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 17,
+          "context_tokens": 506,
+          "retrieval_latency_ms": 501
+        },
+        "media": [
+          {
+            "id": 69,
+            "provider": "YouTube",
+            "provider_label": "YouTube",
+            "observation": "YOUTUBE-CEDRO-36 presenta un método de cinco pasos para documentar decisiones.",
+            "caption": "How to Schedule a Weekly Metrics Report With ChatGPT Work",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.youtube.com/watch?v=p_slDAvPjv0",
+            "channel_url": "https://www.youtube.com/@openai",
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "youtube-2-01",
+      "area": "integration",
+      "key": "youtube_2",
+      "question": "¿Tienes un video que compare entrevistas y encuestas?",
+      "status": "PASS",
+      "response": "Sí, tengo un video que compara entrevistas abiertas y encuestas cerradas. Se titula \"How to Turn a Forecast Spreadsheet Into an Interactive Planning Tool With ChatGPT Work\". Puedes verlo en YouTube.",
+      "expected_ui": "YouTube video card for item 2 only.",
+      "must_include": [
+        "YOUTUBE-NORTE-47"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            504,
+            515,
+            514,
+            503,
+            502,
+            500
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.7375,
+              "semantic_score": 0.5115,
+              "keyword_score": 0.75,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6125,
+              "semantic_score": 0.3567,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6125,
+              "semantic_score": 0.3845,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6125,
+              "semantic_score": 0.4122,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6125,
+              "semantic_score": 0.3039,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6125,
+              "semantic_score": 0.361,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 338,
+          "retrieval_latency_ms": 517
+        },
+        "media": [
+          {
+            "id": 70,
+            "provider": "YouTube",
+            "provider_label": "YouTube",
+            "observation": "YOUTUBE-NORTE-47 compara entrevistas abiertas y encuestas cerradas.",
+            "caption": "How to Turn a Forecast Spreadsheet Into an Interactive Planning Tool With ChatGPT Work",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.youtube.com/watch?v=TryfaGZwvIE",
+            "channel_url": "https://www.youtube.com/@openai",
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "youtube-2-02",
+      "area": "integration",
+      "key": "youtube_2",
+      "question": "¿Qué dos métodos compara el contenido NORTE?",
+      "status": "PASS",
+      "response": "El contenido NORTE compara entrevistas abiertas y encuestas cerradas.",
+      "expected_ui": "YouTube video card for item 2 only.",
+      "must_include": [
+        "entrevistas abiertas",
+        "encuestas cerradas"
+      ],
+      "require_attachment": false,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            504
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.65,
+              "semantic_score": 0.3035,
+              "keyword_score": 0.4,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 64,
+          "retrieval_latency_ms": 431
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "youtube-2-03",
+      "area": "integration",
+      "key": "youtube_2",
+      "question": "Muéstrame tu video para decidir entre preguntas abiertas y cerradas.",
+      "status": "PASS",
+      "response": "Aquí tienes el video que compara entrevistas abiertas y encuestas cerradas: \"How to Turn a Forecast Spreadsheet Into an Interactive Planning Tool With ChatGPT Work\". Puedes verlo en YouTube.",
+      "expected_ui": "YouTube video card for item 2 only.",
+      "must_include": [
+        "YOUTUBE-NORTE-47"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            504,
+            515,
+            514,
+            503,
+            502,
+            500,
+            501,
+            499,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.75,
+              "semantic_score": 0.4293,
+              "keyword_score": 0.8,
+              "lexical_score": 0.4,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6,
+              "semantic_score": 0.3241,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6,
+              "semantic_score": 0.3939,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6,
+              "semantic_score": 0.3635,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.6,
+              "semantic_score": 0.3044,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6,
+              "semantic_score": 0.3516,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.2723,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.1818,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.3535,
+              "semantic_score": 0.3535,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 19,
+          "context_tokens": 506,
+          "retrieval_latency_ms": 406
+        },
+        "media": [
+          {
+            "id": 70,
+            "provider": "YouTube",
+            "provider_label": "YouTube",
+            "observation": "YOUTUBE-NORTE-47 compara entrevistas abiertas y encuestas cerradas.",
+            "caption": "How to Turn a Forecast Spreadsheet Into an Interactive Planning Tool With ChatGPT Work",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://www.youtube.com/watch?v=TryfaGZwvIE",
+            "channel_url": "https://www.youtube.com/@openai",
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-1-01",
+      "area": "integration",
+      "key": "onlyfans_1",
+      "question": "¿Qué material privado tienes sobre composición visual?",
+      "status": "PASS",
+      "response": "Tengo una lámina privada sobre composición visual titulada \"Composición Ámbar QA\", disponible en OnlyFans. Es un recurso complementario para el aprendizaje.",
+      "expected_ui": "Age-restricted OnlyFans image card for item 1 only.",
+      "must_include": [
+        "ONLYFANS-AMBAR-58"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            501,
+            490,
+            489,
+            488,
+            487,
+            502
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.4883,
+              "semantic_score": 0.4883,
+              "keyword_score": 0.5,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.4,
+              "semantic_score": 0.3513,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.4,
+              "semantic_score": 0.3425,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.4,
+              "semantic_score": 0.3619,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.4,
+              "semantic_score": 0.3379,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.3826,
+              "semantic_score": 0.3826,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 375,
+          "retrieval_latency_ms": 505
+        },
+        "media": [
+          {
+            "id": 67,
+            "provider": "OnlyFans",
+            "provider_label": "OnlyFans",
+            "observation": "ONLYFANS-AMBAR-58 es una lámina privada sobre composición visual.",
+            "caption": "Composición Ámbar QA",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://onlyfans.com/qa-big-melo",
+            "channel_url": null,
+            "age_restricted": true
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-1-02",
+      "area": "integration",
+      "key": "onlyfans_1",
+      "question": "Muéstrame la lámina AMBAR.",
+      "status": "PASS",
+      "response": "Aquí tienes la lámina privada sobre composición visual: Composición Ámbar QA.",
+      "expected_ui": "Age-restricted OnlyFans image card for item 1 only.",
+      "must_include": [
+        "ONLYFANS-AMBAR-58"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            501,
+            500
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.5333,
+              "semantic_score": 0.4799,
+              "keyword_score": 0.6667,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.3739,
+              "semantic_score": 0.3739,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 10,
+          "context_tokens": 113,
+          "retrieval_latency_ms": 504
+        },
+        "media": [
+          {
+            "id": 67,
+            "provider": "OnlyFans",
+            "provider_label": "OnlyFans",
+            "observation": "ONLYFANS-AMBAR-58 es una lámina privada sobre composición visual.",
+            "caption": "Composición Ámbar QA",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://onlyfans.com/qa-big-melo",
+            "channel_url": null,
+            "age_restricted": true
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-1-03",
+      "area": "integration",
+      "key": "onlyfans_1",
+      "question": "¿Tienes una imagen exclusiva de diseño visual?",
+      "status": "PASS",
+      "response": "Te comparto esta foto: ONLYFANS-AMBAR-58 es una lámina privada sobre composición visual..",
+      "expected_ui": "Age-restricted OnlyFans image card for item 1 only.",
+      "must_include": [
+        "ONLYFANS-AMBAR-58"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            501,
+            514,
+            502
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.6125,
+              "semantic_score": 0.4186,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.363,
+              "semantic_score": 0.363,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.356,
+              "semantic_score": 0.356,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 159,
+          "retrieval_latency_ms": 434
+        },
+        "media": [
+          {
+            "id": 67,
+            "provider": "OnlyFans",
+            "provider_label": "OnlyFans",
+            "observation": "ONLYFANS-AMBAR-58 es una lámina privada sobre composición visual.",
+            "caption": "Composición Ámbar QA",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://onlyfans.com/qa-big-melo",
+            "channel_url": null,
+            "age_restricted": true
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-2-01",
+      "area": "integration",
+      "key": "onlyfans_2",
+      "question": "¿Qué clip privado muestra una secuencia de colores?",
+      "status": "PASS",
+      "response": "El clip privado que muestra una secuencia de cuatro colores es ONLYFANS-SELVA-69.",
+      "expected_ui": "Age-restricted OnlyFans video card for item 2 only.",
+      "must_include": [
+        "ONLYFANS-SELVA-69"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            502,
+            515,
+            514,
+            504,
+            503,
+            501,
+            500,
+            499
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.75,
+              "semantic_score": 0.5624,
+              "keyword_score": 0.8,
+              "lexical_score": 0.5,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6,
+              "semantic_score": 0.3906,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.55,
+              "semantic_score": 0.3349,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.55,
+              "semantic_score": 0.3149,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.55,
+              "semantic_score": 0.3265,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.4398,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.55,
+              "semantic_score": 0.336,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.2254,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 13,
+          "context_tokens": 449,
+          "retrieval_latency_ms": 436
+        },
+        "media": [
+          {
+            "id": 68,
+            "provider": "OnlyFans",
+            "provider_label": "OnlyFans",
+            "observation": "ONLYFANS-SELVA-69 es un clip privado con una secuencia de cuatro colores.",
+            "caption": "Secuencia Selva QA",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://onlyfans.com/qa-big-melo",
+            "channel_url": null,
+            "age_restricted": true
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-2-02",
+      "area": "integration",
+      "key": "onlyfans_2",
+      "question": "¿Cuántos colores aparecen en SELVA?",
+      "status": "PASS",
+      "response": "En la secuencia Selva QA aparecen cuatro colores.",
+      "expected_ui": "Age-restricted OnlyFans video card for item 2 only.",
+      "must_include": [
+        "cuatro"
+      ],
+      "require_attachment": false,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            502
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.4624,
+              "semantic_score": 0.4624,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 54,
+          "retrieval_latency_ms": 431
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "onlyfans-2-03",
+      "area": "integration",
+      "key": "onlyfans_2",
+      "question": "Muéstrame tu video exclusivo de color.",
+      "status": "PASS",
+      "response": "Aquí tienes un clip privado sobre una secuencia de cuatro colores.",
+      "expected_ui": "Age-restricted OnlyFans video card for item 2 only.",
+      "must_include": [
+        "ONLYFANS-SELVA-69"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            502,
+            515,
+            514,
+            504,
+            503,
+            500,
+            501,
+            499
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 502,
+              "source_type": "integration_media",
+              "source_id": "68",
+              "score": 0.675,
+              "semantic_score": 0.4613,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.6125,
+              "semantic_score": 0.3703,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 514,
+              "source_type": "integration_media",
+              "source_id": "71",
+              "score": 0.6125,
+              "semantic_score": 0.3565,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.6125,
+              "semantic_score": 0.3288,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.6125,
+              "semantic_score": 0.3431,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.6125,
+              "semantic_score": 0.3452,
+              "keyword_score": 0.25,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 501,
+              "source_type": "integration_media",
+              "source_id": "67",
+              "score": 0.55,
+              "semantic_score": 0.3871,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.55,
+              "semantic_score": 0.2303,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 449,
+          "retrieval_latency_ms": 473
+        },
+        "media": [
+          {
+            "id": 68,
+            "provider": "OnlyFans",
+            "provider_label": "OnlyFans",
+            "observation": "ONLYFANS-SELVA-69 es un clip privado con una secuencia de cuatro colores.",
+            "caption": "Secuencia Selva QA",
+            "action_label": null,
+            "destination_label": null,
+            "permalink": "https://onlyfans.com/qa-big-melo",
+            "channel_url": null,
+            "age_restricted": true
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-1-01",
+      "area": "integration",
+      "key": "other_1",
+      "question": "¿Cuál es la edición del boletín Río?",
+      "status": "PASS",
+      "response": "La edición número doce del boletín Río ha sido anunciada por OTRO-RIO-70. Puedes leer en el blog.",
+      "expected_ui": "Other media card with localized View on Blog button and exact URL.",
+      "must_include": [
+        "OTRO-RIO-70"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            499
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.8,
+              "semantic_score": 0.5677,
+              "keyword_score": 1,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 59,
+          "retrieval_latency_ms": 402
+        },
+        "media": [
+          {
+            "id": 65,
+            "provider": "Blog",
+            "provider_label": "Blog",
+            "observation": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "caption": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "action_label": "Leer en el blog",
+            "destination_label": "Blog",
+            "permalink": "https://example.com/blog/rio-70",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-1-02",
+      "area": "integration",
+      "key": "other_1",
+      "question": "Muéstrame el anuncio RIO del blog.",
+      "status": "PASS",
+      "response": "Aquí tienes el anuncio del boletín Río: la edición número doce ha sido publicada. Puedes ver más detalles en el blog.",
+      "expected_ui": "Other media card with localized View on Blog button and exact URL.",
+      "must_include": [
+        "OTRO-RIO-70"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            499,
+            500,
+            503,
+            504
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.675,
+              "semantic_score": 0.5634,
+              "keyword_score": 0.5,
+              "lexical_score": 0.3,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.4165,
+              "semantic_score": 0.4165,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 503,
+              "source_type": "integration_media",
+              "source_id": "69",
+              "score": 0.36,
+              "semantic_score": 0.36,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.3513,
+              "semantic_score": 0.3513,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 243,
+          "retrieval_latency_ms": 566
+        },
+        "media": [
+          {
+            "id": 65,
+            "provider": "Blog",
+            "provider_label": "Blog",
+            "observation": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "caption": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "action_label": "Leer en el blog",
+            "destination_label": "Blog",
+            "permalink": "https://example.com/blog/rio-70",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-1-03",
+      "area": "integration",
+      "key": "other_1",
+      "question": "¿Tienes una publicación sobre la edición doce de un boletín?",
+      "status": "PASS",
+      "response": "OTRO-RIO-70 anuncia la edición número doce del boletín Río. Puedes consultar más detalles en la publicación. Puedes leer en el blog.",
+      "expected_ui": "Other media card with localized View on Blog button and exact URL.",
+      "must_include": [
+        "OTRO-RIO-70"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            499,
+            510,
+            488
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 499,
+              "source_type": "integration_media",
+              "source_id": "65",
+              "score": 0.7375,
+              "semantic_score": 0.4912,
+              "keyword_score": 0.75,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.3799,
+              "semantic_score": 0.3799,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3603,
+              "semantic_score": 0.3603,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 18,
+          "context_tokens": 167,
+          "retrieval_latency_ms": 426
+        },
+        "media": [
+          {
+            "id": 65,
+            "provider": "Blog",
+            "provider_label": "Blog",
+            "observation": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "caption": "OTRO-RIO-70 anuncia la edición número doce del boletín Río.",
+            "action_label": "Leer en el blog",
+            "destination_label": "Blog",
+            "permalink": "https://example.com/blog/rio-70",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-2-01",
+      "area": "integration",
+      "key": "other_2",
+      "question": "¿Tienes un mapa interactivo?",
+      "status": "PASS",
+      "response": "Sí, tengo un mapa interactivo de ocho estaciones disponible. Puedo mostrarlo si lo deseas. Puedes visitar el sitio web.",
+      "expected_ui": "Other media card with localized View on Website button and exact URL.",
+      "must_include": [
+        "OTRO-MAPA-81"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            500,
+            504
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.8,
+              "semantic_score": 0.5177,
+              "keyword_score": 1,
+              "lexical_score": 0.6,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.3856,
+              "semantic_score": 0.3856,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 8,
+          "context_tokens": 125,
+          "retrieval_latency_ms": 1436
+        },
+        "media": [
+          {
+            "id": 66,
+            "provider": "Sitio web",
+            "provider_label": "Sitio web",
+            "observation": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones.",
+            "caption": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones.",
+            "action_label": "Visitar el sitio web",
+            "destination_label": "Sitio web",
+            "permalink": "https://example.com/mapa-81",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-2-02",
+      "area": "integration",
+      "key": "other_2",
+      "question": "¿Cuántas estaciones tiene MAPA-81?",
+      "status": "PASS",
+      "response": "MAPA-81 tiene ocho estaciones.",
+      "expected_ui": "Other media card with localized View on Website button and exact URL.",
+      "must_include": [
+        "ocho"
+      ],
+      "require_attachment": false,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            500
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 1,
+              "semantic_score": 0.4602,
+              "keyword_score": 0.75,
+              "lexical_score": 0.8,
+              "identifier_score": 1,
+              "forced": false
+            }
+          ],
+          "query_tokens": 12,
+          "context_tokens": 61,
+          "retrieval_latency_ms": 426
+        },
+        "media": [],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "other-2-03",
+      "area": "integration",
+      "key": "other_2",
+      "question": "Muéstrame el contenido de tu sitio web sobre estaciones.",
+      "status": "PASS",
+      "response": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones. Puedes visitar el sitio web.",
+      "expected_ui": "Other media card with localized View on Website button and exact URL.",
+      "must_include": [
+        "OTRO-MAPA-81"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            500,
+            511
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 500,
+              "source_type": "integration_media",
+              "source_id": "66",
+              "score": 0.7,
+              "semantic_score": 0.522,
+              "keyword_score": 0.6,
+              "lexical_score": 0.4,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.3765,
+              "semantic_score": 0.3765,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 14,
+          "context_tokens": 100,
+          "retrieval_latency_ms": 421
+        },
+        "media": [
+          {
+            "id": 66,
+            "provider": "Sitio web",
+            "provider_label": "Sitio web",
+            "observation": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones.",
+            "caption": "OTRO-MAPA-81 presenta un mapa interactivo de ocho estaciones.",
+            "action_label": "Visitar el sitio web",
+            "destination_label": "Sitio web",
+            "permalink": "https://example.com/mapa-81",
+            "channel_url": null,
+            "age_restricted": false
+          }
+        ],
+        "products": [],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-1-01",
+      "area": "product",
+      "key": "product_1",
+      "question": "¿Qué producto tienes para planificar varias semanas?",
+      "status": "PASS",
+      "response": "Te recomiendo el Kit Horizonte 92, que es una plantilla digital para planificar 12 semanas. Su precio de referencia es USD 29. Puede ser una excelente opción para tu planificación.",
+      "expected_ui": "Published product card for Kit Horizonte 92.",
+      "must_include": [
+        "Kit Horizonte 92"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            511,
+            513,
+            512,
+            510,
+            515
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.675,
+              "semantic_score": 0.4767,
+              "keyword_score": 0.5,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.55,
+              "semantic_score": 0.436,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.3652,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.3266,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.4326,
+              "semantic_score": 0.4326,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 10,
+          "context_tokens": 223,
+          "retrieval_latency_ms": 434
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 243,
+            "name": "Kit Horizonte 92",
+            "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/kit-horizonte-92?v=1786141797",
+            "action_url": "https://example.com/productos/horizonte-92"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-1-02",
+      "area": "product",
+      "key": "product_1",
+      "question": "¿Cuántas semanas cubre y cuánto cuesta Kit Horizonte 92?",
+      "status": "PASS",
+      "response": "El Kit Horizonte 92 cubre 12 semanas y tiene un precio de referencia de USD 29.",
+      "expected_ui": "Published product card for Kit Horizonte 92.",
+      "must_include": [
+        "Kit Horizonte 92"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            511,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 1,
+              "semantic_score": 0.5729,
+              "keyword_score": 0.8,
+              "lexical_score": 0.4,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 1,
+              "semantic_score": 0.4299,
+              "keyword_score": 0.6,
+              "lexical_score": 0.3,
+              "identifier_score": 1,
+              "forced": false
+            }
+          ],
+          "query_tokens": 20,
+          "context_tokens": 96,
+          "retrieval_latency_ms": 330
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 243,
+            "name": "Kit Horizonte 92",
+            "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/kit-horizonte-92?v=1786141797",
+            "action_url": "https://example.com/productos/horizonte-92"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-1-03",
+      "area": "product",
+      "key": "product_1",
+      "question": "Recomiéndame algo para planificación sin acompañamiento personal.",
+      "status": "PASS",
+      "response": "Te recomiendo el Kit Horizonte 92, que es una plantilla digital para planificar 12 semanas. Es ideal para organizar tus actividades de forma autónoma.",
+      "expected_ui": "Published product card for Kit Horizonte 92.",
+      "must_include": [
+        "Kit Horizonte 92"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            512,
+            511,
+            510,
+            515,
+            489,
+            490
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.7,
+              "semantic_score": 0.6422,
+              "keyword_score": 0.6,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.345,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.55,
+              "semantic_score": 0.3305,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.3271,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 515,
+              "source_type": "integration_media",
+              "source_id": "72",
+              "score": 0.3798,
+              "semantic_score": 0.3798,
+              "keyword_score": 0.2,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.3602,
+              "semantic_score": 0.3602,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3525,
+              "semantic_score": 0.3525,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 15,
+          "context_tokens": 342,
+          "retrieval_latency_ms": 396
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 243,
+            "name": "Kit Horizonte 92",
+            "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/kit-horizonte-92?v=1786141797",
+            "action_url": "https://example.com/productos/horizonte-92"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-2-01",
+      "area": "product",
+      "key": "product_2",
+      "question": "¿Qué guía tienes para preparar entrevistas?",
+      "status": "PASS",
+      "response": "Tengo la \"Guía Brújula 13\", que es un PDF de 38 páginas para preparar entrevistas. Su precio de referencia es USD 15. Si deseas más información, puedo ayudarte.",
+      "expected_ui": "Published product card for Guía Brújula 13.",
+      "must_include": [
+        "Guía Brújula 13"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            510,
+            513,
+            489,
+            488,
+            487,
+            490,
+            390,
+            504
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.8,
+              "semantic_score": 0.5172,
+              "keyword_score": 1,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.4558,
+              "semantic_score": 0.4558,
+              "keyword_score": 0.3333,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.421,
+              "semantic_score": 0.421,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3927,
+              "semantic_score": 0.3927,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.376,
+              "semantic_score": 0.376,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3741,
+              "semantic_score": 0.3741,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.3687,
+              "semantic_score": 0.3687,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.3519,
+              "semantic_score": 0.3519,
+              "keyword_score": 0.3333,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 11,
+          "context_tokens": 493,
+          "retrieval_latency_ms": 564
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-2-02",
+      "area": "product",
+      "key": "product_2",
+      "question": "¿Cuántas páginas tiene y cuánto cuesta Guía Brújula 13?",
+      "status": "PASS",
+      "response": "La Guía Brújula 13 tiene 38 páginas y su precio de referencia es de USD 15.",
+      "expected_ui": "Published product card for Guía Brújula 13.",
+      "must_include": [
+        "Guía Brújula 13"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            510,
+            513,
+            511
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 1,
+              "semantic_score": 0.6498,
+              "keyword_score": 0.8,
+              "lexical_score": 0.1,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 1,
+              "semantic_score": 0.4237,
+              "keyword_score": 0.6,
+              "lexical_score": 0.1,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.3624,
+              "semantic_score": 0.3624,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 22,
+          "context_tokens": 135,
+          "retrieval_latency_ms": 437
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-2-03",
+      "area": "product",
+      "key": "product_2",
+      "question": "Quiero aprender de forma autónoma a entrevistar usuarios, ¿qué recomiendas?",
+      "status": "PASS",
+      "response": "Te recomiendo la Guía Brújula 13, una guía PDF de 38 páginas que te ayudará a preparar entrevistas. Su precio de referencia es USD 15.",
+      "expected_ui": "Published product card for Guía Brújula 13.",
+      "must_include": [
+        "Guía Brújula 13"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            512,
+            511,
+            510,
+            489,
+            487,
+            488,
+            504,
+            490,
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.7,
+              "semantic_score": 0.509,
+              "keyword_score": 0.6,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.2956,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.55,
+              "semantic_score": 0.2117,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.3777,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.4089,
+              "semantic_score": 0.4089,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 487,
+              "source_type": "profile_source_item",
+              "source_id": "110",
+              "score": 0.3875,
+              "semantic_score": 0.3875,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 488,
+              "source_type": "profile_source_item",
+              "source_id": "109",
+              "score": 0.3793,
+              "semantic_score": 0.3793,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 504,
+              "source_type": "integration_media",
+              "source_id": "70",
+              "score": 0.3773,
+              "semantic_score": 0.3773,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3619,
+              "semantic_score": 0.3619,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.3586,
+              "semantic_score": 0.3586,
+              "keyword_score": 0.2,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 19,
+          "context_tokens": 573,
+          "retrieval_latency_ms": 384
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-3-01",
+      "area": "product",
+      "key": "product_3",
+      "question": "¿Ofreces acompañamiento personalizado?",
+      "status": "PASS",
+      "response": "Sí, ofrezco acompañamiento personalizado a través de sesiones. Una opción es la \"Sesión Prisma 24\", que es una sesión remota de 45 minutos para revisar una estrategia.",
+      "expected_ui": "Published product card for Sesión Prisma 24.",
+      "must_include": [
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            512,
+            489,
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.5333,
+              "semantic_score": 0.4733,
+              "keyword_score": 0.6667,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.3821,
+              "semantic_score": 0.3821,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.3693,
+              "semantic_score": 0.3693,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 0.361,
+              "semantic_score": 0.361,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 9,
+          "context_tokens": 225,
+          "retrieval_latency_ms": 406
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-3-02",
+      "area": "product",
+      "key": "product_3",
+      "question": "¿Cuánto dura y cuánto cuesta Sesión Prisma 24?",
+      "status": "PASS",
+      "response": "La Sesión Prisma 24 tiene una duración de 45 minutos y su precio de referencia es USD 60.",
+      "expected_ui": "Published product card for Sesión Prisma 24.",
+      "must_include": [
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            512,
+            390
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 1,
+              "semantic_score": 0.4044,
+              "keyword_score": 0.6,
+              "lexical_score": 0.2,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 1,
+              "semantic_score": 0.6154,
+              "keyword_score": 0.6,
+              "lexical_score": 0.3,
+              "identifier_score": 1,
+              "forced": false
+            },
+            {
+              "chunk_id": 390,
+              "source_type": "profile_identity",
+              "source_id": "24",
+              "score": 1,
+              "semantic_score": 0.2235,
+              "keyword_score": 0.2,
+              "lexical_score": 0,
+              "identifier_score": 1,
+              "forced": false
+            }
+          ],
+          "query_tokens": 19,
+          "context_tokens": 162,
+          "retrieval_latency_ms": 458
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "product-3-03",
+      "area": "product",
+      "key": "product_3",
+      "question": "Necesito revisar mi estrategia con alguien, ¿qué producto me sirve?",
+      "status": "PASS",
+      "response": "Te recomiendo la \"Sesión Prisma 24\", que es una sesión remota de 45 minutos para revisar una estrategia. Es ideal para obtener acompañamiento personalizado.",
+      "expected_ui": "Published product card for Sesión Prisma 24.",
+      "must_include": [
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            512,
+            513,
+            511,
+            510,
+            490,
+            489
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.65,
+              "semantic_score": 0.4718,
+              "keyword_score": 0.4,
+              "lexical_score": 0.2,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.55,
+              "semantic_score": 0.483,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.55,
+              "semantic_score": 0.3097,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.3576,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3592,
+              "semantic_score": 0.3592,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.3514,
+              "semantic_score": 0.3514,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 20,
+          "context_tokens": 295,
+          "retrieval_latency_ms": 443
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "guidance-01",
+      "area": "product_guidance",
+      "key": "comparison",
+      "question": "Compara tus tres productos por uso y precio.",
+      "status": "PASS",
+      "response": "La Guía Brújula 13 es útil para preparar entrevistas a un precio de USD 15; el Kit Horizonte 92 sirve para planificar 12 semanas por USD 29; y la Sesión Prisma 24 ofrece revisión de estrategia por USD 60.",
+      "expected_ui": "",
+      "must_include": [
+        "Guía Brújula 13",
+        "Kit Horizonte 92",
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            512,
+            511,
+            510,
+            513
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.65,
+              "semantic_score": 0.3381,
+              "keyword_score": 0.4,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.65,
+              "semantic_score": 0.3443,
+              "keyword_score": 0.4,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.65,
+              "semantic_score": 0.3338,
+              "keyword_score": 0.4,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.55,
+              "semantic_score": 0.4391,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 10,
+          "context_tokens": 176,
+          "retrieval_latency_ms": 420
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          },
+          {
+            "id": 243,
+            "name": "Kit Horizonte 92",
+            "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/kit-horizonte-92?v=1786141797",
+            "action_url": "https://example.com/productos/horizonte-92"
+          },
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "guidance-02",
+      "area": "product_guidance",
+      "key": "comparison",
+      "question": "¿Qué elegirías para aprender solo, planificar y recibir acompañamiento?",
+      "status": "PASS",
+      "response": "Para aprender de forma autónoma, te recomendaría la Guía Brújula 13. Para planificación, el Kit Horizonte 92. Si necesitas acompañamiento personalizado, la Sesión Prisma 24 es ideal.",
+      "expected_ui": "",
+      "must_include": [
+        "Guía Brújula 13",
+        "Kit Horizonte 92",
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            511,
+            512,
+            510,
+            489,
+            490
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.65,
+              "semantic_score": 0.5792,
+              "keyword_score": 0.4,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.6,
+              "semantic_score": 0.2573,
+              "keyword_score": 0.2,
+              "lexical_score": 0.1,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.3013,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.2914,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 489,
+              "source_type": "profile_fact",
+              "source_id": "110",
+              "score": 0.3868,
+              "semantic_score": 0.3868,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            },
+            {
+              "chunk_id": 490,
+              "source_type": "profile_fact",
+              "source_id": "109",
+              "score": 0.3625,
+              "semantic_score": 0.3625,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": false
+            }
+          ],
+          "query_tokens": 16,
+          "context_tokens": 295,
+          "retrieval_latency_ms": 446
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          },
+          {
+            "id": 243,
+            "name": "Kit Horizonte 92",
+            "description": "Plantilla digital para planificar 12 semanas. Precio de referencia: USD 29.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/kit-horizonte-92?v=1786141797",
+            "action_url": "https://example.com/productos/horizonte-92"
+          },
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    },
+    {
+      "id": "guidance-03",
+      "area": "product_guidance",
+      "key": "comparison",
+      "question": "¿Cuál es el producto más barato y cuál el más costoso?",
+      "status": "PASS",
+      "response": "El producto más barato es la Guía Brújula 13, con un precio de referencia de USD 15. El más costoso es la Sesión Prisma 24, con un precio de referencia de USD 60.",
+      "expected_ui": "",
+      "must_include": [
+        "Guía Brújula 13",
+        "Sesión Prisma 24"
+      ],
+      "require_attachment": null,
+      "evidence": {
+        "knowledge": {
+          "mode": "rag",
+          "index_id": 14,
+          "retrieved_chunk_ids": [
+            513,
+            512,
+            511,
+            510
+          ],
+          "retrieved_sources": [
+            {
+              "chunk_id": 513,
+              "source_type": "product_guidance",
+              "source_id": "24",
+              "score": 0.55,
+              "semantic_score": 0.2637,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 512,
+              "source_type": "product",
+              "source_id": "245",
+              "score": 0.55,
+              "semantic_score": 0.2536,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 511,
+              "source_type": "product",
+              "source_id": "243",
+              "score": 0.55,
+              "semantic_score": 0.2945,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            },
+            {
+              "chunk_id": 510,
+              "source_type": "product",
+              "source_id": "244",
+              "score": 0.55,
+              "semantic_score": 0.2868,
+              "keyword_score": 0,
+              "lexical_score": 0,
+              "identifier_score": 0,
+              "forced": true
+            }
+          ],
+          "query_tokens": 17,
+          "context_tokens": 176,
+          "retrieval_latency_ms": 1409
+        },
+        "media": [],
+        "products": [
+          {
+            "id": 244,
+            "name": "Guía Brújula 13",
+            "description": "Guía PDF de 38 páginas para preparar entrevistas. Precio de referencia: USD 15.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/guia-brujula-13?v=1786141797",
+            "action_url": "https://example.com/productos/brujula-13"
+          },
+          {
+            "id": 245,
+            "name": "Sesión Prisma 24",
+            "description": "Sesión remota de 45 minutos para revisar una estrategia. Precio de referencia: USD 60.",
+            "public_url": "http://localhost:8000/p/qa-embeddings-20260807/productos/sesion-prisma-24?v=1786141797",
+            "action_url": "https://example.com/productos/prisma-24"
+          }
+        ],
+        "social_links": []
+      },
+      "notes": null
+    }
+  ]
+}

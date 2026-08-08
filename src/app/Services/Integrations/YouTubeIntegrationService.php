@@ -10,6 +10,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileIntegrationKnowledgeLifecycle;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -18,6 +19,7 @@ class YouTubeIntegrationService
     public function __construct(
         private readonly YouTubeClient $client,
         private readonly SubscriptionPlanCapabilityService $capabilities,
+        private readonly ProfileIntegrationKnowledgeLifecycle $knowledgeLifecycle,
     ) {}
 
     public function connect(Profile $profile, User $user, string $channelUrl): ProfileIntegration
@@ -139,6 +141,8 @@ class YouTubeIntegrationService
             });
         });
 
+        $this->knowledgeLifecycle->selectionChanged($integration);
+
         return $integration->fresh(['media']);
     }
 
@@ -151,13 +155,22 @@ class YouTubeIntegrationService
             throw new InvalidArgumentException('YouTube media was not found.');
         }
 
-        $media->delete();
+        $mediaId = $media->id;
+        $media->deleteQuietly();
+        $this->knowledgeLifecycle->forgetMedia(
+            (int) $integration->profile_id,
+            [$mediaId],
+            ProfileIntegration::PROVIDER_YOUTUBE,
+        );
     }
 
     public function disconnect(ProfileIntegration $integration): void
     {
         $this->assertYouTube($integration);
-        $integration->delete();
+        $mediaIds = $integration->media()->pluck('id')->all();
+        $profileId = (int) $integration->profile_id;
+        $integration->deleteQuietly();
+        $this->knowledgeLifecycle->forgetMedia($profileId, $mediaIds, ProfileIntegration::PROVIDER_YOUTUBE);
     }
 
     /**

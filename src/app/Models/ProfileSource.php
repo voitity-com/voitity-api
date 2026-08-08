@@ -30,6 +30,11 @@ class ProfileSource extends Model
         'last_synced_at',
         'approved_at',
         'indexed_at',
+        'processing_stage',
+        'last_error',
+        'retry_count',
+        'processing_started_at',
+        'processing_completed_at',
     ];
 
     protected $casts = [
@@ -39,6 +44,9 @@ class ProfileSource extends Model
         'last_synced_at' => 'datetime',
         'approved_at' => 'datetime',
         'indexed_at' => 'datetime',
+        'retry_count' => 'integer',
+        'processing_started_at' => 'datetime',
+        'processing_completed_at' => 'datetime',
     ];
 
     public function profile(): BelongsTo

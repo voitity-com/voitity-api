@@ -38,4 +38,48 @@ class ProfileKnowledgeQueryIntentAnalyzerTest extends TestCase
         $this->assertContains('product', $intent->sourceTypes);
         $this->assertContains('product_guidance', $intent->sourceTypes);
     }
+
+    #[Test]
+    public function it_resolves_indirect_social_network_language_without_selecting_media(): void
+    {
+        $analyzer = app(ProfileKnowledgeQueryIntentAnalyzer::class);
+
+        foreach ([
+            'Quiero ir a tu cuenta de videos cortos, ¿me ayudas?' => 'tiktok',
+            '¿Dónde puedo ver tus videos largos?' => 'youtube',
+            '¿Dónde encuentro tu red profesional oficial?' => 'linkedin',
+            'Compárteme tu repositorio oficial.' => 'github',
+            'Quiero ir a tu perfil de código, ¿qué enlace uso?' => 'github',
+        ] as $query => $provider) {
+            $intent = $analyzer->analyze($query);
+
+            $this->assertTrue($intent->socialLink, $query);
+            $this->assertContains($provider, $intent->providers, $query);
+            $this->assertContains('social_link', $intent->sourceTypes, $query);
+            $this->assertContains('integration_media', $intent->excludedSourceTypes, $query);
+        }
+    }
+
+    #[Test]
+    public function it_treats_a_provider_topic_question_as_media_instead_of_a_profile_link(): void
+    {
+        $intent = app(ProfileKnowledgeQueryIntentAnalyzer::class)
+            ->analyze('¿Tienes un TikTok sobre validar ideas antes de construir?');
+
+        $this->assertTrue($intent->media);
+        $this->assertFalse($intent->socialLink);
+        $this->assertContains('tiktok', $intent->providers);
+        $this->assertContains('integration_media', $intent->sourceTypes);
+    }
+
+    #[Test]
+    public function it_recognizes_choice_language_as_a_product_recommendation(): void
+    {
+        $intent = app(ProfileKnowledgeQueryIntentAnalyzer::class)
+            ->analyze('¿Qué elegirías para aprender solo, planificar y recibir acompañamiento?');
+
+        $this->assertTrue($intent->productRecommendation);
+        $this->assertContains('product', $intent->sourceTypes);
+        $this->assertContains('product_guidance', $intent->sourceTypes);
+    }
 }

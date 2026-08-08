@@ -1,0 +1,70 @@
+voitity-laravel-queue  |   2026-08-07 21:01:19 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:01:19 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  219.81ms DONE
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  7.33ms DONE
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1.91ms DONE
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:01:34 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1.46ms DONE
+voitity-laravel-queue  |   2026-08-07 21:01:49 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:01:49 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  125.57ms DONE
+voitity-laravel-queue  |   2026-08-07 21:07:05 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:07:05 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  128.46ms DONE
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  2.94ms DONE
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1.91ms DONE
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:07:20 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1.94ms DONE
+voitity-laravel-queue  |   2026-08-07 21:07:35 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:07:35 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  118.70ms DONE
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  6.49ms DONE
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  2.72ms DONE
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  2.23ms DONE
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:11:54 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  3.77ms DONE
+voitity-laravel-queue  |   2026-08-07 21:12:09 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:12:09 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  128.65ms DONE
+voitity-laravel-queue  |   2026-08-07 21:12:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:12:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  10.78ms DONE
+voitity-laravel-queue  |   2026-08-07 21:12:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:12:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  2.41ms DONE
+voitity-laravel-queue  |   2026-08-07 21:12:39 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:12:39 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  3.99ms FAIL
+voitity-laravel-queue  |   2026-08-07 21:12:39 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 21:12:39 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1.15ms FAIL
+voitity-laravel-queue  |   2026-08-07 22:23:58 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:23:59 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1s DONE
+voitity-laravel-queue  |   2026-08-07 22:24:56 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:24:56 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  11.38ms DONE
+voitity-laravel-queue  |   2026-08-07 22:25:11 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:25:11 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  43.19ms DONE
+voitity-laravel-queue  |   2026-08-07 22:26:11 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:26:13 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  1s DONE
+voitity-laravel-queue  |   2026-08-07 22:27:49 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:27:50 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  809.78ms DONE
+voitity-laravel-queue  |   2026-08-07 22:33:12 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:33:12 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  53.28ms DONE
+voitity-laravel-queue  |   2026-08-07 22:33:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:33:24 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  43.69ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  56.52ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  20.92ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  18.87ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:00 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  20.90ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  48.21ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  22.44ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  20.09ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:36 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:37 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  24.06ms DONE
+voitity-laravel-queue  |   2026-08-07 22:34:55 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  RUNNING
+voitity-laravel-queue  |   2026-08-07 22:34:55 App\Jobs\ProfileKnowledge\IndexProfileKnowledge  895.62ms DONE

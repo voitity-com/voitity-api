@@ -116,10 +116,7 @@ class OpenAIProfileKnowledgeClient implements ProfileKnowledgeAIClient
 
     private function userPrompt(Profile $profile, string $text): string
     {
-        $profession = $profile->profession_key ?: config('profile-professions.default', 'custom');
-
         return implode("\n\n", [
-            'Profile profession: '.$profession,
             'CV text:',
             mb_substr($text, 0, 24000),
         ]);

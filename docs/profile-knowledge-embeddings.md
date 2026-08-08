@@ -93,8 +93,8 @@ El modelo de chat recibe aparte hasta seis mensajes recientes como historial con
 
 | `source_type` | Fuente y contenido | Elegibilidad |
 | --- | --- | --- |
-| `profile_identity` | Nombre, descripción, género, personalidad y profesión. | Activo. La identidad mínima también permanece en el prompt de sistema. |
-| `profile_data` | Secciones e ítems de `profiles.data`: biografía, trabajo, estudios, proyectos, habilidades y campos adicionales. | Activo; se excluyen `networks` y flags de voz. |
+| `profile_identity` | Nombre, descripción, género y personalidad. | Activo. La identidad mínima también permanece en el prompt de sistema. La profesión dejó de intervenir en prompts, embeddings y calidad. |
+| `profile_data` | Datos manuales históricos de `profiles.data`. | Activo para compatibilidad; se excluyen `networks`, flags de voz y cualquier ítem derivado de una Fuente. Las Fuentes son la representación canónica. |
 | `profile_source_item` | Nombre e ID de la fuente, tipo, título y contenido del ítem. | Fuente e ítem aprobados, fuente no duplicada. |
 | `profile_source` | Texto extraído cuando una fuente aprobada no tiene ítems aprobados. | Fuente aprobada, con texto y no duplicada. |
 | `profile_fact` | Categoría y texto del hecho, conservando trazabilidad a la fuente. | Aprobado, público y de una fuente no duplicada. |
@@ -114,6 +114,40 @@ Antes de construir documentos, `ProfileKnowledgeSourceDeduplicator` normaliza es
 - Ítems y hechos aprobados quedan con `indexed=true` únicamente si realmente produjeron un chunk.
 
 Esto conserva la trazabilidad en base de datos sin gastar tokens ni competir dos veces por la misma información durante retrieval.
+
+## Ciclo automático de Fuentes
+
+Una Fuente legible y no duplicada ya no espera aprobación manual:
+
+1. se guarda el archivo en el disk configurado (`profiles` local o S3) y el texto puro también se materializa como `.txt`;
+2. se extrae y estructura su contenido;
+3. queda en `pending_sync` y se despacha `SynchronizeProfileSource` después del commit;
+4. el job pasa por `syncing` e `indexing`, aprueba ítems/hechos, conserva compatibilidad con `profiles.data` e invoca el indexador;
+5. termina en `indexed` o, después de tres intentos, en `failed`.
+
+`profile_sources` guarda `processing_stage`, `last_error`, `retry_count`, inicio y final. El endpoint `POST /sources/{source}/retry` solo acepta un fallo reintentable con texto extraído. La interfaz consulta los estados transitorios, abre el detalle de error y habilita Sincronizar únicamente en ese caso.
+
+Una fuente duplicada queda en `duplicate`, referencia la canónica y no se indexa. Una fuente sin texto legible queda en `failed` de etapa `parsing` y no se presenta como reintentable, porque repetir la sincronización no corregiría la extracción.
+
+Al eliminar con `DELETE /sources/{source}` se hace, en ese orden lógico:
+
+- eliminación inmediata de chunks de fuente, ítems, hechos y datos derivados;
+- retiro de entradas generadas dentro de `profiles.data`, incluido el resumen con procedencia;
+- eliminación explícita de hechos antes de borrar la fuente para evitar que `nullOnDelete` los deje huérfanos;
+- eliminación del archivo en el disk configurado;
+- marcado del índice como desactualizado y reindexación.
+
+Así, aun antes de terminar el job nuevo, un chat no puede recuperar los chunks eliminados.
+
+## Ciclo de vida de integraciones
+
+`ProfileIntegrationKnowledgeLifecycle` es el punto explícito de limpieza para Instagram, TikTok, YouTube, OnlyFans y Otro.
+
+- deseleccionar cambia inmediatamente `active=false` en los chunks afectados y programa reindexación;
+- eliminar un elemento borra inmediatamente su chunk y luego reindexa;
+- desconectar captura los IDs antes del borrado en cascada, borra sus chunks y programa una sola reconstrucción.
+
+La captura previa es obligatoria: los `DELETE CASCADE` de base de datos no disparan eventos Eloquent de cada `ProfileIntegrationMedia`. Los observadores siguen funcionando como red de seguridad para crear o editar medios, productos, perfiles y fuentes, pero la semántica destructiva no depende de ellos.
 
 ## Construcción y almacenamiento
 
@@ -160,8 +194,14 @@ La selección vectorial nunca autoriza por sí sola un adjunto:
 - `ProfileProductPromptService` vuelve a validar feature del perfil, `products_enabled` y estado publicado;
 - en modo RAG, `AnswerBuilder` limita tarjetas de medios y productos a los IDs presentes en `retrieved_sources`;
 - si el visitante pide explícitamente mostrar un medio y el modelo no selecciona un ID válido, se adjunta de forma determinista el mejor medio recuperado que pasó todas las reglas;
-- por defecto no se adjunta un medio solo porque su descripción se parezca a una pregunta informativa. Ese comportamiento solo puede habilitarse con `AI_KNOWLEDGE_PROACTIVE_MEDIA_ENABLED=true`;
+- el modelo devuelve `references` estructuradas para los registros realmente usados; el backend acepta únicamente referencias presentes en `retrieved_sources` y todavía vigentes en la base de datos;
+- si el modelo omite una referencia de medio, `AnswerBuilder` solo la infiere cuando pregunta y respuesta comparten una coincidencia factual fuerte con el mismo medio recuperado. La similitud vectorial por sí sola no adjunta nada;
+- si una respuesta factual queda vacía pese a existir un único medio fuertemente coincidente, se responde con su observación canónica sin inventar información;
+- si una respuesta menciona por nombre exacto productos recuperados pero omite sus IDs, se construyen sus tarjetas desde los registros publicados;
+- los enlaces sociales indirectos se resuelven por intención y sinónimos, pero el botón solo se construye desde un `social_link` recuperado y una URL vigente. El texto sigue siendo generado por IA; solo el adjunto es determinista;
 - una solicitud de link social no se convierte en tarjeta de contenido, y una solicitud de contenido no agrega automáticamente todos los botones sociales.
+
+Las referencias válidas son `social_link`, `integration_media` y `product`. Para redes se usa el `provider_key`; para medios y productos se usa el ID numérico. Precios, URLs, imágenes, destinos y etiquetas de acción nunca se aceptan desde texto generado: se vuelven a leer de la base de datos y se localizan en el backend.
 
 Para **Otro**, el destino y la acción final se vuelven a resolver con `IntegrationDestinationCatalog` según el idioma del perfil. El índice puede contener etiquetas útiles para retrieval, pero el botón visible se construye desde los metadatos vigentes, permitiendo “Ver en Instagram”, “Ver en TikTok”, “Leer en el medio”, “Visitar el sitio web” o el destino personalizado.
 

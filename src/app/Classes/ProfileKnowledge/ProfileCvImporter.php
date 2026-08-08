@@ -8,6 +8,7 @@ use App\Enums\ProfileFactVisibility;
 use App\Enums\ProfileSourceStatus;
 use App\Enums\ProfileSourceType;
 use App\Models\Profile;
+use App\Models\ProfileFact;
 use App\Models\ProfileSource;
 use App\Models\ProfileSourceItem;
 use App\Models\User;
@@ -47,14 +48,14 @@ class ProfileCvImporter
             ? $profile->sources()->where('content_hash', $contentHash)->oldest('id')->first()
             : null;
         $status = $duplicate
-            ? ProfileSourceStatus::NeedsReview
-            : ($extractedText !== '' ? ProfileSourceStatus::Parsed : ProfileSourceStatus::NeedsReview);
+            ? ProfileSourceStatus::Duplicate
+            : ($extractedText !== '' ? ProfileSourceStatus::PendingSync : ProfileSourceStatus::Failed);
         $structure = $extractedText !== '' && ! $duplicate
             ? $this->profileKnowledgeAIService->structureCv($profile, $extractedText)
             : null;
 
         return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $contentHash, $duplicate, $status, $name, $metadata, $structure): ProfileSource {
-            $source = ProfileSource::create([
+            $source = ProfileSource::withoutEvents(fn (): ProfileSource => ProfileSource::create([
                 'profile_id' => $profile->id,
                 'user_id' => $user->id,
                 'type' => ProfileSourceType::Cv,
@@ -63,6 +64,17 @@ class ProfileCvImporter
                 'mime_type' => $file?->getClientMimeType() ?: ($storedFile['mime_type'] ?? null),
                 'storage_path' => $storedFile['path'] ?? null,
                 'status' => $status,
+                'processing_stage' => match ($status) {
+                    ProfileSourceStatus::PendingSync => 'pending_sync',
+                    ProfileSourceStatus::Duplicate => 'duplicate',
+                    default => 'parsing',
+                },
+                'last_error' => match ($status) {
+                    ProfileSourceStatus::Duplicate => 'This source contains the same information as an existing source.',
+                    ProfileSourceStatus::Failed => 'No readable text could be extracted from the source.',
+                    default => null,
+                },
+                'retry_count' => 0,
                 'extracted_text' => $extractedText !== '' ? $extractedText : null,
                 'parser_version' => self::PARSER_VERSION,
                 'content_hash' => $contentHash,
@@ -83,8 +95,8 @@ class ProfileCvImporter
                         'duplicate_of_source_id' => $duplicate?->id,
                     ], fn ($value) => $value !== null),
                 ], fn ($value) => $value !== null),
-                'last_synced_at' => now(),
-            ]);
+                'last_synced_at' => null,
+            ]));
 
             if ($extractedText !== '' && ! $duplicate) {
                 $this->createItemsAndFacts($source, $extractedText, $structure);
@@ -239,7 +251,7 @@ class ProfileCvImporter
 
         $sections->each(function (array $section) use ($source, $structure): void {
             /** @var ProfileSourceItem $item */
-            $item = $source->items()->create([
+            $item = ProfileSourceItem::withoutEvents(fn (): ProfileSourceItem => $source->items()->create([
                 'profile_id' => $source->profile_id,
                 'type' => $section['category'],
                 'title' => $section['title'],
@@ -257,9 +269,9 @@ class ProfileCvImporter
                 'metadata' => [
                     'line_count' => $section['line_count'],
                 ],
-            ]);
+            ]));
 
-            $item->facts()->create([
+            ProfileFact::withoutEvents(fn (): ProfileFact => $item->facts()->create([
                 'profile_id' => $source->profile_id,
                 'profile_source_id' => $source->id,
                 'category' => $section['category'],
@@ -272,7 +284,7 @@ class ProfileCvImporter
                     'source_type' => ProfileSourceType::Cv->value,
                     'structuring_source' => $structure?->source,
                 ],
-            ]);
+            ]));
         });
     }
 

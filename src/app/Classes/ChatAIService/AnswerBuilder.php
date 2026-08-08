@@ -18,6 +18,7 @@ use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Products\ProfileProductPromptService;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileKnowledge\ProfileKnowledgeQueryIntentAnalyzer;
 use App\Services\ProfileVoiceSettings;
 use Illuminate\Support\Facades\Log;
 
@@ -52,6 +53,8 @@ class AnswerBuilder
         $availableProducts = $productService->productsForPrompt($profile);
         $usesKnowledgeRetrieval = data_get($chatAIAnswer->response, '_bigmelo.knowledge.mode') === 'rag';
         $retrievedProductIds = $this->knowledgeSourceIds($chatAIAnswer, 'product');
+        $retrievedSocialProviders = $this->knowledgeSourceKeys($chatAIAnswer, 'social_link');
+        $queryIntent = app(ProfileKnowledgeQueryIntentAnalyzer::class)->analyze($question->text);
 
         if ($usesKnowledgeRetrieval) {
             $availableProducts = collect($availableProducts)
@@ -61,6 +64,13 @@ class AnswerBuilder
         }
 
         $mediaService = app(ProfileMediaPromptService::class);
+        $validatedStructuredMediaIds = $structuredAnswer !== null
+            ? $this->uniqueIntegers([
+                ...($structuredAnswer['media_action'] === 'show' ? $structuredAnswer['media_ids'] : []),
+                ...$this->structuredReferenceIds($structuredAnswer, 'integration_media'),
+            ])
+            : [];
+
         if ($structuredAnswer !== null) {
             $mediaContext = $this->mergeStructuredMediaContextWithText(
                 $mediaService,
@@ -91,7 +101,8 @@ class AnswerBuilder
         $mediaContext = $this->constrainMediaContextToRequestedSubject(
             $mediaService,
             $mediaContext,
-            $question->text
+            $question->text,
+            $validatedStructuredMediaIds,
         );
         $mediaContext = $this->constrainMediaContextToRequestedType(
             $mediaService,
@@ -109,16 +120,31 @@ class AnswerBuilder
         $source = $chatAIAnswer->source;
         $audioPayload = null;
         $usesPreconfiguredAnswer = false;
-        $structuredMediaIds = $structuredAnswer !== null && $structuredAnswer['media_action'] === 'show'
-            ? $structuredAnswer['media_ids']
-            : [];
+        $structuredMediaIds = $validatedStructuredMediaIds;
         $mediaPayload = $structuredAnswer !== null
             ? $this->mediaPayloadForIds($structuredMediaIds, $mediaContext['candidate_media'])
             : $this->fallbackMediaPayloadForQuestion($profile, $question, $mediaContext);
-        $structuredProductIds = $structuredAnswer !== null && $structuredAnswer['product_action'] === 'show'
-            ? $structuredAnswer['product_ids']
+        $structuredProductIds = $structuredAnswer !== null
+            ? $this->uniqueIntegers([
+                ...($structuredAnswer['product_action'] === 'show' ? $structuredAnswer['product_ids'] : []),
+                ...$this->structuredReferenceIds($structuredAnswer, 'product'),
+            ])
             : [];
         $productPayload = $productService->payloadForIds($structuredProductIds, $availableProducts);
+
+        if ($productPayload === [] && $queryIntent->productRecommendation) {
+            $mentionedProductIds = $this->productIdsMentionedInText($answerText, $availableProducts);
+            $productPayload = $productService->payloadForIds($mentionedProductIds, $availableProducts);
+
+            if ($productPayload !== []) {
+                Log::info('Recovered product cards from validated AI answer references.', [
+                    'profile_id' => $profile->id,
+                    'chat_id' => $question->chat_id,
+                    'question_message_id' => $question->id,
+                    'product_ids' => collect($productPayload)->pluck('id')->all(),
+                ]);
+            }
+        }
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
 
@@ -141,13 +167,11 @@ class AnswerBuilder
             $mediaPayload === []
             && ! ($mediaContext['wants_media'] ?? false)
             && ($mediaContext['candidate_media'] ?? []) !== []
-            && config('ai-knowledge.retrieval.proactive_media_enabled', false)
+            && ($usesKnowledgeRetrieval || config('ai-knowledge.retrieval.proactive_media_enabled', false))
         ) {
-            $mediaPayload = $this->stronglyRelevantMediaPayloadForQuestion(
-                $question,
-                $mediaContext,
-                $answerText
-            );
+            $mediaPayload = config('ai-knowledge.retrieval.proactive_media_enabled', false)
+                ? $this->stronglyRelevantMediaPayloadForQuestion($question, $mediaContext, $answerText)
+                : $this->mediaPayloadUsedInAnswer($question, $mediaContext, $answerText);
 
             if ($mediaPayload !== []) {
                 $mediaContext['wants_media'] = true;
@@ -236,6 +260,27 @@ class AnswerBuilder
 
         if (
             $structuredAnswer !== null
+            && ! ($mediaContext['wants_media'] ?? false)
+            && $mediaPayload === []
+            && ($mediaContext['candidate_media'] ?? []) !== []
+            && ($hasNoAnswerMarker || trim($answerText) === '' || $this->answerIndicatesNoAnswer($answerText))
+        ) {
+            $factMedia = $this->targetedMediaItem(
+                $mediaContext['candidate_media'],
+                $question,
+                $answerText,
+                80,
+            );
+
+            if ($factMedia !== null) {
+                $answerText = $this->mediaFactFallbackAnswer($factMedia, $profile);
+                $source = 'profile_media_fact_rules';
+                $usesMediaRuleAnswer = true;
+            }
+        }
+
+        if (
+            $structuredAnswer !== null
             && ($mediaContext['wants_media'] ?? false)
             && $mediaPayload === []
             && $hasNoAnswerMarker
@@ -245,9 +290,20 @@ class AnswerBuilder
             $usesMediaRuleAnswer = true;
         }
 
-        if ($mediaPayload !== [] && ($mediaPayloadWasReplaced || $this->answerIndicatesNoAnswer($answerText))) {
+        if (
+            $mediaPayload !== []
+            && (
+                $mediaPayloadWasReplaced
+                || $hasNoAnswerMarker
+                || trim($answerText) === ''
+                || $this->answerIndicatesNoAnswer($answerText)
+            )
+        ) {
             $answerText = $this->mediaFallbackAnswer($mediaPayload, $profile);
-        } elseif (! $usesMediaRuleAnswer && $this->conversationMessages()->shouldUseFallbackAnswer($profile, $rawAnswerText)) {
+        } elseif (! $usesMediaRuleAnswer && $this->conversationMessages()->shouldUseFallbackAnswer(
+            $profile,
+            $structuredAnswer['answer'] ?? $rawAnswerText
+        )) {
             if ($mediaPayload === [] && $productPayload === []) {
                 $fallback = $this->conversationMessages()->resolvedMessage(
                     $profile,
@@ -263,15 +319,29 @@ class AnswerBuilder
         }
 
         $answerText = $this->normalizeAgeRestrictedMediaAnswer($answerText, $mediaPayload);
-        $displayAnswerText = $this->limitAnswerText(
-            $this->appendMediaHint($answerText, $mediaPayload, $profile),
-            $productPayload === [] ? self::MAX_ANSWER_CHARACTERS : self::MAX_PRODUCT_ANSWER_CHARACTERS
-        );
         $socialLinkPayload = $this->socialLinkPayload(
             $profile,
             $question->text,
             $answerText,
-            $mediaPayload
+            $mediaPayload,
+            $structuredAnswer,
+            $queryIntent->providers,
+            $retrievedSocialProviders,
+            $usesKnowledgeRetrieval,
+        );
+
+        if (
+            $socialLinkPayload !== []
+            && $queryIntent->socialLink
+            && $this->answerIndicatesNoAnswer($answerText)
+        ) {
+            $answerText = $this->socialLinkFallbackAnswer($socialLinkPayload, $profile);
+            $source = 'profile_social_link_rules';
+        }
+
+        $displayAnswerText = $this->limitAnswerText(
+            $this->appendMediaHint($answerText, $mediaPayload, $profile),
+            $productPayload === [] ? self::MAX_ANSWER_CHARACTERS : self::MAX_PRODUCT_ANSWER_CHARACTERS
         );
         $audioText = $this->spokenTextForAnswer($displayAnswerText);
 
@@ -426,7 +496,8 @@ class AnswerBuilder
     private function constrainMediaContextToRequestedSubject(
         ProfileMediaPromptService $mediaService,
         array $mediaContext,
-        string $question
+        string $question,
+        array $validatedStructuredMediaIds = [],
     ): array {
         if (($mediaContext['included_providers'] ?? []) === []) {
             return $mediaContext;
@@ -439,7 +510,8 @@ class AnswerBuilder
         }
 
         $candidateMedia = collect($mediaContext['candidate_media'] ?? [])
-            ->filter(fn (array $media): bool => $this->mediaMatchesRequestedSubject($media, $subjectTerms))
+            ->filter(fn (array $media): bool => in_array((int) ($media['id'] ?? 0), $validatedStructuredMediaIds, true)
+                || $this->mediaMatchesRequestedSubject($media, $subjectTerms))
             ->values()
             ->all();
 
@@ -555,7 +627,10 @@ class AnswerBuilder
             'youtube',
         ];
 
-        return collect($this->searchTokens($question))
+        return collect([
+            ...$this->searchTokens($question),
+            ...$this->shortReferenceTokens($question),
+        ])
             ->filter(fn (string $term): bool => ! in_array($term, $ignored, true))
             ->unique()
             ->values()
@@ -780,6 +855,45 @@ class AnswerBuilder
         }
 
         $item = $this->targetedMediaItem($candidateMedia, $question, $answerText, 130);
+
+        return $item !== null ? [$this->mediaItemToPayload($item)] : [];
+    }
+
+    /**
+     * Infer an omitted structured reference only when the generated answer
+     * and the visitor question share a factual term from the same retrieved
+     * media record. This prevents attaching merely similar retrieval results.
+     *
+     * @param  array<string, mixed>  $mediaContext
+     * @return array<int, array<string, mixed>>
+     */
+    private function mediaPayloadUsedInAnswer(
+        Message $question,
+        array $mediaContext,
+        string $answerText
+    ): array {
+        $questionText = $this->normalizeSearchText($question->text);
+        $normalizedAnswer = $this->normalizeSearchText($answerText);
+
+        if ($normalizedAnswer === '') {
+            return [];
+        }
+
+        $candidates = collect($mediaContext['candidate_media'] ?? [])
+            ->filter(function (array $media) use ($questionText, $normalizedAnswer): bool {
+                return collect($this->mediaSearchTerms($media))->contains(
+                    fn (string $term): bool => mb_strpos($questionText, $term) !== false
+                        && mb_strpos($normalizedAnswer, $term) !== false
+                );
+            })
+            ->values()
+            ->all();
+
+        if ($candidates === []) {
+            return [];
+        }
+
+        $item = $this->targetedMediaItem($candidates, $question, $answerText, 130);
 
         return $item !== null ? [$this->mediaItemToPayload($item)] : [];
     }
@@ -1124,6 +1238,7 @@ class AnswerBuilder
      *     product_request: bool,
      *     product_action: string|null,
      *     product_ids: array<int>,
+     *     references: array<int, array{type:string,id:string}>,
      *     constraints: array<string, mixed>
      * }|null
      */
@@ -1187,6 +1302,26 @@ class AnswerBuilder
         }
 
         $productRequest = filter_var($payload['product_request'] ?? null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        $references = collect(is_array($payload['references'] ?? null) ? $payload['references'] : [])
+            ->filter(fn ($reference): bool => is_array($reference))
+            ->map(function (array $reference): ?array {
+                $type = is_scalar($reference['type'] ?? null)
+                    ? mb_strtolower(trim((string) $reference['type']))
+                    : '';
+                $id = is_scalar($reference['id'] ?? null)
+                    ? trim((string) $reference['id'])
+                    : '';
+
+                if (! in_array($type, ['integration_media', 'product', 'social_link'], true) || $id === '') {
+                    return null;
+                }
+
+                return compact('type', 'id');
+            })
+            ->filter()
+            ->unique(fn (array $reference): string => $reference['type'].':'.$reference['id'])
+            ->values()
+            ->all();
 
         return [
             'answer' => is_scalar($payload['answer']) ? (string) $payload['answer'] : '',
@@ -1196,8 +1331,41 @@ class AnswerBuilder
             'product_request' => $productRequest ?? ($productAction === 'show' || $productIds !== []),
             'product_action' => $productAction,
             'product_ids' => $productIds,
+            'references' => $references,
             'constraints' => is_array($payload['constraints'] ?? null) ? $payload['constraints'] : [],
         ];
+    }
+
+    /** @return array<int, int> */
+    private function structuredReferenceIds(array $structuredAnswer, string $type): array
+    {
+        return collect($structuredAnswer['references'] ?? [])
+            ->filter(fn ($reference): bool => is_array($reference) && ($reference['type'] ?? null) === $type)
+            ->map(fn (array $reference): int => (int) ($reference['id'] ?? 0))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $products
+     * @return array<int, int>
+     */
+    private function productIdsMentionedInText(string $answerText, array $products): array
+    {
+        $normalizedAnswer = $this->normalizeSearchText($answerText);
+
+        return collect($products)
+            ->filter(function (array $product) use ($normalizedAnswer): bool {
+                $name = $this->normalizeSearchText((string) ($product['name'] ?? ''));
+
+                return $name !== '' && str_contains($normalizedAnswer, $name);
+            })
+            ->map(fn (array $product): int => (int) ($product['id'] ?? 0))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
     }
 
     private function extractJsonObject(string $text): ?string
@@ -1295,6 +1463,25 @@ class AnswerBuilder
         ]);
 
         return implode(' ', $sentences);
+    }
+
+    /** @param array<string, mixed> $media */
+    private function mediaFactFallbackAnswer(array $media, Profile $profile): string
+    {
+        $detail = $this->cleanMediaText($media['observation'] ?? null)
+            ?: $this->cleanMediaText($media['caption'] ?? null);
+
+        if ($detail === '') {
+            return $this->profileLocale($profile) === 'en'
+                ? 'I do not have that detail available right now.'
+                : 'No tengo ese detalle disponible por ahora.';
+        }
+
+        $detail = rtrim($this->shortenText($detail, 170), " \t\n\r\0\x0B.");
+
+        return $this->profileLocale($profile) === 'en'
+            ? "According to the available content, {$detail}."
+            : "Según el contenido disponible, {$detail}.";
     }
 
     /**
@@ -1434,7 +1621,7 @@ class AnswerBuilder
         $detail = $observation ?: $caption;
 
         if ($detail !== '') {
-            $detail = $this->shortenText($detail, 140);
+            $detail = rtrim($this->shortenText($detail, 140), " \t\n\r\0\x0B.");
 
             if ($isVideo) {
                 return $locale === 'en'
@@ -1544,13 +1731,19 @@ class AnswerBuilder
      * current answer. Media cards with the same destination already own the CTA.
      *
      * @param  array<int, array<string, mixed>>  $mediaPayload
+     * @param  array<int, string>  $intentProviders
+     * @param  array<int, string>  $retrievedProviders
      * @return array<int, array<string, string>>
      */
     private function socialLinkPayload(
         Profile $profile,
         string $questionText,
         string $answerText,
-        array $mediaPayload
+        array $mediaPayload,
+        ?array $structuredAnswer,
+        array $intentProviders,
+        array $retrievedProviders,
+        bool $usesRetrieval,
     ): array {
         $networks = (array) ($profile->networks ?? []);
 
@@ -1570,6 +1763,33 @@ class AnswerBuilder
             ->unique()
             ->all();
         $locale = $this->profileLocale($profile);
+        $structuredProviders = collect($structuredAnswer['references'] ?? [])
+            ->filter(fn ($reference): bool => is_array($reference) && ($reference['type'] ?? null) === 'social_link')
+            ->map(fn (array $reference): string => $this->normalizeSocialProvider((string) ($reference['id'] ?? '')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $intentProviders = collect($intentProviders)
+            ->map(fn (string $provider): string => $this->normalizeSocialProvider($provider))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $retrievedProviders = collect($retrievedProviders)
+            ->map(fn (string $provider): string => $this->normalizeSocialProvider($provider))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $requestedProviders = collect([...$structuredProviders, ...$intentProviders])
+            ->unique()
+            ->when(
+                $usesRetrieval,
+                fn ($providers) => $providers->filter(fn (string $provider): bool => in_array($provider, $retrievedProviders, true))
+            )
+            ->values()
+            ->all();
         $links = [];
 
         foreach ($networks as $provider => $url) {
@@ -1588,12 +1808,23 @@ class AnswerBuilder
                 continue;
             }
 
+            if ($usesRetrieval && ! in_array($provider, $retrievedProviders, true)) {
+                continue;
+            }
+
             $label = $this->socialNetworkLabel($provider);
             $answerMentionsUrl = $this->answerMentionsSocialUrl($answerText, $url);
             $answerMentionsProvider = $this->textMentionsSocialProvider($answerText, $provider, $label);
             $questionMentionsProvider = $this->textMentionsSocialProvider($questionText, $provider, $label);
 
-            if (! $genericSocialRequest && ! $answerMentionsUrl && ! ($answerMentionsProvider && $questionMentionsProvider)) {
+            $isRequestedProvider = in_array($provider, $requestedProviders, true);
+
+            if (
+                ! $genericSocialRequest
+                && ! $isRequestedProvider
+                && ! $answerMentionsUrl
+                && ! ($answerMentionsProvider && $questionMentionsProvider)
+            ) {
                 continue;
             }
 
@@ -1606,6 +1837,31 @@ class AnswerBuilder
         }
 
         return $links;
+    }
+
+    /**
+     * @param  array<int, array<string, string>>  $links
+     */
+    private function socialLinkFallbackAnswer(array $links, Profile $profile): string
+    {
+        $locale = $this->profileLocale($profile);
+        $labels = collect($links)
+            ->pluck('provider_label')
+            ->filter(fn ($label): bool => is_string($label) && trim($label) !== '')
+            ->values()
+            ->all();
+
+        if (count($labels) === 1) {
+            $label = $labels[0];
+
+            return $locale === 'en'
+                ? "You can find my official {$label} profile here."
+                : "Puedes encontrar mi perfil oficial de {$label} aquí.";
+        }
+
+        return $locale === 'en'
+            ? 'You can find my official social profiles here.'
+            : 'Puedes encontrar mis perfiles oficiales en redes sociales aquí.';
     }
 
     /** @return array<int, int> */
@@ -1621,6 +1877,24 @@ class AnswerBuilder
             ->filter(fn ($source): bool => is_array($source) && ($source['source_type'] ?? null) === $sourceType)
             ->map(fn (array $source): int => (int) ($source['source_id'] ?? 0))
             ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private function knowledgeSourceKeys(ChatAIAnswer $answer, string $sourceType): array
+    {
+        $mode = data_get($answer->response, '_bigmelo.knowledge.mode');
+
+        if ($mode !== 'rag') {
+            return [];
+        }
+
+        return collect(data_get($answer->response, '_bigmelo.knowledge.retrieved_sources', []))
+            ->filter(fn ($source): bool => is_array($source) && ($source['source_type'] ?? null) === $sourceType)
+            ->map(fn (array $source): string => trim((string) ($source['source_id'] ?? '')))
+            ->filter()
             ->unique()
             ->values()
             ->all();
@@ -1773,7 +2047,7 @@ class AnswerBuilder
                 $terms[] = $location;
             }
 
-            $terms = array_merge($terms, $this->searchTokens($text));
+            $terms = array_merge($terms, $this->searchTokens($text), $this->shortReferenceTokens($text));
         }
 
         return collect($terms)
@@ -1793,6 +2067,28 @@ class AnswerBuilder
         preg_match_all('/[\pL\pN]{4,}/u', $normalized, $matches);
 
         return $matches[0] ?? [];
+    }
+
+    /** @return array<int, string> */
+    private function shortReferenceTokens(string $text): array
+    {
+        preg_match_all('/[\pL\pN]+/u', $text, $matches);
+
+        return collect($matches[0] ?? [])
+            ->filter(function (string $token): bool {
+                $length = mb_strlen($token);
+
+                if ($length < 2 || $length > 3) {
+                    return false;
+                }
+
+                return preg_match('/\d/u', $token) === 1 || mb_strtoupper($token) === $token;
+            })
+            ->map(fn (string $token): string => $this->normalizeSearchText($token))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function normalizeSearchText(string $text): string

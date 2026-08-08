@@ -8,6 +8,7 @@ use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
 use App\Models\User;
+use App\Services\ProfileKnowledge\ProfileIntegrationKnowledgeLifecycle;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +21,7 @@ class OtherIntegrationService
     public function __construct(
         private readonly SubscriptionPlanCapabilityService $capabilities,
         private readonly IntegrationDestinationCatalog $destinations,
+        private readonly ProfileIntegrationKnowledgeLifecycle $knowledgeLifecycle,
     ) {}
 
     /**
@@ -214,6 +216,8 @@ class OtherIntegrationService
             });
         });
 
+        $this->knowledgeLifecycle->selectionChanged($integration);
+
         Log::info('Other integration media selection updated.', [
             'profile_id' => $integration->profile_id,
             'selected_count' => $selectedCount,
@@ -233,7 +237,12 @@ class OtherIntegrationService
         $disk = $media->storage_disk;
         $path = $media->storage_path;
 
-        DB::transaction(fn () => $media->delete());
+        DB::transaction(fn () => $media->deleteQuietly());
+        $this->knowledgeLifecycle->forgetMedia(
+            (int) $integration->profile_id,
+            [$mediaId],
+            ProfileIntegration::PROVIDER_OTHER,
+        );
 
         if (filled($disk) && filled($path)) {
             Storage::disk($disk)->delete($path);
@@ -253,7 +262,12 @@ class OtherIntegrationService
         $media = $integration->media()->get(['id', 'storage_disk', 'storage_path']);
         $profileId = $integration->profile_id;
 
-        DB::transaction(fn () => $integration->delete());
+        DB::transaction(fn () => $integration->deleteQuietly());
+        $this->knowledgeLifecycle->forgetMedia(
+            (int) $profileId,
+            $media->pluck('id'),
+            ProfileIntegration::PROVIDER_OTHER,
+        );
 
         foreach ($media as $item) {
             if (filled($item->storage_disk) && filled($item->storage_path)) {

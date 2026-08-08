@@ -1,0 +1,232 @@
+{
+  "version": "2026-08-07",
+  "execution_rule": "Run every question in a new private browser context and a new chat.",
+  "groups": [
+    {
+      "area": "profile",
+      "key": "general",
+      "must_include": ["PERFIL-03"],
+      "questions": [
+        {"id": "profile-01", "text": "¿Cuál es tu distintivo general?"},
+        {"id": "profile-02", "text": "¿Desde qué ciudad atiendes y qué tipo de trabajo haces?", "must_include": ["Medellín", "Consultora"]},
+        {"id": "profile-03", "text": "Resume tu forma de comunicarte y dime el código que identifica tu perfil."}
+      ]
+    },
+    {
+      "area": "source",
+      "key": "orquidea",
+      "must_include": ["ORQUIDEA-41"],
+      "questions": [
+        {"id": "source-orquidea-01", "text": "¿Cuál es el código de la conferencia principal?"},
+        {"id": "source-orquidea-02", "text": "¿A qué hora y en qué ciudad comienza la conferencia?", "must_include": ["09:17", "Cartagena"]},
+        {"id": "source-orquidea-03", "text": "¿Quién está a cargo y cuál es el tema central de la conferencia ORQUIDEA?", "must_include": ["Valentina Ríos", "inteligencia artificial confiable"]}
+      ]
+    },
+    {
+      "area": "source",
+      "key": "faro",
+      "must_include": ["FARO-82"],
+      "questions": [
+        {"id": "source-faro-01", "text": "¿Cuál es el identificador del proyecto de sensores solares?"},
+        {"id": "source-faro-02", "text": "¿Qué reducción de agua logró el Proyecto Faro y dónde se probó?", "must_include": ["28", "Minca"]},
+        {"id": "source-faro-03", "text": "¿Quién coordinó FARO-82 y para qué cultivo se usaron los sensores?"}
+      ]
+    },
+    {
+      "area": "source",
+      "key": "nebula",
+      "must_include": ["NEBULA-73"],
+      "questions": [
+        {"id": "source-nebula-01", "text": "¿Cuál es la frase de control de las notas del taller?"},
+        {"id": "source-nebula-02", "text": "¿Cuánto dura el taller, qué día se dicta y qué enseña?", "must_include": ["47", "jueves", "entrevistas"]},
+        {"id": "source-nebula-03", "text": "¿Cómo se llama el material complementario del taller NEBULA?", "must_include": ["Cuaderno Atlas"]}
+      ]
+    },
+    {
+      "area": "social_link",
+      "key": "tiktok",
+      "must_include": ["TikTok"],
+      "expected_ui": "Localized Go to TikTok button with the exact configured URL.",
+      "questions": [
+        {"id": "social-tiktok-01", "text": "¿Dónde puedo ver tu TikTok?"},
+        {"id": "social-tiktok-02", "text": "Compárteme tu enlace oficial de TikTok."},
+        {"id": "social-tiktok-03", "text": "Quiero ir a tu cuenta de videos cortos, ¿me ayudas?"}
+      ]
+    },
+    {
+      "area": "social_link",
+      "key": "youtube",
+      "must_include": ["YouTube"],
+      "expected_ui": "Localized Go to YouTube button with the exact configured URL.",
+      "questions": [
+        {"id": "social-youtube-01", "text": "¿Cuál es tu canal de YouTube?"},
+        {"id": "social-youtube-02", "text": "Llévame a tu enlace oficial de YouTube."},
+        {"id": "social-youtube-03", "text": "¿Dónde puedo ver tus videos largos?"}
+      ]
+    },
+    {
+      "area": "social_link",
+      "key": "facebook",
+      "must_include": ["Facebook"],
+      "expected_ui": "Localized Go to Facebook button with the exact configured URL.",
+      "questions": [
+        {"id": "social-facebook-01", "text": "¿Tienes Facebook oficial?"},
+        {"id": "social-facebook-02", "text": "Dame el enlace para ir a tu Facebook."},
+        {"id": "social-facebook-03", "text": "Quiero abrir tu página de Facebook."}
+      ]
+    },
+    {
+      "area": "social_link",
+      "key": "linkedin",
+      "must_include": ["LinkedIn"],
+      "expected_ui": "Localized Go to LinkedIn button with the exact configured URL.",
+      "questions": [
+        {"id": "social-linkedin-01", "text": "¿Cuál es tu LinkedIn?"},
+        {"id": "social-linkedin-02", "text": "Quiero consultar tu perfil profesional en LinkedIn."},
+        {"id": "social-linkedin-03", "text": "¿Dónde encuentro tu red profesional oficial?"}
+      ]
+    },
+    {
+      "area": "social_link",
+      "key": "github",
+      "must_include": ["GitHub"],
+      "expected_ui": "Localized Go to GitHub button with the exact configured URL.",
+      "questions": [
+        {"id": "social-github-01", "text": "¿Cuál es tu GitHub?"},
+        {"id": "social-github-02", "text": "Compárteme tu repositorio oficial."},
+        {"id": "social-github-03", "text": "Quiero ir a tu perfil de código, ¿qué enlace uso?"}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "tiktok_1",
+      "must_include": ["TIKTOK-CORAL-14"],
+      "expected_ui": "TikTok media card for item 1 only.",
+      "questions": [
+        {"id": "tiktok-1-01", "text": "¿Tienes un TikTok sobre validar ideas antes de construir?"},
+        {"id": "tiktok-1-02", "text": "Muéstrame las tres reglas del video CORAL."},
+        {"id": "tiktok-1-03", "text": "¿Qué contenido corto recomiendas para probar una idea?"}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "tiktok_2",
+      "must_include": ["TIKTOK-LUNA-25"],
+      "expected_ui": "TikTok media card for item 2 only.",
+      "questions": [
+        {"id": "tiktok-2-01", "text": "¿Tienes un video de una rutina de planificación?"},
+        {"id": "tiktok-2-02", "text": "¿Cuántos minutos dura la rutina LUNA?", "must_include": ["siete"], "require_attachment": false},
+        {"id": "tiktok-2-03", "text": "Muéstrame tu contenido corto para planificar rápido."}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "youtube_1",
+      "must_include": ["YOUTUBE-CEDRO-36"],
+      "expected_ui": "YouTube video card for item 1 only.",
+      "questions": [
+        {"id": "youtube-1-01", "text": "¿Tienes un video sobre documentar decisiones?"},
+        {"id": "youtube-1-02", "text": "¿Cuántos pasos tiene el método CEDRO?", "must_include": ["cinco"], "require_attachment": false},
+        {"id": "youtube-1-03", "text": "Muéstrame el video que usarías para ordenar decisiones de equipo."}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "youtube_2",
+      "must_include": ["YOUTUBE-NORTE-47"],
+      "expected_ui": "YouTube video card for item 2 only.",
+      "questions": [
+        {"id": "youtube-2-01", "text": "¿Tienes un video que compare entrevistas y encuestas?"},
+        {"id": "youtube-2-02", "text": "¿Qué dos métodos compara el contenido NORTE?", "must_include": ["entrevistas abiertas", "encuestas cerradas"], "require_attachment": false},
+        {"id": "youtube-2-03", "text": "Muéstrame tu video para decidir entre preguntas abiertas y cerradas."}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "onlyfans_1",
+      "must_include": ["ONLYFANS-AMBAR-58"],
+      "expected_ui": "Age-restricted OnlyFans image card for item 1 only.",
+      "questions": [
+        {"id": "onlyfans-1-01", "text": "¿Qué material privado tienes sobre composición visual?"},
+        {"id": "onlyfans-1-02", "text": "Muéstrame la lámina AMBAR."},
+        {"id": "onlyfans-1-03", "text": "¿Tienes una imagen exclusiva de diseño visual?"}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "onlyfans_2",
+      "must_include": ["ONLYFANS-SELVA-69"],
+      "expected_ui": "Age-restricted OnlyFans video card for item 2 only.",
+      "questions": [
+        {"id": "onlyfans-2-01", "text": "¿Qué clip privado muestra una secuencia de colores?"},
+        {"id": "onlyfans-2-02", "text": "¿Cuántos colores aparecen en SELVA?", "must_include": ["cuatro"], "require_attachment": false},
+        {"id": "onlyfans-2-03", "text": "Muéstrame tu video exclusivo de color."}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "other_1",
+      "must_include": ["OTRO-RIO-70"],
+      "expected_ui": "Other media card with localized View on Blog button and exact URL.",
+      "questions": [
+        {"id": "other-1-01", "text": "¿Cuál es la edición del boletín Río?"},
+        {"id": "other-1-02", "text": "Muéstrame el anuncio RIO del blog."},
+        {"id": "other-1-03", "text": "¿Tienes una publicación sobre la edición doce de un boletín?"}
+      ]
+    },
+    {
+      "area": "integration",
+      "key": "other_2",
+      "must_include": ["OTRO-MAPA-81"],
+      "expected_ui": "Other media card with localized View on Website button and exact URL.",
+      "questions": [
+        {"id": "other-2-01", "text": "¿Tienes un mapa interactivo?"},
+        {"id": "other-2-02", "text": "¿Cuántas estaciones tiene MAPA-81?", "must_include": ["ocho"], "require_attachment": false},
+        {"id": "other-2-03", "text": "Muéstrame el contenido de tu sitio web sobre estaciones."}
+      ]
+    },
+    {
+      "area": "product",
+      "key": "product_1",
+      "must_include": ["Kit Horizonte 92"],
+      "expected_ui": "Published product card for Kit Horizonte 92.",
+      "questions": [
+        {"id": "product-1-01", "text": "¿Qué producto tienes para planificar varias semanas?"},
+        {"id": "product-1-02", "text": "¿Cuántas semanas cubre y cuánto cuesta Kit Horizonte 92?"},
+        {"id": "product-1-03", "text": "Recomiéndame algo para planificación sin acompañamiento personal.", "must_include": ["Kit Horizonte 92"]}
+      ]
+    },
+    {
+      "area": "product",
+      "key": "product_2",
+      "must_include": ["Guía Brújula 13"],
+      "expected_ui": "Published product card for Guía Brújula 13.",
+      "questions": [
+        {"id": "product-2-01", "text": "¿Qué guía tienes para preparar entrevistas?"},
+        {"id": "product-2-02", "text": "¿Cuántas páginas tiene y cuánto cuesta Guía Brújula 13?"},
+        {"id": "product-2-03", "text": "Quiero aprender de forma autónoma a entrevistar usuarios, ¿qué recomiendas?"}
+      ]
+    },
+    {
+      "area": "product",
+      "key": "product_3",
+      "must_include": ["Sesión Prisma 24"],
+      "expected_ui": "Published product card for Sesión Prisma 24.",
+      "questions": [
+        {"id": "product-3-01", "text": "¿Ofreces acompañamiento personalizado?"},
+        {"id": "product-3-02", "text": "¿Cuánto dura y cuánto cuesta Sesión Prisma 24?"},
+        {"id": "product-3-03", "text": "Necesito revisar mi estrategia con alguien, ¿qué producto me sirve?"}
+      ]
+    },
+    {
+      "area": "product_guidance",
+      "key": "comparison",
+      "must_include": ["Guía Brújula 13", "Kit Horizonte 92", "Sesión Prisma 24"],
+      "questions": [
+        {"id": "guidance-01", "text": "Compara tus tres productos por uso y precio."},
+        {"id": "guidance-02", "text": "¿Qué elegirías para aprender solo, planificar y recibir acompañamiento?"},
+        {"id": "guidance-03", "text": "¿Cuál es el producto más barato y cuál el más costoso?", "must_include": ["Guía Brújula 13", "Sesión Prisma 24"]}
+      ]
+    }
+  ]
+}

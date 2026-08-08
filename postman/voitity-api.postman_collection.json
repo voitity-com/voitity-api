@@ -6176,7 +6176,7 @@
                     "cv"
                   ]
                 },
-                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. When only text is provided, the API stores it as a downloadable TXT file. If a document cannot be parsed automatically, paste profile_cv_text so facts can be created immediately."
+                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. Text-only input is stored as a downloadable TXT file. Readable, non-duplicate sources are automatically queued for approval, synchronization, and embedding indexing. Poll List Profile Sources until status is indexed or failed."
               },
               "response": [],
               "event": [
@@ -6254,7 +6254,62 @@
                     "approve"
                   ]
                 },
-                "description": "Approves and indexes an imported profile source plus its generated items and facts. Requires token ability: profile:write."
+                "description": "Legacy compatibility endpoint for manually approving a source. New uploads are approved and indexed automatically. Requires token ability: profile:write."
+              },
+              "response": []
+            },
+            {
+              "name": "Retry Failed Profile Source Synchronization",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources/{{profile_source_id}}/retry",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources",
+                    "{{profile_source_id}}",
+                    "retry"
+                  ]
+                },
+                "description": "Queues a new synchronization and embedding attempt for a failed source that has readable extracted text. Requires token ability: profile:write."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Profile Source",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/profile/{{profile_id}}/sources/{{profile_source_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "{{profile_id}}",
+                    "sources",
+                    "{{profile_source_id}}"
+                  ]
+                },
+                "description": "Deletes the source file, source items, facts, derived profile data, and related embedding chunks, then queues a clean profile reindex. Requires token ability: profile:write."
               },
               "response": []
             },

@@ -269,9 +269,10 @@ class OpenAIClientTest extends TestCase
                 && str_contains($prompt, 'implied benefits such as improving performance, recovery')
                 && str_contains($prompt, 'Profile-specific product recommendation guidance')
                 && str_contains($prompt, 'Si habla de fútbol, ofrece ayudarle a elegir un balón.')
-                && str_contains($prompt, 'routing only, not product facts')
+                && str_contains($prompt, 'authoritative for selecting which published product')
                 && str_contains($prompt, 'keep product_action as "none"')
-                && str_contains($prompt, 'accepts that offer or explicitly requests a recommendation')
+                && str_contains($prompt, 'explicitly requests a recommendation')
+                && str_contains($prompt, '"references" as an array of objects')
                 && str_contains($prompt, 'Direct product mentions and explicit product requests keep the existing');
         });
     }
@@ -518,10 +519,13 @@ class OpenAIClientTest extends TestCase
             $systemPrompt = $request->data()['messages'][0]['content'];
 
             return str_contains($systemPrompt, 'Public social links (authoritative):')
-                && str_contains($systemPrompt, 'Instagram: https://www.instagram.com/lifetaps/')
-                && str_contains($systemPrompt, 'GitHub: https://github.com/aosmorac')
-                && str_contains($systemPrompt, 'LinkedIn: https://www.linkedin.com/in/abelmoreno/')
-                && str_contains($systemPrompt, 'answer using these exact links')
+                && str_contains($systemPrompt, '"provider_key":"instagram"')
+                && str_contains($systemPrompt, '"url":"https://www.instagram.com/lifetaps/"')
+                && str_contains($systemPrompt, '"provider_key":"github"')
+                && str_contains($systemPrompt, '"url":"https://github.com/aosmorac"')
+                && str_contains($systemPrompt, '"provider_key":"linkedin"')
+                && str_contains($systemPrompt, '"url":"https://www.linkedin.com/in/abelmoreno/"')
+                && str_contains($systemPrompt, 'reference with type "social_link"')
                 && str_contains($systemPrompt, 'do not say you do not have them');
         });
     }
