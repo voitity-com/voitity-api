@@ -7206,6 +7206,16 @@
                 "exec": [
                   "let json = {};",
                   "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('Avatar request returns an expected status', function () {",
+                  "  pm.expect([200, 422, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 422) {",
+                  "  pm.test('Rejected image includes actionable reasons', function () {",
+                  "    pm.expect(json.code).to.eql('avatar_source_image_invalid');",
+                  "    pm.expect(json.errors.image).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(json.data.reason_codes).to.be.an('array').that.is.not.empty;",
+                  "  });",
+                  "}",
                   "if (json.data && json.data.id) {",
                   "  pm.environment.set('aiimage_id', json.data.id);",
                   "}",
@@ -7253,7 +7263,64 @@
                 "generate"
               ]
             },
-            "description": "Uploads a source image and starts avatar generation for the selected profile. Requires avatar:write. Non-admin users can only generate avatars for their own profiles; admins can generate for any profile. Set avatar_image_file_path to a local jpg, png, or webp image."
+            "description": "Uploads a source image and starts avatar generation for the selected profile. The API first performs an authoritative AWS Rekognition check: exactly one clear, centered, front-facing and unobstructed face is required. Rejected images return 422 with code avatar_source_image_invalid and reason_codes; provider outages return 503 and do not store the image, reserve usage or start generation. Requires avatar:write. Non-admin users can only generate avatars for their own profiles; admins can generate for any profile. Set avatar_image_file_path to a local jpg, png, or webp image."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Invalid Avatar Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Invalid avatar image is rejected', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(json.code).to.eql('avatar_source_image_invalid');",
+                  "  pm.expect(json.errors.image).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(json.data.reason_codes).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "profile_id",
+                  "value": "{{profile_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{invalid_avatar_image_file_path}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/avatar/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "avatar",
+                "generate"
+              ]
+            },
+            "description": "Negative functional check. Set invalid_avatar_image_file_path to a clear non-face image or a photo containing multiple people. The request must return 422 without creating an avatar, storing a source image or consuming quota."
           },
           "response": []
         },
@@ -7321,12 +7388,29 @@
                 "history"
               ]
             },
-            "description": "Lists previous avatars for profile_id, including active_avatar, processing_avatar, and all avatar rows ordered by latest update. Requires avatar:read. Non-admin users can only read their own profiles; admins can read any profile."
+            "description": "Lists previous avatar attempts for profile_id. Each item exposes generation_status, selected_variant and variants.original, variants.enhanced and variants.animation with their availability, file and failure state. Face-validation rejections never create a history item. Requires avatar:read. Non-admin users can only read their own profiles; admins can read any profile."
           },
           "response": []
         },
         {
           "name": "Activate Avatar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('Avatar variant activation succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(json.data.selected_variant).to.eql(pm.collectionVariables.get('avatar_variant'));",
+                  "  pm.expect(json.data.file).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -7341,7 +7425,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"avatar_id\": \"{{profile_avatar_id}}\"\n}"
+              "raw": "{\n  \"avatar_id\": \"{{profile_avatar_id}}\",\n  \"variant\": \"{{avatar_variant}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/avatar/{{profile_id}}/activate",
@@ -7355,7 +7439,7 @@
                 "activate"
               ]
             },
-            "description": "Activates a previous avatar for profile_id and marks the previously active avatar inactive. Requires avatar:write. Returns 409 while a generation is processing and 422 when the selected avatar is not selectable."
+            "description": "Activates one available version of a previous avatar attempt and marks the previously active avatar inactive. Set avatar_variant to original, enhanced or animation. The server resolves the stored file and never accepts a client-provided URL. Requires avatar:write. Returns 409 while a generation is processing and 422 when that version is unavailable."
           },
           "response": []
         }
@@ -7363,6 +7447,21 @@
     }
   ],
   "variable": [
+    {
+      "key": "avatar_image_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invalid_avatar_image_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "avatar_variant",
+      "value": "animation",
+      "type": "string"
+    },
     {
       "key": "public_profile_id",
       "value": "",

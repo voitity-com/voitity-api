@@ -5,6 +5,7 @@ namespace App\Listeners\AI\Images;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Models\ProfileAvatar;
@@ -191,6 +192,7 @@ class GetAIImageForAvatar implements ShouldQueue
         }
 
         $avatar->status = ProfileAvatar::STATUS_FAILED;
+        $avatar->generation_status = AvatarGenerationStatus::ImageFailed;
         $avatar->failure_code = $code;
         $avatar->failure_reason = $reason;
         $avatar->save();

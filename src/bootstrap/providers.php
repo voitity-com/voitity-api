@@ -1,6 +1,7 @@
 <?php
 
 use App\Providers\AppServiceProvider;
+use App\Providers\AvatarImageValidationServiceProvider;
 use App\Providers\ChatAIServiceProvider;
 use App\Providers\ConversationInsightsServiceProvider;
 use App\Providers\EmbeddingServiceProvider;
@@ -15,6 +16,7 @@ use App\Providers\YouTubeServiceProvider;
 
 return [
     AppServiceProvider::class,
+    AvatarImageValidationServiceProvider::class,
     EventServiceProvider::class,
     ChatAIServiceProvider::class,
     ConversationInsightsServiceProvider::class,

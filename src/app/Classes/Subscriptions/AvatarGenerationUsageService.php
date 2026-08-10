@@ -7,6 +7,7 @@ use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\SubscriptionUse;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class AvatarGenerationUsageService
 {
@@ -53,6 +54,55 @@ class AvatarGenerationUsageService
         $this->recorder->release("avatar-video:profile-avatar:{$avatar->id}");
 
         return $released;
+    }
+
+    /** @param array<string, mixed> $metadata */
+    public function finalizeImageOnly(ProfileAvatar $avatar, array $metadata = []): ?SubscriptionUse
+    {
+        $key = $this->key($avatar);
+        $use = SubscriptionUse::where('idempotency_key', $key)->first();
+
+        if (! $use || $use->status === SubscriptionUse::STATUS_RELEASED) {
+            return null;
+        }
+
+        if ($use->status === SubscriptionUse::STATUS_FINALIZED) {
+            return $use;
+        }
+
+        if ($use->status === SubscriptionUse::STATUS_RESERVED) {
+            $this->recorder->replaceReservation(
+                userId: (int) $avatar->user_id,
+                usageType: SubscriptionUsageType::AvatarGenerated,
+                amounts: [
+                    'avatar_images' => 1,
+                    'avatar_video_seconds' => 0,
+                ],
+                idempotencyKey: $key,
+                profileId: (int) $avatar->profile_id,
+                sourceType: ProfileAvatar::class,
+                sourceId: (string) $avatar->id,
+                metadata: [
+                    'duration_seconds' => 0,
+                    'reservation' => 'avatar_generation',
+                    'partial_result' => 'enhanced_image',
+                    ...$metadata,
+                ],
+            );
+        }
+
+        $finalized = $this->recorder->finalize($key, [
+            'partial_result' => 'enhanced_image',
+            ...$metadata,
+        ]);
+
+        Log::info('Avatar usage finalized for enhanced image only.', [
+            'profile_avatar_id' => $avatar->id,
+            'profile_id' => $avatar->profile_id,
+            'subscription_use_id' => $finalized->id,
+        ]);
+
+        return $finalized;
     }
 
     public function exists(ProfileAvatar $avatar): bool

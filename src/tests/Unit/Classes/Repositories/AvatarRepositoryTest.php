@@ -2,13 +2,18 @@
 
 namespace Tests\Unit\Classes\Repositories;
 
+use App\Classes\AvatarImageValidation\AvatarImageAnalysis;
+use App\Classes\AvatarImageValidation\AvatarImageValidationClient;
+use App\Classes\AvatarImageValidation\AvatarImageValidator;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
+use App\Exceptions\Avatar\InvalidAvatarSourceImageException;
 use App\Models\AiImage as AiImageModel;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
@@ -64,13 +69,16 @@ class AvatarRepositoryTest extends TestCase
                 ]);
             });
 
-        $repository = (new AvatarRepository)->setVideoAIService($service);
+        $repository = $this->repositoryWithValidImageValidator($service);
         $aiImage = $repository->generateAvatar($user, $profile, $this->validImageUpload());
 
         $this->assertSame($user->id, $aiImage->user_id);
         $this->assertSame($profile->id, $aiImage->profile_id);
         $this->assertCount(1, Storage::disk('profiles')->allFiles('images/sources'));
         $avatar = ProfileAvatar::where('aiimage_id', $aiImage->id)->firstOrFail();
+        $sourcePath = Storage::disk('profiles')->allFiles('images/sources')[0];
+        $this->assertSame(Storage::disk('profiles')->url($sourcePath), $avatar->original_file);
+        $this->assertSame(AvatarGenerationStatus::Processing, $avatar->generation_status);
         $this->assertDatabaseHas('profile_avatars', [
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -123,7 +131,7 @@ class AvatarRepositoryTest extends TestCase
                 ]);
             });
 
-        $repository = (new AvatarRepository)->setVideoAIService($service);
+        $repository = $this->repositoryWithValidImageValidator($service);
         $aiImage = $repository->generateAvatar($admin, $profile, $this->validImageUpload());
 
         $this->assertSame($owner->id, $aiImage->user_id);
@@ -151,7 +159,7 @@ class AvatarRepositoryTest extends TestCase
             ->once()
             ->andThrow(new RuntimeException('Provider image generation failed.'));
 
-        $repository = (new AvatarRepository)->setVideoAIService($service);
+        $repository = $this->repositoryWithValidImageValidator($service);
 
         try {
             $repository->generateAvatar($user, $profile, $this->validImageUpload());
@@ -164,6 +172,9 @@ class AvatarRepositoryTest extends TestCase
         $limit = $subscription->limit()->firstOrFail();
 
         $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
+        $this->assertSame(AvatarGenerationStatus::ImageFailed, $avatar->generation_status);
+        $this->assertNotNull($avatar->original_file);
+        $this->assertSame('Provider image generation failed.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
         $this->assertSame(2, (int) $limit->avatar_video_seconds_remaining);
         $this->assertDatabaseHas('subscription_uses', [
@@ -191,11 +202,78 @@ class AvatarRepositoryTest extends TestCase
         $service = Mockery::mock(VideoAIService::class);
         $service->shouldNotReceive('generateImage');
 
-        $repository = (new AvatarRepository)->setVideoAIService($service);
+        $repository = $this->repositoryWithValidImageValidator($service);
 
         $this->expectException(AvatarGenerationInProgressException::class);
 
         $repository->generateAvatar($user, $profile, $this->validImageUpload());
+    }
+
+    #[Test]
+    public function it_rejects_invalid_source_before_storage_usage_or_provider_calls(): void
+    {
+        Storage::fake('profiles');
+
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $this->createActiveSubscriptionFor($user);
+        $service = Mockery::mock(VideoAIService::class);
+        $service->shouldNotReceive('generateImage');
+        $validator = new AvatarImageValidator(new class implements AvatarImageValidationClient
+        {
+            public function analyze(string $imageBytes): AvatarImageAnalysis
+            {
+                return new AvatarImageAnalysis([], 'rekognition-no-face');
+            }
+
+            public function name(): string
+            {
+                return 'fake_rekognition';
+            }
+        });
+        config()->set('avatar-image-validation.thresholds.min_image_width', 1);
+        config()->set('avatar-image-validation.thresholds.min_image_height', 1);
+        $repository = (new AvatarRepository(null, null, $validator))->setVideoAIService($service);
+
+        try {
+            $repository->generateAvatar($user, $profile, $this->validImageUpload());
+            $this->fail('The invalid source image should be rejected.');
+        } catch (InvalidAvatarSourceImageException $exception) {
+            $this->assertContains('no_face', $exception->validationResult()->reasonCodes);
+        }
+
+        $this->assertSame([], Storage::disk('profiles')->allFiles());
+        $this->assertDatabaseCount('profile_avatars', 0);
+        $this->assertDatabaseCount('subscription_uses', 0);
+    }
+
+    private function repositoryWithValidImageValidator(VideoAIService $service): AvatarRepository
+    {
+        config()->set('avatar-image-validation.thresholds.min_image_width', 1);
+        config()->set('avatar-image-validation.thresholds.min_image_height', 1);
+
+        $validator = new AvatarImageValidator(new class implements AvatarImageValidationClient
+        {
+            public function analyze(string $imageBytes): AvatarImageAnalysis
+            {
+                return new AvatarImageAnalysis([[
+                    'BoundingBox' => ['Width' => 0.4, 'Height' => 0.5, 'Left' => 0.3, 'Top' => 0.2],
+                    'Confidence' => 99.9,
+                    'Quality' => ['Brightness' => 70, 'Sharpness' => 80],
+                    'Pose' => ['Yaw' => 0, 'Pitch' => 0, 'Roll' => 0],
+                    'FaceOccluded' => ['Value' => false, 'Confidence' => 99],
+                    'EyesOpen' => ['Value' => true, 'Confidence' => 99],
+                    'Sunglasses' => ['Value' => false, 'Confidence' => 99],
+                ]], 'rekognition-valid-face');
+            }
+
+            public function name(): string
+            {
+                return 'fake_rekognition';
+            }
+        });
+
+        return (new AvatarRepository(null, null, $validator))->setVideoAIService($service);
     }
 
     private function profileForUser(User $user): Profile
@@ -213,9 +291,10 @@ class AvatarRepositoryTest extends TestCase
     private function validImageUpload(): UploadedFile
     {
         $path = tempnam(sys_get_temp_dir(), 'avatar_');
-        file_put_contents($path, base64_decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
-        ));
+        $image = imagecreatetruecolor(1, 1);
+        imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+        imagepng($image, $path);
+        imagedestroy($image);
 
         return new UploadedFile($path, 'avatar.png', 'image/png', null, true);
     }

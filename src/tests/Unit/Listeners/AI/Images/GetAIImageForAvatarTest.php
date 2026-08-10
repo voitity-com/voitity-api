@@ -5,6 +5,7 @@ namespace Tests\Unit\Listeners\AI\Images;
 use App\Classes\VideoAIService\AiImage as AiImageResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
@@ -145,6 +146,7 @@ class GetAIImageForAvatarTest extends TestCase
         $this->assertSame('SAFETY.OUTPUT.IMAGE', $aiImage->failure_code);
         $this->assertSame('Image did not pass public figure content moderation.', $aiImage->failure_reason);
         $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
+        $this->assertSame(AvatarGenerationStatus::ImageFailed, $avatar->generation_status);
         $this->assertSame('SAFETY.OUTPUT.IMAGE', $avatar->failure_code);
         $this->assertSame('Image did not pass public figure content moderation.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);

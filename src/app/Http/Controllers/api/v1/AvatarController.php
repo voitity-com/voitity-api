@@ -5,7 +5,11 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Enums\AvatarGenerationStatus;
+use App\Enums\AvatarVariant;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
+use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
+use App\Exceptions\Avatar\InvalidAvatarSourceImageException;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Avatar\GenerateAvatarRequest;
@@ -17,6 +21,7 @@ use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -50,6 +55,7 @@ class AvatarController extends Controller
      *     @OA\Response(response=404, description="Profile not found"),
      *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=503, description="Image validation service unavailable"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
@@ -92,6 +98,20 @@ class AvatarController extends Controller
             ], 200);
         } catch (AvatarGenerationInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (InvalidAvatarSourceImageException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'avatar_source_image_invalid',
+                'errors' => ['image' => $e->messages()],
+                'data' => ['reason_codes' => $e->validationResult()->reasonCodes],
+            ], 422);
+        } catch (AvatarImageValidationUnavailableException) {
+            $locale = str_starts_with(strtolower((string) $request->user()?->locale), 'en') ? 'en' : 'es';
+
+            return response()->json([
+                'message' => config('avatar-image-validation.copy.'.$locale.'.unavailable'),
+                'code' => 'avatar_image_validation_unavailable',
+            ], 503);
         } catch (SubscriptionEntitlementException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -226,6 +246,7 @@ class AvatarController extends Controller
 
             $validated = $request->validate([
                 'avatar_id' => ['required', 'integer', 'exists:profile_avatars,id'],
+                'variant' => ['required', 'string', Rule::enum(AvatarVariant::class)],
             ]);
 
             $avatar = ProfileAvatar::with(['aiImage', 'aiVideo'])
@@ -236,7 +257,8 @@ class AvatarController extends Controller
                 return response()->json(['message' => 'Avatar not found.'], 404);
             }
 
-            $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar);
+            $variant = AvatarVariant::from((string) $validated['variant']);
+            $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar, $variant);
 
             $this->notifyProfileOwner($profile, 'avatar_activated');
 
@@ -255,6 +277,7 @@ class AvatarController extends Controller
                 'user_id' => $request->user()?->id,
                 'profile_id' => $profile->id ?? null,
                 'avatar_id' => $request->input('avatar_id'),
+                'variant' => $request->input('variant'),
                 'message' => $e->getMessage(),
             ]);
 
@@ -300,10 +323,18 @@ class AvatarController extends Controller
             'aiimage_id' => $avatar->aiimage_id,
             'ai_video_id' => $avatar->ai_video_id,
             'video_duration_seconds' => $avatar->video_duration_seconds,
+            'original_file' => $avatar->original_file,
             'file' => $avatar->file,
             'status' => $avatar->status,
+            'generation_status' => $avatar->generation_status?->value,
+            'selected_variant' => $avatar->selected_variant?->value,
             'failure_code' => $avatar->failure_code,
             'failure_reason' => $avatar->failure_reason,
+            'variants' => collect(AvatarVariant::cases())
+                ->mapWithKeys(fn (AvatarVariant $variant): array => [
+                    $variant->value => $this->profileAvatarVariantToArray($avatar, $variant),
+                ])
+                ->all(),
             'ai_image' => $avatar->aiImage ? $this->aiImageToArray($avatar->aiImage) : null,
             'ai_video' => $avatar->aiVideo ? [
                 'id' => $avatar->aiVideo->id,
@@ -317,6 +348,52 @@ class AvatarController extends Controller
             ] : null,
             'created_at' => $avatar->created_at,
             'updated_at' => $avatar->updated_at,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function profileAvatarVariantToArray(ProfileAvatar $avatar, AvatarVariant $variant): array
+    {
+        $file = $avatar->variantFile($variant);
+        $generationStatus = $avatar->generation_status;
+        $status = 'unavailable';
+        $failureCode = null;
+        $failureReason = null;
+
+        if (filled($file)) {
+            $status = 'available';
+        } elseif ($variant === AvatarVariant::Enhanced) {
+            $failureCode = $avatar->aiImage?->failure_code
+                ?? ($generationStatus === AvatarGenerationStatus::ImageFailed ? $avatar->failure_code : null);
+            $failureReason = $avatar->aiImage?->failure_reason
+                ?? ($generationStatus === AvatarGenerationStatus::ImageFailed ? $avatar->failure_reason : null);
+            $status = $generationStatus === AvatarGenerationStatus::ImageFailed || $avatar->aiImage?->status === 'failed'
+                ? 'failed'
+                : ($generationStatus === AvatarGenerationStatus::Processing ? 'processing' : 'unavailable');
+        } elseif ($variant === AvatarVariant::Animation) {
+            $failureCode = $avatar->aiVideo?->failure_code
+                ?? ($generationStatus === AvatarGenerationStatus::VideoFailed ? $avatar->failure_code : null);
+            $failureReason = $avatar->aiVideo?->failure_reason
+                ?? ($generationStatus === AvatarGenerationStatus::VideoFailed ? $avatar->failure_reason : null);
+
+            if ($generationStatus === AvatarGenerationStatus::VideoFailed || $avatar->aiVideo?->status === 'failed') {
+                $status = 'failed';
+            } elseif ($generationStatus === AvatarGenerationStatus::ImageFailed) {
+                $status = 'not_generated';
+            } elseif ($generationStatus === AvatarGenerationStatus::Processing) {
+                $status = $avatar->aiImage?->status === 'succeeded' ? 'processing' : 'waiting';
+            }
+        }
+
+        return [
+            'kind' => $variant === AvatarVariant::Animation ? 'video' : 'image',
+            'status' => $status,
+            'file' => $file,
+            'failure_code' => $failureCode,
+            'failure_reason' => $failureReason,
+            'selected' => $avatar->selected_variant === $variant && $avatar->status === ProfileAvatar::STATUS_ACTIVE,
         ];
     }
 
