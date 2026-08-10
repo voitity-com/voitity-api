@@ -23,6 +23,24 @@ class VideoAIServiceTest extends TestCase
     }
 
     #[Test]
+    public function default_image_prompt_respects_runway_character_limit(): void
+    {
+        $prompt = (string) config('videoai.prompts.image');
+
+        $this->assertNotSame('', trim($prompt));
+        $this->assertLessThanOrEqual(1000, mb_strlen($prompt));
+    }
+
+    #[Test]
+    public function default_image_prompt_requires_a_solid_white_background(): void
+    {
+        $this->assertStringContainsString(
+            'Set the entire background to solid pure white (#FFFFFF)',
+            (string) config('videoai.prompts.image')
+        );
+    }
+
+    #[Test]
     public function it_delegates_create_image_to_client(): void
     {
         $client = Mockery::mock(VideoAIClient::class);
