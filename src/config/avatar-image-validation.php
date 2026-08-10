@@ -1,0 +1,66 @@
+<?php
+
+return [
+    'rekognition' => [
+        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'max_image_bytes' => 5 * 1024 * 1024,
+        'max_image_edge' => 4096,
+    ],
+
+    'jpeg_quality' => 90,
+
+    'thresholds' => [
+        'min_image_width' => 512,
+        'min_image_height' => 512,
+        'min_face_confidence' => 95,
+        'min_face_area_ratio' => 0.07,
+        'max_face_area_ratio' => 0.70,
+        'min_face_center_x' => 0.25,
+        'max_face_center_x' => 0.75,
+        'min_face_center_y' => 0.20,
+        'max_face_center_y' => 0.68,
+        'min_sharpness' => 35,
+        'min_brightness' => 25,
+        'max_abs_yaw' => 30,
+        'max_abs_pitch' => 25,
+        'max_abs_roll' => 25,
+        'boolean_attribute_confidence' => 90,
+    ],
+
+    'copy' => [
+        'es' => [
+            'invalid_image' => 'La imagen no cumple los requisitos para generar el avatar.',
+            'unavailable' => 'No fue posible validar la imagen en este momento. Intenta nuevamente en unos minutos.',
+            'image_too_small' => 'Usa una imagen de al menos 512 × 512 píxeles.',
+            'no_face' => 'No se detectó un rostro. Usa una foto clara de una sola persona.',
+            'multiple_faces' => 'Se detectó más de un rostro. Usa una foto de una sola persona.',
+            'low_confidence' => 'El rostro no se distingue con suficiente claridad.',
+            'face_too_small' => 'Acerca más el rostro para que ocupe una parte mayor de la imagen.',
+            'face_too_large' => 'Aleja un poco el rostro para incluir la cabeza completa.',
+            'face_off_center' => 'Centra el rostro dentro del recuadro.',
+            'low_sharpness' => 'La imagen está borrosa. Usa una foto más nítida.',
+            'poor_lighting' => 'La imagen está muy oscura. Usa una foto con mejor iluminación.',
+            'pose_too_large' => 'Mira de frente a la cámara y mantén la cabeza recta.',
+            'face_occluded' => 'El rostro está cubierto. Retira objetos que oculten ojos, nariz o boca.',
+            'eyes_closed' => 'Usa una foto con los ojos abiertos y visibles.',
+            'sunglasses' => 'Usa una foto sin gafas oscuras.',
+        ],
+        'en' => [
+            'invalid_image' => 'The image does not meet the requirements to generate the avatar.',
+            'unavailable' => 'The image could not be validated right now. Please try again in a few minutes.',
+            'image_too_small' => 'Use an image that is at least 512 × 512 pixels.',
+            'no_face' => 'No face was detected. Use a clear photo of one person.',
+            'multiple_faces' => 'More than one face was detected. Use a photo of one person.',
+            'low_confidence' => 'The face is not clear enough to process.',
+            'face_too_small' => 'Move closer so the face takes up more of the image.',
+            'face_too_large' => 'Move back slightly so the full head is visible.',
+            'face_off_center' => 'Center the face inside the frame.',
+            'low_sharpness' => 'The image is blurry. Use a sharper photo.',
+            'poor_lighting' => 'The image is too dark. Use a better-lit photo.',
+            'pose_too_large' => 'Face the camera and keep your head straight.',
+            'face_occluded' => 'The face is covered. Remove objects hiding the eyes, nose, or mouth.',
+            'eyes_closed' => 'Use a photo with open, visible eyes.',
+            'sunglasses' => 'Use a photo without dark glasses.',
+        ],
+    ],
+];

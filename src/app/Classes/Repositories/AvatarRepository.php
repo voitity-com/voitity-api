@@ -2,11 +2,14 @@
 
 namespace App\Classes\Repositories;
 
+use App\Classes\AvatarImageValidation\AvatarImageValidator;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIService;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
+use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
+use App\Exceptions\Avatar\InvalidAvatarSourceImageException;
 use App\Models\AiImage;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
@@ -26,6 +29,7 @@ class AvatarRepository
     public function __construct(
         private readonly ?AvatarGenerationUsageService $avatarUsage = null,
         private readonly ?AvatarGenerationSpecification $avatarSpecification = null,
+        private readonly ?AvatarImageValidator $avatarImageValidator = null,
     ) {}
 
     public function setVideoAIService(VideoAIService $videoAIService): self
@@ -44,6 +48,17 @@ class AvatarRepository
                 throw new AvatarGenerationInProgressException('Avatar generation is already processing for this profile.');
             }
 
+            $owner = $profile->user ?: $actor;
+            $validation = $this->avatarImageValidator()->validate($sourceImage, (string) ($owner->locale ?: 'es'));
+
+            Log::info('Avatar source image accepted for generation.', [
+                'actor_user_id' => $actor->id,
+                'owner_user_id' => $owner->id,
+                'profile_id' => $profile->id,
+                'validation_request_id' => $validation->requestId,
+                'validation_summary' => $validation->summary,
+            ]);
+
             $disk = $this->profileArtifactDisk();
             $path = $sourceImage->store($this->sourceImageFolder(), $disk);
 
@@ -52,8 +67,6 @@ class AvatarRepository
             }
 
             $sourceImageUri = $this->sourceImageToDataUri($path, $sourceImage, $disk);
-            $owner = $profile->user ?: $actor;
-
             $processingAvatar = ProfileAvatar::create([
                 'user_id' => $owner->id,
                 'profile_id' => $profile->id,
@@ -104,6 +117,24 @@ class AvatarRepository
             ]);
 
             return $aiImage;
+        } catch (InvalidAvatarSourceImageException $e) {
+            Log::warning('Avatar generation rejected by source image validation.', [
+                'actor_user_id' => $actor->id,
+                'owner_user_id' => $profile->user?->id ?: $profile->user_id,
+                'profile_id' => $profile->id,
+                'reason_codes' => $e->validationResult()->reasonCodes,
+                'validation_request_id' => $e->validationResult()->requestId,
+            ]);
+
+            throw $e;
+        } catch (AvatarImageValidationUnavailableException $e) {
+            Log::error('Avatar generation stopped because source image validation is unavailable.', [
+                'actor_user_id' => $actor->id,
+                'owner_user_id' => $profile->user?->id ?: $profile->user_id,
+                'profile_id' => $profile->id,
+            ]);
+
+            throw $e;
         } catch (Throwable $e) {
             Log::error('Avatar image generation failed.', [
                 'actor_user_id' => $actor->id,
@@ -203,6 +234,11 @@ class AvatarRepository
     private function avatarSpecification(): AvatarGenerationSpecification
     {
         return $this->avatarSpecification ?? app(AvatarGenerationSpecification::class);
+    }
+
+    private function avatarImageValidator(): AvatarImageValidator
+    {
+        return $this->avatarImageValidator ?? app(AvatarImageValidator::class);
     }
 
     private function sourceImageToDataUri(string $path, UploadedFile $sourceImage, string $disk): string

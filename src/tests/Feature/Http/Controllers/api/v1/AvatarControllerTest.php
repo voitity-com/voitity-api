@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\AvatarImageValidation\AvatarImageValidationResult;
 use App\Classes\Repositories\AvatarRepository;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
+use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
+use App\Exceptions\Avatar\InvalidAvatarSourceImageException;
 use App\Models\AiImage;
 use App\Models\AiVideo;
 use App\Models\Profile;
@@ -85,6 +88,61 @@ class AvatarControllerTest extends TestAPI
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_invalid_source_image_returns_actionable_validation_error(): void
+    {
+        $user = User::factory()->create(['locale' => 'es']);
+        $profile = $this->profileForUser($user);
+        $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $validationResult = new AvatarImageValidationResult(
+            valid: false,
+            reasonCodes: ['no_face'],
+            summary: ['face_count' => 0],
+            requestId: 'rekognition-no-face',
+        );
+
+        $this->mock(AvatarRepository::class, function ($mock) use ($validationResult): void {
+            $mock->shouldReceive('generateAvatar')
+                ->once()
+                ->andThrow(new InvalidAvatarSourceImageException($validationResult, 'es'));
+        });
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT_GENERATE, [
+                'profile_id' => $profile->id,
+                'image' => $this->validImageUpload(),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('code', 'avatar_source_image_invalid');
+        $response->assertJsonPath('data.reason_codes.0', 'no_face');
+        $response->assertJsonPath('errors.image.0', 'No se detectó un rostro. Usa una foto clara de una sola persona.');
+    }
+
+    public function test_image_validation_outage_returns_localized_service_unavailable_response(): void
+    {
+        $user = User::factory()->create(['locale' => 'en']);
+        $profile = $this->profileForUser($user);
+        $this->createActiveSubscriptionFor($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+
+        $this->mock(AvatarRepository::class, function ($mock): void {
+            $mock->shouldReceive('generateAvatar')
+                ->once()
+                ->andThrow(new AvatarImageValidationUnavailableException('Provider unavailable.'));
+        });
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT_GENERATE, [
+                'profile_id' => $profile->id,
+                'image' => $this->validImageUpload(),
+            ]);
+
+        $response->assertStatus(503);
+        $response->assertJsonPath('code', 'avatar_image_validation_unavailable');
+        $response->assertJsonPath('message', 'The image could not be validated right now. Please try again in a few minutes.');
     }
 
     public function test_admin_can_generate_avatar_for_any_profile(): void

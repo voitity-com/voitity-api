@@ -6,6 +6,8 @@ use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
+use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
+use App\Exceptions\Avatar\InvalidAvatarSourceImageException;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Avatar\GenerateAvatarRequest;
@@ -50,6 +52,7 @@ class AvatarController extends Controller
      *     @OA\Response(response=404, description="Profile not found"),
      *     @OA\Response(response=402, description="Subscription limit exceeded"),
      *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=503, description="Image validation service unavailable"),
      *     @OA\Response(response=500, description="Unexpected error")
      * )
      */
@@ -92,6 +95,20 @@ class AvatarController extends Controller
             ], 200);
         } catch (AvatarGenerationInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (InvalidAvatarSourceImageException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'avatar_source_image_invalid',
+                'errors' => ['image' => $e->messages()],
+                'data' => ['reason_codes' => $e->validationResult()->reasonCodes],
+            ], 422);
+        } catch (AvatarImageValidationUnavailableException) {
+            $locale = str_starts_with(strtolower((string) $request->user()?->locale), 'en') ? 'en' : 'es';
+
+            return response()->json([
+                'message' => config('avatar-image-validation.copy.'.$locale.'.unavailable'),
+                'code' => 'avatar_image_validation_unavailable',
+            ], 503);
         } catch (SubscriptionEntitlementException $e) {
             return response()->json([
                 'message' => $e->getMessage(),

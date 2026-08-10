@@ -5,5 +5,6 @@ Este directorio contiene pruebas reproducibles y evidencias. Está separado de `
 ## Suites
 
 - [`profile-knowledge-lifecycle/PROFILE_KNOWLEDGE_LIFECYCLE_QA.md`](profile-knowledge-lifecycle/PROFILE_KNOWLEDGE_LIFECYCLE_QA.md): fuentes, embeddings, integraciones, redes sociales, productos y conversación.
+- [`avatar-image-validation/AVATAR_IMAGE_VALIDATION_QA.md`](avatar-image-validation/AVATAR_IMAGE_VALIDATION_QA.md): validación facial del avatar en navegador y API, almacenamiento y consumo.
 
 No guardes contraseñas, tokens OAuth, cookies ni secretos en este directorio. Usa una cuenta local de QA y registra solamente identificadores no sensibles.
