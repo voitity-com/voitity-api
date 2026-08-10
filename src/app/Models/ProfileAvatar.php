@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\AvatarGenerationStatus;
+use App\Enums\AvatarVariant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -24,14 +26,19 @@ class ProfileAvatar extends Model
         'aiimage_id',
         'ai_video_id',
         'video_duration_seconds',
+        'original_file',
         'file',
         'status',
+        'generation_status',
+        'selected_variant',
         'failure_code',
         'failure_reason',
     ];
 
     protected $casts = [
         'video_duration_seconds' => 'integer',
+        'generation_status' => AvatarGenerationStatus::class,
+        'selected_variant' => AvatarVariant::class,
     ];
 
     public function user()
@@ -59,9 +66,35 @@ class ProfileAvatar extends Model
         return $this->status === self::STATUS_PROCESSING;
     }
 
-    public function isSelectable(): bool
+    public function isSelectable(?AvatarVariant $variant = null): bool
     {
-        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_INACTIVE], true)
-            && filled($this->file);
+        if ($this->isProcessing()) {
+            return false;
+        }
+
+        if ($variant) {
+            return filled($this->variantFile($variant));
+        }
+
+        foreach (AvatarVariant::cases() as $candidate) {
+            if (filled($this->variantFile($candidate))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function variantFile(AvatarVariant $variant): ?string
+    {
+        return match ($variant) {
+            AvatarVariant::Original => filled($this->original_file) ? $this->original_file : null,
+            AvatarVariant::Enhanced => $this->aiImage?->status === 'succeeded' && filled($this->aiImage?->file)
+                ? $this->aiImage->file
+                : null,
+            AvatarVariant::Animation => $this->aiVideo?->status === 'succeeded' && filled($this->aiVideo?->file)
+                ? $this->aiVideo->file
+                : null,
+        };
     }
 }

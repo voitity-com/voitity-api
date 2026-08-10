@@ -6,6 +6,8 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Classes\AvatarImageValidation\AvatarImageValidationResult;
 use App\Classes\Repositories\AvatarRepository;
+use App\Enums\AvatarGenerationStatus;
+use App\Enums\AvatarVariant;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
@@ -294,6 +296,8 @@ class AvatarControllerTest extends TestAPI
             'aiimage_id' => $aiImage->id,
             'file' => null,
             'status' => ProfileAvatar::STATUS_FAILED,
+            'generation_status' => AvatarGenerationStatus::ImageFailed,
+            'original_file' => 'images/sources/original.png',
             'failure_code' => 'SAFETY.OUTPUT.IMAGE',
             'failure_reason' => 'Image did not pass public figure content moderation.',
         ]);
@@ -309,6 +313,10 @@ class AvatarControllerTest extends TestAPI
         $response->assertJsonPath('data.avatars.0.failure_reason', 'Image did not pass public figure content moderation.');
         $response->assertJsonPath('data.avatars.0.ai_image.failure_code', 'SAFETY.OUTPUT.IMAGE');
         $response->assertJsonPath('data.avatars.0.ai_image.failure_reason', 'Image did not pass public figure content moderation.');
+        $response->assertJsonPath('data.avatars.0.generation_status', AvatarGenerationStatus::ImageFailed->value);
+        $response->assertJsonPath('data.avatars.0.variants.original.status', 'available');
+        $response->assertJsonPath('data.avatars.0.variants.enhanced.status', 'failed');
+        $response->assertJsonPath('data.avatars.0.variants.animation.status', 'not_generated');
     }
 
     public function test_user_can_not_list_avatar_history_for_other_profile(): void
@@ -336,12 +344,14 @@ class AvatarControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $inactive->id,
+                'variant' => AvatarVariant::Animation->value,
             ]);
 
         $response->assertStatus(200);
         $response->assertJsonPath('message', 'Avatar activated successfully.');
         $response->assertJsonPath('data.id', $inactive->id);
         $response->assertJsonPath('data.status', ProfileAvatar::STATUS_ACTIVE);
+        $response->assertJsonPath('data.selected_variant', AvatarVariant::Animation->value);
 
         $this->assertSame(ProfileAvatar::STATUS_INACTIVE, $active->fresh()->status);
         $this->assertSame(ProfileAvatar::STATUS_ACTIVE, $inactive->fresh()->status);
@@ -362,6 +372,7 @@ class AvatarControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $inactive->id,
+                'variant' => AvatarVariant::Animation->value,
             ]);
 
         $response->assertStatus(409);
@@ -378,10 +389,96 @@ class AvatarControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post("/api/avatar/{$profile->id}/activate", [
                 'avatar_id' => $failed->id,
+                'variant' => AvatarVariant::Original->value,
             ]);
 
         $response->assertStatus(422);
-        $response->assertJsonPath('message', 'Avatar cannot be activated.');
+        $response->assertJsonPath('message', 'The selected avatar version is not available.');
+    }
+
+    public function test_user_can_activate_original_after_image_generation_fails(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'original_file' => 'images/sources/original.png',
+            'status' => ProfileAvatar::STATUS_FAILED,
+            'generation_status' => AvatarGenerationStatus::ImageFailed,
+            'failure_reason' => 'Image generation failed.',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $avatar->id,
+                'variant' => AvatarVariant::Original->value,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.file', 'images/sources/original.png');
+        $response->assertJsonPath('data.generation_status', AvatarGenerationStatus::ImageFailed->value);
+        $response->assertJsonPath('data.selected_variant', AvatarVariant::Original->value);
+        $response->assertJsonPath('data.variants.original.selected', true);
+    }
+
+    public function test_user_can_activate_enhanced_image_after_video_generation_fails(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $aiImage = $this->aiImageForProfile($profile, 'succeeded', 'images/enhanced.png');
+        $aiVideo = AiVideo::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'source_id' => 'failed-video-source-id',
+            'source' => 'runway',
+            'status' => 'failed',
+            'failure_reason' => 'Video generation failed.',
+        ]);
+        $avatar = ProfileAvatar::create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'aiimage_id' => $aiImage->id,
+            'ai_video_id' => $aiVideo->id,
+            'original_file' => 'images/sources/original.png',
+            'status' => ProfileAvatar::STATUS_FAILED,
+            'generation_status' => AvatarGenerationStatus::VideoFailed,
+            'failure_reason' => 'Video generation failed.',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $avatar->id,
+                'variant' => AvatarVariant::Enhanced->value,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.file', 'images/enhanced.png');
+        $response->assertJsonPath('data.generation_status', AvatarGenerationStatus::VideoFailed->value);
+        $response->assertJsonPath('data.selected_variant', AvatarVariant::Enhanced->value);
+        $response->assertJsonPath('data.variants.original.status', 'available');
+        $response->assertJsonPath('data.variants.enhanced.status', 'available');
+        $response->assertJsonPath('data.variants.animation.status', 'failed');
+    }
+
+    public function test_activate_avatar_requires_a_supported_variant(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+        $avatar = $this->avatarForProfile($profile, ProfileAvatar::STATUS_INACTIVE, 'aivideos/old.mp4');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post("/api/avatar/{$profile->id}/activate", [
+                'avatar_id' => $avatar->id,
+                'variant' => 'unknown',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['variant']);
     }
 
     private function profileForUser(User $user): Profile
@@ -428,6 +525,8 @@ class AvatarControllerTest extends TestAPI
             'ai_video_id' => $aiVideo->id,
             'file' => $file,
             'status' => $status,
+            'generation_status' => $file ? AvatarGenerationStatus::Completed : AvatarGenerationStatus::ImageFailed,
+            'selected_variant' => $file ? AvatarVariant::Animation : null,
         ]);
     }
 

@@ -12,13 +12,13 @@ Demostrar que Bigmelo acepta una imagen clara de una persona y rechaza imágenes
 4. Un usuario local verificado con plan que incluya al menos una generación de avatar.
 5. Un perfil perteneciente al usuario.
 
-No ejecute este set contra producción salvo que se haya autorizado expresamente el costo de Rekognition y Runway.
+Con `APP_ENV=local`, la API omite Rekognition deliberadamente; en ese entorno solo se comprueban MediaPipe, las validaciones de archivo y el flujo posterior. Para validar rechazos autoritativos de Rekognition, ejecute el set automatizado en `testing` o use un entorno `staging` con credenciales y permisos de AWS. No ejecute este set contra producción salvo que se haya autorizado expresamente el costo de Rekognition y Runway.
 
 ## Datos
 
 | Caso | Archivo | Resultado esperado |
 |---|---|---|
-| Válido | `fixtures/valid-single-face.png` | MediaPipe aprueba; Rekognition aprueba; comienza generación |
+| Válido | `fixtures/valid-single-face.png` | MediaPipe aprueba; en local la API omite Rekognition y comienza generación |
 | Sin rostro | `fixtures/invalid-no-face.png` | rechazo `no_face` |
 | Dos rostros | `fixtures/invalid-two-faces.png` | rechazo `multiple_faces` |
 

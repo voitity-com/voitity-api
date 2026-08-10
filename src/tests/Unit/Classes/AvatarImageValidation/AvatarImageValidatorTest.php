@@ -13,6 +13,39 @@ use Tests\TestCase;
 class AvatarImageValidatorTest extends TestCase
 {
     #[Test]
+    public function it_skips_the_provider_in_the_local_environment(): void
+    {
+        config()->set('app.env', 'local');
+
+        $client = new class implements AvatarImageValidationClient
+        {
+            public int $calls = 0;
+
+            public function analyze(string $imageBytes): AvatarImageAnalysis
+            {
+                $this->calls++;
+
+                throw new \RuntimeException('The provider must not be called locally.');
+            }
+
+            public function name(): string
+            {
+                return 'fake_rekognition';
+            }
+        };
+
+        $result = (new AvatarImageValidator($client))->validate($this->imageUpload());
+
+        $this->assertTrue($result->valid);
+        $this->assertSame([], $result->reasonCodes);
+        $this->assertSame(0, $client->calls);
+        $this->assertSame([
+            'validation_skipped' => true,
+            'environment' => 'local',
+        ], $result->summary);
+    }
+
+    #[Test]
     public function it_accepts_one_clear_centered_face(): void
     {
         $result = $this->validatorWithFaces([$this->validFace()])->validate($this->imageUpload());

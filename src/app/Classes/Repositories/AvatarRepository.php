@@ -6,6 +6,8 @@ use App\Classes\AvatarImageValidation\AvatarImageValidator;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
+use App\Enums\AvatarVariant;
 use App\Events\AI\Images\AiImageForAvatarCreated;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
 use App\Exceptions\Avatar\AvatarImageValidationUnavailableException;
@@ -66,6 +68,7 @@ class AvatarRepository
                 throw new RuntimeException('Avatar source image could not be stored.');
             }
 
+            $originalFile = Storage::disk($disk)->url($path);
             $sourceImageUri = $this->sourceImageToDataUri($path, $sourceImage, $disk);
             $processingAvatar = ProfileAvatar::create([
                 'user_id' => $owner->id,
@@ -73,14 +76,18 @@ class AvatarRepository
                 'aiimage_id' => null,
                 'ai_video_id' => null,
                 'video_duration_seconds' => $this->avatarSpecification()->videoDurationSeconds(),
+                'original_file' => $originalFile,
                 'file' => null,
                 'status' => ProfileAvatar::STATUS_PROCESSING,
+                'generation_status' => AvatarGenerationStatus::Processing,
+                'selected_variant' => null,
             ]);
 
             Log::info('Avatar image generation started.', [
                 'actor_user_id' => $actor->id,
                 'owner_user_id' => $owner->id,
                 'profile_id' => $profile->id,
+                'profile_avatar_id' => $processingAvatar->id,
                 'source_image_path' => $path,
             ]);
 
@@ -88,6 +95,8 @@ class AvatarRepository
                 $this->avatarUsage()->reserve($owner, $profile, $processingAvatar);
             } catch (Throwable $e) {
                 $processingAvatar->status = ProfileAvatar::STATUS_FAILED;
+                $processingAvatar->generation_status = AvatarGenerationStatus::ImageFailed;
+                $processingAvatar->failure_reason = $e->getMessage();
                 $processingAvatar->save();
 
                 throw $e;
@@ -97,6 +106,8 @@ class AvatarRepository
                 $aiImage = $this->videoAIService()->generateImage($owner, $sourceImageUri, $profile);
             } catch (Throwable $e) {
                 $processingAvatar->status = ProfileAvatar::STATUS_FAILED;
+                $processingAvatar->generation_status = AvatarGenerationStatus::ImageFailed;
+                $processingAvatar->failure_reason = $e->getMessage();
                 $processingAvatar->save();
                 $this->avatarUsage()->release($processingAvatar);
 
@@ -190,7 +201,7 @@ class AvatarRepository
             ->get();
     }
 
-    public function activateAvatar(Profile $profile, ProfileAvatar $avatar): ProfileAvatar
+    public function activateAvatar(Profile $profile, ProfileAvatar $avatar, AvatarVariant $variant): ProfileAvatar
     {
         if ((int) $avatar->profile_id !== (int) $profile->id) {
             throw new RuntimeException('Avatar not found.');
@@ -200,18 +211,26 @@ class AvatarRepository
             throw new AvatarGenerationInProgressException('Avatar generation is still processing for this profile.');
         }
 
-        if (! $avatar->isSelectable()) {
-            throw new RuntimeException('Avatar cannot be activated.');
+        if (! $avatar->isSelectable($variant)) {
+            throw new RuntimeException('The selected avatar version is not available.');
         }
 
-        return DB::transaction(function () use ($profile, $avatar): ProfileAvatar {
+        return DB::transaction(function () use ($profile, $avatar, $variant): ProfileAvatar {
             ProfileAvatar::where('profile_id', $profile->id)
                 ->where('status', ProfileAvatar::STATUS_ACTIVE)
                 ->where('id', '<>', $avatar->id)
                 ->update(['status' => ProfileAvatar::STATUS_INACTIVE]);
 
+            $avatar->file = $avatar->variantFile($variant);
+            $avatar->selected_variant = $variant;
             $avatar->status = ProfileAvatar::STATUS_ACTIVE;
             $avatar->save();
+
+            Log::info('Avatar version activated.', [
+                'profile_id' => $profile->id,
+                'profile_avatar_id' => $avatar->id,
+                'variant' => $variant->value,
+            ]);
 
             return $avatar->fresh(['aiImage', 'aiVideo']);
         });

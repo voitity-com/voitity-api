@@ -7,6 +7,7 @@ use App\Classes\AvatarImageValidation\AvatarImageValidationClient;
 use App\Classes\AvatarImageValidation\AvatarImageValidator;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
@@ -75,6 +76,9 @@ class AvatarRepositoryTest extends TestCase
         $this->assertSame($profile->id, $aiImage->profile_id);
         $this->assertCount(1, Storage::disk('profiles')->allFiles('images/sources'));
         $avatar = ProfileAvatar::where('aiimage_id', $aiImage->id)->firstOrFail();
+        $sourcePath = Storage::disk('profiles')->allFiles('images/sources')[0];
+        $this->assertSame(Storage::disk('profiles')->url($sourcePath), $avatar->original_file);
+        $this->assertSame(AvatarGenerationStatus::Processing, $avatar->generation_status);
         $this->assertDatabaseHas('profile_avatars', [
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -168,6 +172,9 @@ class AvatarRepositoryTest extends TestCase
         $limit = $subscription->limit()->firstOrFail();
 
         $this->assertSame(ProfileAvatar::STATUS_FAILED, $avatar->status);
+        $this->assertSame(AvatarGenerationStatus::ImageFailed, $avatar->generation_status);
+        $this->assertNotNull($avatar->original_file);
+        $this->assertSame('Provider image generation failed.', $avatar->failure_reason);
         $this->assertSame(1, (int) $limit->avatar_images_remaining);
         $this->assertSame(2, (int) $limit->avatar_video_seconds_remaining);
         $this->assertDatabaseHas('subscription_uses', [

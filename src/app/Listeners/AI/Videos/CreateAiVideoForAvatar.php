@@ -5,6 +5,7 @@ namespace App\Listeners\AI\Videos;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\AiVideo as AiVideoModel;
@@ -112,7 +113,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
                 $aiVideo->failure_reason = $failureReason;
                 $aiVideo->save();
                 $avatar = $this->markAvatarFailed($aiImage->id, $failureReason, $failureCode);
-                $this->releaseAvatarUsage($avatar);
+                $this->finalizeImageOnlyAvatarUsage($avatar, $failureCode);
                 $this->notifyAvatarFailure($aiImage->id, $failureReason);
                 throw new RuntimeException('Video AI video generation did not return a source id.');
             }
@@ -153,7 +154,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
             ]);
 
         $avatar = $this->markAvatarFailed($event->aiImage->id, $failureReason);
-        $this->releaseAvatarUsage($avatar);
+        $this->finalizeImageOnlyAvatarUsage($avatar);
         $this->notifyAvatarFailure($event->aiImage->id, $failureReason);
 
         Log::error('CreateAiVideoForAvatar listener failed', [
@@ -181,6 +182,7 @@ class CreateAiVideoForAvatar implements ShouldQueue
         }
 
         $avatar->status = ProfileAvatar::STATUS_FAILED;
+        $avatar->generation_status = AvatarGenerationStatus::VideoFailed;
         $avatar->failure_code = $code;
         $avatar->failure_reason = $reason;
         $avatar->save();
@@ -215,13 +217,16 @@ class CreateAiVideoForAvatar implements ShouldQueue
         ]);
     }
 
-    private function releaseAvatarUsage(?ProfileAvatar $avatar): void
+    private function finalizeImageOnlyAvatarUsage(?ProfileAvatar $avatar, ?string $failureCode = null): void
     {
         if (! $avatar) {
             return;
         }
 
-        app(AvatarGenerationUsageService::class)->release($avatar);
+        app(AvatarGenerationUsageService::class)->finalizeImageOnly($avatar, [
+            'video_generation_failed' => true,
+            'failure_code' => $failureCode,
+        ]);
     }
 
     /**

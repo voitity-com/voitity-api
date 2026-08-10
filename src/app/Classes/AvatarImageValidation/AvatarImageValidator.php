@@ -19,6 +19,24 @@ class AvatarImageValidator
     public function validate(UploadedFile $image, string $locale = 'es'): AvatarImageValidationResult
     {
         $startedAt = microtime(true);
+        $environment = (string) config('app.env', 'production');
+
+        if ($environment === 'local') {
+            Log::info('Avatar source image validation skipped in local environment.', [
+                'environment' => $environment,
+                'provider' => $this->client->name(),
+            ]);
+
+            return new AvatarImageValidationResult(
+                valid: true,
+                reasonCodes: [],
+                summary: [
+                    'validation_skipped' => true,
+                    'environment' => $environment,
+                ],
+                requestId: null,
+            );
+        }
 
         try {
             [$bytes, $width, $height] = $this->normalizedImage($image);

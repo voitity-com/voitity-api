@@ -22,7 +22,7 @@ Los artefactos de MediaPipe están versionados con la aplicación:
 
 Esto evita descargar código o el modelo desde un CDN durante el uso normal.
 
-### 2. Validación obligatoria en la API
+### 2. Validación en la API
 
 `POST /api/avatar/generate` mantiene las validaciones de archivo del `GenerateAvatarRequest` y luego aplica el siguiente orden:
 
@@ -31,6 +31,8 @@ Esto evita descargar código o el modelo desde un CDN durante el uso normal.
 3. `AvatarImageValidator` decodifica la imagen con GD, elimina metadatos al normalizarla a JPEG y llama a `AvatarImageValidationClient`.
 4. El adaptador `RekognitionAvatarImageValidationClient` ejecuta `DetectFaces` con `Attributes=ALL` y bytes en memoria. La API de Rekognition es stateless: Bigmelo no crea colecciones faciales ni indexa identidades.
 5. Solo después de aprobar se guarda la fuente, se crea `ProfileAvatar`, se reserva el consumo y se llama a Runway.
+
+Cuando `config('app.env')` es exactamente `local`, `AvatarImageValidator` omite la llamada a Rekognition y registra `Avatar source image validation skipped in local environment.`. Esto permite desarrollar sin credenciales de AWS. Las validaciones del archivo y la prevalidación de MediaPipe en el navegador permanecen activas. En cualquier otro entorno —incluidos `testing`, `staging` y `production`— Rekognition sigue siendo obligatorio y falla de forma cerrada si no está disponible.
 
 La regla de negocio exige exactamente un rostro y evalúa:
 
@@ -55,7 +57,7 @@ Los umbrales están centralizados en `voitity-api/src/config/avatar-image-valida
 }
 ```
 
-Si Rekognition no está disponible, se devuelve HTTP 503 con `avatar_image_validation_unavailable`. En ambos casos no se almacena la imagen, no se crea `ProfileAvatar`, no se consume cuota y no se llama a Runway.
+Fuera de `local`, si Rekognition no está disponible, se devuelve HTTP 503 con `avatar_image_validation_unavailable`. En ese caso no se almacena la imagen, no se crea `ProfileAvatar`, no se consume cuota y no se llama a Runway.
 
 ### 3. Credenciales, IAM y privacidad
 
@@ -74,17 +76,44 @@ Los logs incluyen IDs internos, proveedor, request ID, duración, códigos de re
 Cuando la fuente fue aprobada, `AvatarRepository`:
 
 1. Guarda la fuente en el disco `videoai.profiles.disk`, carpeta `images/sources`.
-2. Crea un `ProfileAvatar` en estado `processing`.
-3. Reserva una imagen y los segundos de video definidos por `AvatarGenerationSpecification`.
-4. Envía a Runway la referencia junto al prompt de imagen y modelo configurados en `config/videoai.php`.
-5. Emite `AiImageForAvatarCreated`.
+2. Persiste la URL de ese recorte en `ProfileAvatar.original_file`. Esta es la versión `original`: el recorte de 1024 × 1024 aprobado por la persona, no el archivo completo sin recortar del dispositivo.
+3. Crea un `ProfileAvatar` en estado `processing` y `generation_status=processing`.
+4. Reserva una imagen y los segundos de video definidos por `AvatarGenerationSpecification`.
+5. Envía a Runway la referencia junto al prompt de imagen y modelo configurados en `config/videoai.php`.
+6. Emite `AiImageForAvatarCreated`.
 
 El procesamiento posterior es asíncrono:
 
 1. `GetAIImageForAvatar` consulta la tarea, descarga la imagen generada al disco de perfiles y emite `AiImageForAvatarGenerated`.
 2. `CreateAiVideoForAvatar` crea el clip con el modelo, prompt y duración configurados, y emite `AiVideoForAvatarCreated`.
 3. `GetAIVideoForAvatar` consulta la tarea, guarda el video, activa el nuevo avatar, inactiva el anterior y finaliza el consumo reservado.
-4. En fallos o timeouts se marca el avatar como `failed`, se libera la reserva y se notifica al dueño del perfil y a los administradores.
+4. En fallos o timeouts se marca la etapa correspondiente, se ajusta el consumo según los artefactos realmente producidos y se notifica al dueño del perfil y a los administradores.
+
+### Versiones disponibles e historial
+
+Cada `ProfileAvatar` representa un intento de generación y puede exponer hasta tres versiones:
+
+| Variante API | Fuente | Tipo |
+|---|---|---|
+| `original` | `profile_avatars.original_file` | Imagen recortada enviada al API |
+| `enhanced` | `aiimages.file` | Imagen mejorada por Runway |
+| `animation` | `aivideos.file` | Video generado desde la mejorada |
+
+`generation_status` conserva el resultado técnico del intento (`processing`, `completed`, `image_failed` o `video_failed`) aunque después se active una versión parcial. `selected_variant` indica cuál versión está en uso. El campo histórico `file` continúa siendo la fuente pública activa para mantener compatibilidad con el endpoint público y con `voitity-web`.
+
+`GET /api/avatar/{profile}/history` devuelve un objeto `variants` por intento. Cada versión informa `kind`, `status`, `file`, fallo y si está seleccionada. `POST /api/avatar/{profile}/activate` exige `avatar_id` y `variant`; el servidor resuelve el archivo desde sus relaciones y no acepta una URL enviada por el cliente.
+
+Reglas del historial:
+
+- Un rechazo de validación facial no almacena la fuente ni crea `ProfileAvatar`, por lo que no aparece.
+- Si falla la imagen mejorada, el intento conserva la original y marca `generation_status=image_failed`.
+- Si falla el video, conserva original y mejorada y marca `generation_status=video_failed`.
+- Si termina todo, conserva las tres, activa la animación por defecto y permite cambiar posteriormente a cualquiera de ellas.
+- Mientras haya una generación en curso no se cambia el avatar activo.
+
+En un fallo de imagen se libera la reserva completa. En un fallo de video, como la imagen mejorada sí se produjo, `AvatarGenerationUsageService::finalizeImageOnly` reemplaza la reserva por una imagen y cero segundos, finaliza ese consumo y devuelve los segundos de video. Los reintentos son idempotentes sobre la misma clave de uso.
+
+Los registros históricos creados antes de `original_file` no se relacionan automáticamente con objetos de `images/sources`: los nombres aleatorios anteriores no incluyen el ID del avatar y asociarlos por fecha sería inseguro. Para esos registros la API muestra las versiones mejorada y animación que sí estén relacionadas, y marca la original como no disponible.
 
 El disco de perfiles determina el almacenamiento sin bifurcar el código: localmente puede apuntar a filesystem y en producción al bucket S3 de perfiles.
 

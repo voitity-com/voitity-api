@@ -1,5 +1,7 @@
 # Informe de ejecución: validación de imagen de avatar
 
+> Nota de vigencia: este informe conserva la evidencia de una ejecución anterior contra Rekognition. El comportamiento actual omite la validación remota cuando `config('app.env') === 'local'`; los rechazos autoritativos del API se prueban en `testing` o `staging`.
+
 Fecha: 2026-08-10  
 Entorno: local (`voitity-admin` en `localhost:3000`, `voitity-api` en `localhost:8000`)  
 Resultado general: **APROBADO**

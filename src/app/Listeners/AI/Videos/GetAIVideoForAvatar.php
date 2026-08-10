@@ -5,6 +5,8 @@ namespace App\Listeners\AI\Videos;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\AvatarGenerationStatus;
+use App\Enums\AvatarVariant;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Models\ProfileAvatar;
 use App\Models\User;
@@ -98,7 +100,7 @@ class GetAIVideoForAvatar implements ShouldQueue
                 $aiVideo->failure_reason = $failureReason;
                 $aiVideo->save();
                 $avatar = $this->markAvatarFailed($event, $failureReason, $failureCode);
-                $this->releaseAvatarUsage($avatar);
+                $this->finalizeImageOnlyAvatarUsage($avatar, $failureCode);
                 $this->notifyAvatarFailure($event, $failureReason);
 
                 Log::error('AI video generation failed at provider', [
@@ -134,7 +136,7 @@ class GetAIVideoForAvatar implements ShouldQueue
             $aiVideo->failure_reason = $failureReason;
             $aiVideo->save();
             $avatar = $this->markAvatarFailed($event, $failureReason);
-            $this->releaseAvatarUsage($avatar);
+            $this->finalizeImageOnlyAvatarUsage($avatar);
             $this->notifyAvatarFailure($event, $failureReason);
         }
 
@@ -179,6 +181,8 @@ class GetAIVideoForAvatar implements ShouldQueue
                 ?? $avatar->video_duration_seconds;
             $avatar->file = $aiVideo->file;
             $avatar->status = ProfileAvatar::STATUS_ACTIVE;
+            $avatar->generation_status = AvatarGenerationStatus::Completed;
+            $avatar->selected_variant = AvatarVariant::Animation;
             $avatar->failure_code = null;
             $avatar->failure_reason = null;
             $avatar->save();
@@ -195,7 +199,7 @@ class GetAIVideoForAvatar implements ShouldQueue
             $aiVideo->failure_reason = $failureReason;
             $aiVideo->save();
             $avatar = $this->markAvatarFailedByVideo($aiVideo, $failureReason);
-            $this->releaseAvatarUsage($avatar);
+            $this->finalizeImageOnlyAvatarUsage($avatar);
             $this->notifyAvatarFailureByVideo($aiVideo, $failureReason);
 
             Log::error('AI video generation exceeded max attempts', [
@@ -256,6 +260,7 @@ class GetAIVideoForAvatar implements ShouldQueue
         }
 
         $avatar->status = ProfileAvatar::STATUS_FAILED;
+        $avatar->generation_status = AvatarGenerationStatus::VideoFailed;
         $avatar->failure_code = $code;
         $avatar->failure_reason = $reason;
         $avatar->save();
@@ -335,13 +340,16 @@ class GetAIVideoForAvatar implements ShouldQueue
         ]);
     }
 
-    private function releaseAvatarUsage(?ProfileAvatar $avatar): void
+    private function finalizeImageOnlyAvatarUsage(?ProfileAvatar $avatar, ?string $failureCode = null): void
     {
         if (! $avatar) {
             return;
         }
 
-        app(AvatarGenerationUsageService::class)->release($avatar);
+        app(AvatarGenerationUsageService::class)->finalizeImageOnly($avatar, [
+            'video_generation_failed' => true,
+            'failure_code' => $failureCode,
+        ]);
     }
 
     /**

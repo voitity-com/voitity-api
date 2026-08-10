@@ -7388,12 +7388,29 @@
                 "history"
               ]
             },
-            "description": "Lists previous avatars for profile_id, including active_avatar, processing_avatar, and all avatar rows ordered by latest update. Requires avatar:read. Non-admin users can only read their own profiles; admins can read any profile."
+            "description": "Lists previous avatar attempts for profile_id. Each item exposes generation_status, selected_variant and variants.original, variants.enhanced and variants.animation with their availability, file and failure state. Face-validation rejections never create a history item. Requires avatar:read. Non-admin users can only read their own profiles; admins can read any profile."
           },
           "response": []
         },
         {
           "name": "Activate Avatar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "pm.test('Avatar variant activation succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(json.data.selected_variant).to.eql(pm.collectionVariables.get('avatar_variant'));",
+                  "  pm.expect(json.data.file).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -7408,7 +7425,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"avatar_id\": \"{{profile_avatar_id}}\"\n}"
+              "raw": "{\n  \"avatar_id\": \"{{profile_avatar_id}}\",\n  \"variant\": \"{{avatar_variant}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/avatar/{{profile_id}}/activate",
@@ -7422,7 +7439,7 @@
                 "activate"
               ]
             },
-            "description": "Activates a previous avatar for profile_id and marks the previously active avatar inactive. Requires avatar:write. Returns 409 while a generation is processing and 422 when the selected avatar is not selectable."
+            "description": "Activates one available version of a previous avatar attempt and marks the previously active avatar inactive. Set avatar_variant to original, enhanced or animation. The server resolves the stored file and never accepts a client-provided URL. Requires avatar:write. Returns 409 while a generation is processing and 422 when that version is unavailable."
           },
           "response": []
         }
@@ -7438,6 +7455,11 @@
     {
       "key": "invalid_avatar_image_file_path",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "avatar_variant",
+      "value": "animation",
       "type": "string"
     },
     {
