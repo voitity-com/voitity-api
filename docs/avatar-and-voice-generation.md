@@ -89,6 +89,14 @@ El procesamiento posterior es asíncrono:
 3. `GetAIVideoForAvatar` consulta la tarea, guarda el video, activa el nuevo avatar, inactiva el anterior y finaliza el consumo reservado.
 4. En fallos o timeouts se marca la etapa correspondiente, se ajusta el consumo según los artefactos realmente producidos y se notifica al dueño del perfil y a los administradores.
 
+#### Restricción del prompt de imagen en Runway
+
+La operación `POST /v1/text_to_image` usada con el modelo de imagen de Runway acepta `promptText` con un máximo de **1.000 caracteres**. El prompt predeterminado de `config/videoai.php` debe mantenerse dentro de ese límite, contando el texto final que realmente se envía al proveedor.
+
+Si se supera el límite, Runway responde HTTP 400 con `Validation of body failed` y un issue `too_big` para `promptText`. Como la respuesta rechazada no contiene un ID de tarea, la capa de aplicación también puede mostrar el mensaje secundario `Video AI image generation did not return a source id.`. Para diagnosticarlo debe revisarse primero el log `Runway: Image generation failed`, que conserva el estado HTTP y la respuesta sanitizada del proveedor.
+
+La prueba `VideoAIServiceTest::default_image_prompt_respects_runway_character_limit` verifica que el prompt no esté vacío y que `mb_strlen(config('videoai.prompts.image')) <= 1000`. Cualquier modificación futura del prompt debe conservar esta prueba aprobada antes de probar con la API real.
+
 ### Versiones disponibles e historial
 
 Cada `ProfileAvatar` representa un intento de generación y puede exponer hasta tres versiones:
@@ -161,6 +169,7 @@ Pruebas automatizadas relevantes:
 - `AvatarImageValidatorTest`: aceptación y códigos de rechazo por rostro/calidad.
 - `AvatarRepositoryTest`: demuestra que una imagen inválida no se almacena, no crea avatar, no reserva cuota y no llama al generador.
 - `AvatarControllerTest`: contrato HTTP 422 traducido.
+- `VideoAIServiceTest::default_image_prompt_respects_runway_character_limit`: impide enviar a Runway un prompt de imagen mayor de 1.000 caracteres.
 - Typecheck, lint y build del administrador: comprueban la integración de MediaPipe y los recursos estáticos.
 
 La colección `voitity-api/postman/voitity-api.postman_collection.json` incluye `Generate Avatar` y el caso negativo `Reject Invalid Avatar Image`. Para una prueba manual configure `avatar_image_file_path` e `invalid_avatar_image_file_path`.
