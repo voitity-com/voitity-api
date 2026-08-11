@@ -28,7 +28,7 @@ class StoreProfileInteractionRequest extends FormRequest
             'destination_type' => ['nullable', Rule::in(['provider_video', 'provider_channel'])],
             'surface' => ['nullable', 'string', Rule::in([
                 'profile_page', 'product_image', 'product_button', 'chat_media_card',
-                'chat_media_modal', 'profile_social_nav', 'chat_social_link',
+                'chat_media_modal', 'profile_social_nav', 'chat_social_link', 'widget_chat',
             ])],
             'media_type' => ['nullable', Rule::in(['image', 'video'])],
             'metadata' => ['nullable', 'array'],

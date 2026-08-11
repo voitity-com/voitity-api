@@ -114,6 +114,10 @@ class ProfileControllerTest extends TestAPI
                 'enabled' => false,
             ]);
         }
+        $this->assertDatabaseHas('profile_widgets', [
+            'profile_id' => $new_profile->id,
+            'enabled' => false,
+        ]);
         $this->assertDatabaseHas('subscription_uses', [
             'user_id' => $new_profile->user_id,
             'profile_id' => $new_profile->id,
@@ -274,6 +278,10 @@ class ProfileControllerTest extends TestAPI
     public function test_user_can_not_show_profile_if_he_is_not_owner()
     {
         $user = User::factory()->create(['role' => 'admin']);
+        $reader = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
         $profile = Profile::create([
             'user_id' => $user->id,
             'name' => $this->faker->name,
@@ -282,11 +290,27 @@ class ProfileControllerTest extends TestAPI
             'personality' => $this->faker->text(100),
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($reader->email, 'test123'))
             ->json('GET', self::ENDPOINT_PROFILE.'/'.$profile->id);
 
         $response->assertStatus(404);
         $response->assertJsonPath('message', 'Profile not found.');
+    }
+
+    public function test_admin_can_show_profile_if_he_is_not_owner()
+    {
+        $owner = User::factory()->create(['role' => 'user']);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = Profile::factory()->create(['user_id' => $owner->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->getToken($admin->email, 'test123'))
+            ->getJson(self::ENDPOINT_PROFILE.'/'.$profile->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Profile retrieved successfully.')
+            ->assertJsonPath('data.id', $profile->id);
     }
 
     public function test_user_can_show_profile()

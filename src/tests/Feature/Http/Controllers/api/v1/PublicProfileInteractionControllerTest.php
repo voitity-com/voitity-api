@@ -14,6 +14,27 @@ use Illuminate\Support\Str;
 
 class PublicProfileInteractionControllerTest extends TestAPI
 {
+    public function test_embedded_profile_view_accepts_widget_chat_surface(): void
+    {
+        $profile = Profile::factory()->for(User::factory())->create([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+
+        $this->postJson("/api/public/profiles/{$profile->id}/interactions", [
+            'event_id' => (string) Str::uuid(),
+            'visitor_id' => (string) Str::uuid(),
+            'event_type' => 'profile_viewed',
+            'surface' => 'widget_chat',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('profile_interaction_events', [
+            'profile_id' => $profile->id,
+            'event_type' => 'profile_viewed',
+            'surface' => 'widget_chat',
+        ]);
+    }
+
     public function test_public_profile_view_is_idempotent_and_visitor_identifier_is_hashed(): void
     {
         $profile = Profile::factory()->for(User::factory())->create([
