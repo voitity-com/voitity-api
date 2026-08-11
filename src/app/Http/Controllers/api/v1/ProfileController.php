@@ -22,6 +22,7 @@ use App\Models\Voice;
 use App\Services\Features\FeatureService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileVoiceSettings;
+use App\Services\ProfileWidgetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -161,7 +162,8 @@ class ProfileController extends Controller
         StoreProfileRequest $request,
         SubscriptionEntitlementService $entitlements,
         SubscriptionUsageRecorder $usageRecorder,
-        FeatureService $features
+        FeatureService $features,
+        ProfileWidgetService $widgets,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -172,12 +174,13 @@ class ProfileController extends Controller
 
             $entitlements->assertCanUse($user, ['profiles' => 1]);
 
-            [$profile] = DB::transaction(function () use ($features, $request, $usageRecorder, $user): array {
+            [$profile] = DB::transaction(function () use ($features, $request, $usageRecorder, $user, $widgets): array {
                 $profile = $user->profiles()->create(array_merge($request->validated(), [
                     'active' => false,
                     'status' => ProfileStatus::Draft,
                 ]));
                 $features->initializeProfileFeatures($profile, false);
+                $widgets->createForProfile($profile);
                 $voice = $this->createBaseVoiceForProfile($profile);
 
                 $usageRecorder->record(
@@ -295,7 +298,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            if (! $profile || $profile->user_id !== $user->id) {
+            if ($user->role !== 'admin' && (int) $profile->user_id !== (int) $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 

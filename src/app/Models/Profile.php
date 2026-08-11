@@ -128,6 +128,11 @@ class Profile extends Model
         return $this->hasMany(ProfileFeatureSetting::class);
     }
 
+    public function widget(): HasOne
+    {
+        return $this->hasOne(ProfileWidget::class);
+    }
+
     public function products(): HasMany
     {
         return $this->hasMany(ProfileProduct::class);

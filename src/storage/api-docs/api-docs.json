@@ -507,6 +507,9 @@
                     "422": {
                         "description": "Validation error"
                     },
+                    "503": {
+                        "description": "Image validation service unavailable"
+                    },
                     "500": {
                         "description": "Unexpected error"
                     }
@@ -2614,6 +2617,95 @@
                 ]
             }
         },
+        "/api/profile/{profile}/widget": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Get the embeddable widget settings for a profile",
+                "operationId": "8f82e972c15e812e1469c6766256d6f4",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Widget settings retrieved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Enable or disable the embeddable profile widget",
+                "operationId": "80e78bd9ce4ce6c85bebb30b3100e7bf",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "enabled"
+                                ],
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Widget settings updated"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/public/profiles/{profile}/interactions": {
             "post": {
                 "tags": [
@@ -2702,6 +2794,34 @@
                     },
                     "422": {
                         "description": "Invalid event or subject"
+                    }
+                }
+            }
+        },
+        "/api/public/widgets/{publicKey}": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Resolve the safe public configuration for an enabled profile widget",
+                "operationId": "3ec2c70fca4a6cd3efbfeb8138b363ea",
+                "parameters": [
+                    {
+                        "name": "publicKey",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Public widget configuration retrieved"
+                    },
+                    "404": {
+                        "description": "Widget not available"
                     }
                 }
             }

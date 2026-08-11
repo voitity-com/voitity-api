@@ -24,8 +24,10 @@ use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
 use App\Http\Controllers\api\v1\ProfileOtherIntegrationController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
+use App\Http\Controllers\api\v1\ProfileWidgetController;
 use App\Http\Controllers\api\v1\PublicProfileController;
 use App\Http\Controllers\api\v1\PublicProfileInteractionController;
+use App\Http\Controllers\api\v1\PublicProfileWidgetController;
 use App\Http\Controllers\api\v1\SubscriptionActionsController;
 use App\Http\Controllers\api\v1\SubscriptionLimitsController;
 use App\Http\Controllers\api\v1\SubscriptionPlansController;
@@ -52,6 +54,8 @@ Route::prefix('/public')->group(function () {
     Route::get('/seo/profiles', [PublicProfileController::class, 'seoIndex'])
         ->middleware('throttle:public-profile-reads');
     Route::get('/social-networks', [PublicProfileController::class, 'socialNetworks'])
+        ->middleware('throttle:public-profile-reads');
+    Route::get('/widgets/{publicKey}', [PublicProfileWidgetController::class, 'show'])
         ->middleware('throttle:public-profile-reads');
     Route::get('/profiles/{alias}', [PublicProfileController::class, 'show'])
         ->middleware('throttle:public-profile-reads');
@@ -134,6 +138,8 @@ Route::prefix('/profile')->group(function () {
     Route::delete('/{profile}/sources/{source}', [ProfileKnowledgeController::class, 'deleteSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/features', [ProfileFeatureController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/features', [ProfileFeatureController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/widget', [ProfileWidgetController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::patch('/{profile}/widget', [ProfileWidgetController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/integrations', [ProfileIntegrationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/integrations/instagram/connect-url', [ProfileIntegrationController::class, 'instagramConnectUrl'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/integrations/instagram/sync', [ProfileIntegrationController::class, 'instagramSync'])->middleware(['auth:sanctum', 'abilities:profile:write']);

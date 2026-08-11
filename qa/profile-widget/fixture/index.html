@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sitio anfitrión de prueba | Bigmelo Widget QA</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #f8fafc; background: #111827; font-family: Georgia, serif; }
+      main { width: min(960px, calc(100% - 40px)); margin: 0 auto; padding: 72px 0; }
+      h1 { max-width: 760px; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 0.95; }
+      p { max-width: 650px; color: #cbd5e1; font-size: 1.15rem; line-height: 1.7; }
+      button, img, iframe { border: 10px solid hotpink !important; border-radius: 0 !important; font-family: monospace !important; }
+      .note { margin-top: 48px; padding: 20px; color: #111827; background: #facc15; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Fixture externo de QA</p>
+      <h1>Una página con estilos deliberadamente agresivos.</h1>
+      <p>
+        El widget debe conservar su avatar circular, globo, tipografía y panel aunque este sitio cambie globalmente
+        botones, imágenes e iframes.
+      </p>
+      <p class="note" id="status">Agrega ?key=UUID a la URL para cargar el widget.</p>
+    </main>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const key = params.get('key');
+      const web = params.get('web') || 'http://localhost:3001';
+      const api = params.get('api') || 'http://localhost:8000';
+
+      if (key) {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = `${web.replace(/\/$/, '')}/widget/v1.js`;
+        script.dataset.bigmeloWidget = key;
+        script.dataset.bigmeloApi = api.replace(/\/$/, '');
+        document.body.append(script);
+        document.getElementById('status').textContent = 'Widget solicitado. Verifica la esquina inferior derecha.';
+      }
+    </script>
+  </body>
+</html>

@@ -3315,6 +3315,51 @@
             "description": "Records an idempotent, allowlisted interaction. media_shown is server-owned and cannot be submitted by clients."
           },
           "response": []
+        },
+        {
+          "name": "Get Public Widget Configuration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Enabled widget is public', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Owner data is not exposed', function () {",
+                  "  pm.expect(json.data.widget.profile).not.to.have.property('user_id');",
+                  "  pm.expect(json.data.widget).not.to.have.property('enabled');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/public/widgets/{{public_widget_key}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "widgets",
+                "{{public_widget_key}}"
+              ]
+            },
+            "description": "Returns the safe launcher and profile identity for an enabled widget whose profile is active and published. Otherwise returns 404."
+          },
+          "response": []
         }
       ]
     },
@@ -3414,6 +3459,96 @@
               ]
             },
             "description": "Retrieves the profile identified by profile_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile Widget",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Widget settings are returned', function () { pm.response.to.have.status(200); });",
+                  "if (json.data && json.data.widget && json.data.widget.public_key) {",
+                  "  pm.collectionVariables.set('public_widget_key', json.data.widget.public_key);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/widget",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "widget"
+              ]
+            },
+            "description": "Returns the stable public key and current availability of the profile widget. Existing profiles receive an explicitly disabled widget on first access. Requires profile:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Widget",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Widget setting is updated', function () { pm.response.to.have.status(200); });",
+                  "if (json.data && json.data.widget && json.data.widget.public_key) {",
+                  "  pm.collectionVariables.set('public_widget_key', json.data.widget.public_key);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": {{widget_enabled}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/widget",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "widget"
+              ]
+            },
+            "description": "Enables or disables the widget without changing its public key. Requires profile:write."
           },
           "response": []
         },
@@ -7465,6 +7600,16 @@
     {
       "key": "public_profile_id",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "public_widget_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "widget_enabled",
+      "value": "true",
       "type": "string"
     },
     {
