@@ -17,16 +17,22 @@ class ProfileKnowledgeRetriever
         private readonly ProfileKnowledgeQueryIntentAnalyzer $intentAnalyzer,
     ) {}
 
-    public function retrieve(Profile $profile, string $query): ProfileKnowledgeRetrievalResult
-    {
+    public function retrieve(
+        Profile $profile,
+        string $query,
+        ?string $intentQuery = null,
+    ): ProfileKnowledgeRetrievalResult {
         $startedAt = hrtime(true);
-        $embedding = $this->embeddings->embed([$query]);
+        $intentQuery ??= $query;
+        $embeddingInputs = $intentQuery === $query ? [$query] : [$query, $intentQuery];
+        $embedding = $this->embeddings->embed($embeddingInputs);
         $vector = $embedding->vectors[0] ?? [];
+        $intentVector = $embedding->vectors[1] ?? $vector;
         $dimensions = (int) config('ai-knowledge.embedding.dimensions', 1536);
-        $intent = $this->intentAnalyzer->analyze($query);
+        $intent = $this->intentAnalyzer->analyze($intentQuery);
         $forcedTypes = $intent->sourceTypes;
 
-        if (count($vector) !== $dimensions) {
+        if (count($vector) !== $dimensions || count($intentVector) !== $dimensions) {
             throw new \RuntimeException('Query embedding dimensions do not match the configured knowledge index.');
         }
 
@@ -34,9 +40,9 @@ class ProfileKnowledgeRetriever
             ? $this->postgresCandidates($profile, $vector)
             : $this->portableCandidates($profile, $vector);
         $candidates = collect([
-            ...$this->lexicalCandidates($profile, $vector, $intent)->all(),
+            ...$this->lexicalCandidates($profile, $intentVector, $intent)->all(),
+            ...$this->forcedCandidates($profile, $intentVector, $intent)->all(),
             ...$candidates->all(),
-            ...$this->forcedCandidates($profile, $vector, $intent)->all(),
         ])
             ->unique('id')
             ->reject(fn (ProfileKnowledgeChunk $chunk): bool => in_array($chunk->source_type, $intent->excludedSourceTypes, true))
@@ -52,7 +58,13 @@ class ProfileKnowledgeRetriever
                 $keyword = $this->keywordScore($chunk, $queryTerms);
                 $lexical = max(0, min(1, (float) ($chunk->getAttribute('lexical_score') ?? 0)));
                 $identifier = $this->identifierScore($chunk, $intent->identifiers);
-                $forced = $this->isForcedResult($chunk, $intent, max($keyword, $lexical), $identifier);
+                $forced = $this->isForcedResult(
+                    $chunk,
+                    $intent,
+                    $semantic,
+                    max($keyword, $lexical),
+                    $identifier,
+                );
                 $score = max(
                     $semantic,
                     ($semantic * 0.65) + (max($keyword, $lexical) * 0.25) + ($identifier * 0.1),
@@ -93,6 +105,7 @@ class ProfileKnowledgeRetriever
             'source_types' => array_values(array_unique(array_column($items, 'source_type'))),
             'intent_source_types' => $intent->sourceTypes,
             'intent_providers' => $intent->providers,
+            'intent_query_embedded_separately' => count($embeddingInputs) > 1,
             'scores' => collect($items)->map(fn (array $item): array => [
                 'chunk_id' => $item['chunk_id'],
                 'score' => round($item['score'], 4),
@@ -245,16 +258,21 @@ class ProfileKnowledgeRetriever
                 ->get();
         }
 
-        return $query->limit(20)->get()->each(function (ProfileKnowledgeChunk $chunk) use ($vector): void {
-            $stored = $chunk->getAttribute('embedding');
-            $stored = is_string($stored) ? json_decode($stored, true) : $stored;
-            $chunk->setAttribute('semantic_score', $this->cosineSimilarity($vector, is_array($stored) ? $stored : []));
-        });
+        return $query->get()
+            ->each(function (ProfileKnowledgeChunk $chunk) use ($vector): void {
+                $stored = $chunk->getAttribute('embedding');
+                $stored = is_string($stored) ? json_decode($stored, true) : $stored;
+                $chunk->setAttribute('semantic_score', $this->cosineSimilarity($vector, is_array($stored) ? $stored : []));
+            })
+            ->sortByDesc(fn (ProfileKnowledgeChunk $chunk): float => (float) $chunk->getAttribute('semantic_score'))
+            ->take(20)
+            ->values();
     }
 
     private function isForcedResult(
         ProfileKnowledgeChunk $chunk,
         ProfileKnowledgeQueryIntent $intent,
+        float $semanticScore,
         float $lexicalScore,
         float $identifierScore,
     ): bool {
@@ -277,7 +295,14 @@ class ProfileKnowledgeRetriever
         }
 
         if ($chunk->source_type === 'product' && $intent->productRecommendation) {
-            return $lexicalScore > 0 || $identifierScore > 0 || $intent->identifiers === [];
+            if ($intent->product) {
+                return $lexicalScore > 0 || $identifierScore > 0 || $intent->identifiers === [];
+            }
+
+            return max($semanticScore, $lexicalScore) >= (float) config(
+                'ai-knowledge.retrieval.product_recommendation_minimum_score',
+                0.45,
+            );
         }
 
         return false;
@@ -311,13 +336,35 @@ class ProfileKnowledgeRetriever
     private function selectWithinBudget(Collection $ranked, array $forcedTypes, int $topK, int $maxTokens): Collection
     {
         $forcedAllowance = $forcedTypes === [] ? 0 : min(6, max(2, $topK));
-        $limit = $topK + $forcedAllowance;
+        $limit = max($topK + $forcedAllowance, count(array_unique($forcedTypes)));
         $selected = collect();
         $tokens = 0;
+
+        foreach (array_values(array_unique($forcedTypes)) as $sourceType) {
+            $item = $ranked->first(fn (array $candidate): bool => $candidate['forced']
+                && $candidate['chunk']->source_type === $sourceType);
+
+            if ($item === null) {
+                continue;
+            }
+
+            $itemTokens = $this->estimatedTokens($item['chunk']->content);
+
+            if ($selected->isNotEmpty() && $tokens + $itemTokens > $maxTokens) {
+                continue;
+            }
+
+            $selected->push($item);
+            $tokens += $itemTokens;
+        }
 
         foreach ($ranked as $item) {
             if ($selected->count() >= $limit) {
                 break;
+            }
+
+            if ($selected->contains(fn (array $selectedItem): bool => $selectedItem['chunk']->id === $item['chunk']->id)) {
+                continue;
             }
 
             $itemTokens = $this->estimatedTokens($item['chunk']->content);

@@ -41,7 +41,8 @@ class ProfileKnowledgePromptContextService
         return new ProfileKnowledgePromptContext(
             retrieval: $this->retriever->retrieve(
                 $profile,
-                $this->retrievalQuery($profile, $message, $chatId, $currentMessageId)
+                $this->retrievalQuery($profile, $message, $chatId, $currentMessageId),
+                $message,
             ),
             indexId: (int) $readiness['index']->id,
         );

@@ -167,19 +167,22 @@ La configuración actual usa `text-embedding-3-small` con 1536 dimensiones. Camb
 
 El retrieval ya no depende exclusivamente de similitud semántica:
 
-1. Se analiza la intención: medios, solicitud explícita de mostrar, enlace social, producto, recomendación, proveedor, términos e identificadores numéricos.
-2. pgvector obtiene candidatos semánticos por distancia coseno.
-3. PostgreSQL full-text search agrega candidatos léxicos con prefijos; esto recupera nombres, referencias, lugares y palabras exactas aunque no estén en el top semántico.
-4. Se agregan candidatos por tipo según la intención.
-5. El ranking combina similitud semántica, coincidencia léxica, palabras en contenido/metadatos e identificadores exactos.
-6. Una referencia exacta, por ejemplo `61385`, puede superar a un resultado semánticamente cercano pero incorrecto.
-7. Se aplican umbral, `top_k` y presupuesto de contexto.
+1. Se analiza la intención usando únicamente el mensaje actual del visitante: medios, solicitud explícita de mostrar, enlace social, producto, necesidad concreta, recomendación, proveedor, términos e identificadores numéricos. El historial reciente sigue formando parte de una consulta semántica contextual, pero una respuesta anterior del asistente no puede activar por sí sola YouTube, TikTok u otro proveedor en el turno nuevo.
+2. Cuando existe historial, los embeddings de la consulta contextual y del mensaje actual se calculan juntos en un solo batch. La consulta contextual conserva la resolución de seguimientos como “¿cuánto cuesta?”, mientras el vector del mensaje actual puntúa los candidatos forzados por intención sin contaminación del turno anterior.
+3. pgvector obtiene candidatos semánticos por distancia coseno.
+4. PostgreSQL full-text search agrega candidatos léxicos con prefijos; esto recupera nombres, referencias, lugares y palabras exactas aunque no estén en el top semántico.
+5. Se agregan candidatos por tipo según la intención.
+6. El ranking combina similitud semántica, coincidencia léxica, palabras en contenido/metadatos e identificadores exactos.
+7. Una referencia exacta, por ejemplo `61385`, puede superar a un resultado semánticamente cercano pero incorrecto.
+8. Antes de completar el ranking global se reserva el mejor resultado forzado de cada tipo solicitado. Así un producto relevante y su guía no quedan desplazados por hechos o medios con un score ligeramente mayor.
+9. Se aplican umbral, `top_k` y presupuesto de contexto. Una necesidad indirecta solo fuerza un producto si su similitud semántica o léxica alcanza `0.45`; una relación débil no genera una recomendación.
 
 Reglas de intención importantes:
 
 - pedir una foto, video, publicación o contenido busca `integration_media`;
 - pedir el perfil, usuario, canal o link de una red busca `social_link` y excluye medios de esa red cuando no se pidió contenido;
-- pedir un producto o una recomendación busca `product` y `product_guidance`;
+- pedir un producto, solicitar una recomendación o expresar una meta concreta que puede resolver un producto busca `product` y `product_guidance`;
+- cuando la meta o recomendación no solicita contenido multimedia, `integration_media` se excluye para que un video recuperado por el historial no desplace el producto;
 - proveedores como Instagram, TikTok, Facebook, YouTube, LinkedIn, GitHub, OnlyFans, X, blog, sitio web y diario ayudan a restringir el origen.
 
 El retrieval registra `semantic_score`, `lexical_score`, `keyword_score`, `identifier_score`, score final y si el resultado fue forzado por intención.
@@ -198,6 +201,7 @@ La selección vectorial nunca autoriza por sí sola un adjunto:
 - si el modelo omite una referencia de medio, `AnswerBuilder` solo la infiere cuando pregunta y respuesta comparten una coincidencia factual fuerte con el mismo medio recuperado. La similitud vectorial por sí sola no adjunta nada;
 - si una respuesta factual queda vacía pese a existir un único medio fuertemente coincidente, se responde con su observación canónica sin inventar información;
 - si una respuesta menciona por nombre exacto productos recuperados pero omite sus IDs, se construyen sus tarjetas desde los registros publicados;
+- para una necesidad concreta con productos recuperados, si el modelo omite `product_action`, se adjunta de forma determinista el producto recuperado con mayor score. El texto natural permanece generado por la IA; solo ante una respuesta vacía o contradictoria se usa un mensaje localizado de respaldo;
 - los enlaces sociales indirectos se resuelven por intención y sinónimos, pero el botón solo se construye desde un `social_link` recuperado y una URL vigente. El texto sigue siendo generado por IA; solo el adjunto es determinista;
 - una solicitud de link social no se convierte en tarjeta de contenido, y una solicitud de contenido no agrega automáticamente todos los botones sociales.
 
@@ -221,7 +225,7 @@ No existe comparación contra el prompt legacy ni fallback técnico hacia él. L
 
 La indexación registra perfil, modelo, dimensiones, ejecución forzada, chunks totales/activos/recalculados, tokens de embeddings, duplicados detectados y errores.
 
-La recuperación registra perfil, IDs y tipos recuperados, intención detectada, proveedores, tokens de consulta/contexto y latencia. No escribe el texto de los chunks en el log.
+La recuperación registra perfil, IDs y tipos recuperados, intención detectada desde el mensaje actual, proveedores, tokens de consulta/contexto y latencia. No escribe el texto de los chunks en el log. La recuperación determinista de una tarjeta registra además `reason` (`answer_product_name` o `retrieved_concrete_need`) y los IDs validados.
 
 `messages.data.chat_ai.response._bigmelo.knowledge` guarda `mode=rag`, ID del índice, `retrieved_sources`, scores y métricas. Esa metadata permite reproducir por qué se mostró una respuesta, una tarjeta o un link sin duplicar el texto indexado.
 

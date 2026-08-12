@@ -29,6 +29,7 @@ return [
         'candidate_limit' => max(5, (int) env('AI_KNOWLEDGE_RETRIEVAL_CANDIDATE_LIMIT', 40)),
         'lexical_candidate_limit' => max(5, (int) env('AI_KNOWLEDGE_RETRIEVAL_LEXICAL_CANDIDATE_LIMIT', 30)),
         'minimum_score' => min(1, max(0, (float) env('AI_KNOWLEDGE_RETRIEVAL_MINIMUM_SCORE', 0.35))),
+        'product_recommendation_minimum_score' => 0.45,
         'max_context_tokens' => max(500, (int) env('AI_KNOWLEDGE_MAX_CONTEXT_TOKENS', 2500)),
         'proactive_media_enabled' => filter_var(env('AI_KNOWLEDGE_PROACTIVE_MEDIA_ENABLED', false), FILTER_VALIDATE_BOOL),
     ],

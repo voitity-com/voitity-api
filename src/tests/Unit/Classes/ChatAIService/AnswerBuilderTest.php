@@ -3098,6 +3098,67 @@ class AnswerBuilderTest extends TestCase
         );
     }
 
+    public function test_rag_deterministically_attaches_a_retrieved_product_for_a_concrete_need(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'locale' => 'es',
+            'products_enabled' => true,
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Bigmelo',
+            'description' => 'Crea una presencia digital interactiva con inteligencia artificial.',
+            'image_url' => 'https://cdn.example.com/bigmelo.png',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://bigmelo.com/#plans',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Yo quiero construir mi perfil con inteligencia artificial',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Puedo ayudarte a construir una presencia digital interactiva.',
+                'media_request' => false,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'product_request' => false,
+                'product_action' => 'none',
+                'product_ids' => [],
+                'references' => [],
+                'constraints' => [],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'product',
+                            'source_id' => (string) $product->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$product->id], collect($response['products'])->pluck('id')->all());
+        $this->assertSame('Puedo ayudarte a construir una presencia digital interactiva.', $response['text']);
+    }
+
     public function test_rag_ignores_media_types_misplaced_in_source_type_constraints(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);

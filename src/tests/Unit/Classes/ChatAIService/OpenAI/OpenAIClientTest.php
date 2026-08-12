@@ -270,8 +270,9 @@ class OpenAIClientTest extends TestCase
                 && str_contains($prompt, 'Profile-specific product recommendation guidance')
                 && str_contains($prompt, 'Si habla de fútbol, ofrece ayudarle a elegir un balón.')
                 && str_contains($prompt, 'authoritative for selecting which published product')
-                && str_contains($prompt, 'keep product_action as "none"')
-                && str_contains($prompt, 'explicitly requests a recommendation')
+                && str_contains($prompt, 'states a concrete goal or need')
+                && str_contains($prompt, 'recommend it naturally and immediately')
+                && str_contains($prompt, 'Do not show products for a merely topical mention')
                 && str_contains($prompt, '"references" as an array of objects')
                 && str_contains($prompt, 'Direct product mentions and explicit product requests keep the existing');
         });

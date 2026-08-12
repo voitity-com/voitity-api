@@ -57,8 +57,10 @@ class AnswerBuilder
         $queryIntent = app(ProfileKnowledgeQueryIntentAnalyzer::class)->analyze($question->text);
 
         if ($usesKnowledgeRetrieval) {
+            $retrievedProductOrder = array_flip($retrievedProductIds);
             $availableProducts = collect($availableProducts)
                 ->filter(fn (array $product): bool => in_array((int) ($product['id'] ?? 0), $retrievedProductIds, true))
+                ->sortBy(fn (array $product): int => $retrievedProductOrder[(int) ($product['id'] ?? 0)] ?? PHP_INT_MAX)
                 ->values()
                 ->all();
         }
@@ -135,15 +137,34 @@ class AnswerBuilder
         if ($productPayload === [] && $queryIntent->productRecommendation) {
             $mentionedProductIds = $this->productIdsMentionedInText($answerText, $availableProducts);
             $productPayload = $productService->payloadForIds($mentionedProductIds, $availableProducts);
+            $recoveryReason = 'answer_product_name';
+
+            if ($productPayload === [] && ! $queryIntent->product && $availableProducts !== []) {
+                $productPayload = $productService->payloadForIds(
+                    [(int) $availableProducts[0]['id']],
+                    $availableProducts,
+                );
+                $recoveryReason = 'retrieved_concrete_need';
+            }
 
             if ($productPayload !== []) {
-                Log::info('Recovered product cards from validated AI answer references.', [
+                Log::info('Recovered product cards from validated retrieval.', [
                     'profile_id' => $profile->id,
                     'chat_id' => $question->chat_id,
                     'question_message_id' => $question->id,
+                    'reason' => $recoveryReason,
                     'product_ids' => collect($productPayload)->pluck('id')->all(),
                 ]);
             }
+        }
+
+        if (
+            $productPayload !== []
+            && $queryIntent->productRecommendation
+            && ($hasNoAnswerMarker || trim($answerText) === '' || $this->answerIndicatesNoAnswer($answerText))
+        ) {
+            $answerText = $this->productRecommendationFallbackAnswer($productPayload, $profile);
+            $source = 'profile_product_rules';
         }
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
@@ -1463,6 +1484,30 @@ class AnswerBuilder
         ]);
 
         return implode(' ', $sentences);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $productPayload
+     */
+    private function productRecommendationFallbackAnswer(array $productPayload, Profile $profile): string
+    {
+        $names = collect($productPayload)
+            ->pluck('name')
+            ->filter(fn ($name): bool => is_string($name) && trim($name) !== '')
+            ->map(fn (string $name): string => trim($name))
+            ->values()
+            ->all();
+        $products = $this->humanList($names, $this->profileLocale($profile));
+
+        if ($products === '') {
+            return $this->profileLocale($profile) === 'en'
+                ? 'I found an option that fits what you are looking for. I am showing it here.'
+                : 'Encontré una opción que encaja con lo que buscas. Te la muestro aquí.';
+        }
+
+        return $this->profileLocale($profile) === 'en'
+            ? "An option that fits what you are looking for is {$products}. I am showing it here."
+            : "Una opción que encaja con lo que buscas es {$products}. Te la muestro aquí.";
     }
 
     /** @param array<string, mixed> $media */

@@ -82,4 +82,17 @@ class ProfileKnowledgeQueryIntentAnalyzerTest extends TestCase
         $this->assertContains('product', $intent->sourceTypes);
         $this->assertContains('product_guidance', $intent->sourceTypes);
     }
+
+    #[Test]
+    public function it_recognizes_a_concrete_goal_as_a_product_recommendation_opportunity(): void
+    {
+        $intent = app(ProfileKnowledgeQueryIntentAnalyzer::class)
+            ->analyze('Yo quiero construir mi perfil con inteligencia artificial');
+
+        $this->assertFalse($intent->product);
+        $this->assertTrue($intent->productRecommendation);
+        $this->assertContains('product', $intent->sourceTypes);
+        $this->assertContains('product_guidance', $intent->sourceTypes);
+        $this->assertContains('integration_media', $intent->excludedSourceTypes);
+    }
 }

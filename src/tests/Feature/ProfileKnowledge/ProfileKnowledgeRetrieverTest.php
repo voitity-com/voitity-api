@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\ProfileKnowledge;
 
 use App\Classes\EmbeddingService\EmbeddingClient;
+use App\Models\Chat;
+use App\Models\Message;
 use App\Models\Profile;
 use App\Models\ProfileKnowledgeChunk;
 use App\Models\ProfileKnowledgeIndex;
@@ -92,6 +94,82 @@ class ProfileKnowledgeRetrieverTest extends TestCase
 
         $this->assertContains($social->id, $result->chunkIds());
         $this->assertNotContains($media->id, $result->chunkIds());
+    }
+
+    #[Test]
+    public function it_reserves_a_relevant_product_for_a_concrete_goal_even_when_other_chunks_score_higher(): void
+    {
+        [$profile] = $this->readyProfile();
+        config()->set('ai-knowledge.retrieval.top_k', 1);
+        $this->chunk($profile, 'profile.fact.1', 'profile_fact', '1', 'Artificial intelligence consulting.', [1.0, 0.0, 0.0]);
+        $product = $this->chunk(
+            $profile,
+            'product.7',
+            'product',
+            '7',
+            'Bigmelo creates an interactive artificial intelligence profile.',
+            [0.5, 0.8660254, 0.0]
+        );
+
+        $result = app(ProfileKnowledgeRetriever::class)->retrieve(
+            $profile,
+            'Yo quiero construir mi perfil con inteligencia artificial'
+        );
+
+        $this->assertContains($product->id, $result->chunkIds());
+        $this->assertTrue(collect($result->items)->firstWhere('chunk_id', $product->id)['forced']);
+    }
+
+    #[Test]
+    public function it_uses_history_for_semantic_context_but_only_the_current_message_for_intent(): void
+    {
+        [$profile] = $this->readyProfile();
+        $this->app->instance(EmbeddingClient::class, new FakeEmbeddingClient(
+            fn (string $input, int $index): array => $index === 0
+                ? [0.0, 1.0, 0.0]
+                : [1.0, 0.0, 0.0]
+        ));
+        $product = $this->chunk(
+            $profile,
+            'product.8',
+            'product',
+            '8',
+            'Bigmelo digital presence solution.',
+            [1.0, 0.0, 0.0]
+        );
+        $media = $this->chunk(
+            $profile,
+            'integration.media.9',
+            'integration_media',
+            '9',
+            'YouTube tutorial about an unrelated topic.',
+            [1.0, 0.0, 0.0]
+        );
+        $chat = Chat::query()->create(['profile_id' => $profile->id]);
+        Message::query()->create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Puedes verlo en YouTube.',
+            'type' => 'answer',
+            'source' => 'openai',
+        ]);
+        $question = Message::query()->create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Yo quiero construir mi perfil con inteligencia artificial',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+
+        $context = app(ProfileKnowledgePromptContextService::class)->build(
+            $profile,
+            $question->text,
+            $chat->id,
+            $question->id,
+        );
+
+        $this->assertContains($product->id, $context->retrieval->chunkIds());
+        $this->assertNotContains($media->id, $context->retrieval->chunkIds());
     }
 
     /** @return array{Profile} */

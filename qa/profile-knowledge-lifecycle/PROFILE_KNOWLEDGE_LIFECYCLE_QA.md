@@ -69,6 +69,16 @@ qa/profile-knowledge-lifecycle/scripts/run-chat-matrix.sh <profile-id> \
 El script respeta el límite local de mensajes, exige modo `rag`, evalúa los centinelas y valida que integraciones, productos y redes incluyan su tarjeta o botón correspondiente.
 Las preguntas de hechos puntuales pueden definir `must_include` y `require_attachment: false` para evitar falsos negativos por no repetir el identificador o no adjuntar una tarjeta cuando solo se pidió un dato.
 
+### Regresión de necesidad indirecta e historial
+
+Para cada ejecución completa, agregar este escenario con un producto publicado cuya descripción resuelva claramente una necesidad:
+
+1. En un chat nuevo, preguntar por un video de YouTube y confirmar que se adjunta el video correcto.
+2. En el mismo chat, escribir una necesidad concreta sin usar el nombre del producto ni las palabras producto, comprar o recomendar, por ejemplo: “Quiero construir mi perfil con inteligencia artificial”.
+3. Confirmar que la segunda respuesta muestra la tarjeta del producto semánticamente relevante y que el YouTube del turno anterior no se vuelve a adjuntar.
+4. Repetir la segunda pregunta en un chat privado limpio y confirmar el mismo producto.
+5. Hacer una pregunta no relacionada y confirmar que no se fuerza ninguna tarjeta de producto.
+
 ## Ciclo de vida negativo
 
 1. Deseleccionar una pieza de cada proveedor. Abrir chats limpios y repetir sus tres preguntas: no debe aparecer su centinela ni su tarjeta.

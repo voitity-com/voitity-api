@@ -71,11 +71,20 @@ class ProfileKnowledgeQueryIntentAnalyzer
             'producto', 'productos', 'product', 'products', 'comprar', 'compra', 'buy', 'precio',
             'price', 'tienda', 'store', 'balon', 'balones', 'proteina', 'creatina', 'referencia',
         ]);
+        $solutionSeeking = $this->containsAny($normalized, [
+            'quiero', 'quisiera', 'necesito', 'busco', 'me gustaria', 'como puedo', 'ayudame a',
+            'i want', 'i would like', 'i need', 'looking for', 'how can i', 'help me',
+        ]) && $this->containsAny($normalized, [
+            'crear', 'construir', 'lanzar', 'implementar', 'desarrollar', 'resolver', 'mejorar',
+            'automatizar', 'aprender', 'planificar', 'obtener', 'conseguir', 'contratar', 'adquirir',
+            'create', 'build', 'launch', 'implement', 'develop', 'solve', 'improve', 'automate',
+            'learn', 'plan', 'get', 'hire',
+        ]);
         $productRecommendation = $product || $this->containsAny($normalized, [
             'recomienda', 'recomendacion', 'recommend', 'recommendation', 'cual me conviene',
             'que me recomiendas', 'what do you recommend', 'que elegirias', 'cual elegirias',
             'elegir', 'choose', 'which option',
-        ]);
+        ]) || $solutionSeeking;
         $sourceTypes = [];
 
         if ($media) {
@@ -91,9 +100,12 @@ class ProfileKnowledgeQueryIntentAnalyzer
             $sourceTypes[] = 'product_guidance';
         }
 
-        $excludedSourceTypes = $socialLink && ! $explicitMediaShow && ! $providerContentQuery
-            ? ['integration_media']
-            : [];
+        $excludedSourceTypes = [];
+
+        if (($socialLink && ! $explicitMediaShow && ! $providerContentQuery)
+            || ($productRecommendation && ! $media)) {
+            $excludedSourceTypes[] = 'integration_media';
+        }
         $terms = $this->terms($normalized);
         $identifiers = collect($terms)
             ->filter(fn (string $term): bool => preg_match('/\d/u', $term) === 1)
