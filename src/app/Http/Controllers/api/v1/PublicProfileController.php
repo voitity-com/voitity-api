@@ -12,6 +12,7 @@ use App\Http\Responses\Profile\PublicProfileSeoResponse;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class PublicProfileController extends Controller
 {
@@ -54,6 +55,31 @@ class PublicProfileController extends Controller
             'message' => 'Profile retrieved successfully.',
             'data' => (new PublicProfileResponse($profile))->toArray(),
         ]);
+    }
+
+    public function showByDomain(
+        string $hostname,
+        PublicProfileAccess $access,
+    ): JsonResponse {
+        $profile = $access->findByDomain($hostname);
+
+        if (! $profile) {
+            Log::notice('Public profile custom domain lookup did not resolve.', [
+                'hostname' => strtolower(rtrim(trim($hostname), '.')),
+            ]);
+
+            return response()->json(['message' => 'Profile not found.'], 404);
+        }
+
+        Log::info('Public profile resolved by custom domain.', [
+            'profile_id' => $profile->id,
+            'hostname' => strtolower(rtrim(trim($hostname), '.')),
+        ]);
+
+        return response()->json([
+            'message' => 'Profile retrieved successfully.',
+            'data' => (new PublicProfileResponse($profile))->toArray(),
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     public function socialNetworks(): JsonResponse
