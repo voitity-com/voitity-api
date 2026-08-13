@@ -12,6 +12,11 @@ $profilesRoot = env(
     strtolower((string) $profilesDriver) === 's3' ? '' : storage_path('app/public')
 );
 
+// BucketOwnerEnforced accepts this canned ACL while keeping objects private behind CloudFront.
+$s3UploadOptions = static fn (mixed $driver): array => strtolower((string) $driver) === 's3'
+    ? ['ACL' => 'bucket-owner-full-control']
+    : [];
+
 return [
 
     /*
@@ -61,6 +66,7 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => env('FILESYSTEM_PUBLIC_VISIBILITY', 'public'),
+            'options' => $s3UploadOptions($publicDriver),
             'throw' => false,
             'report' => false,
         ],
@@ -76,6 +82,7 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => env('AWS_PROFILES_VISIBILITY', env('FILESYSTEM_PUBLIC_VISIBILITY', 'public')),
+            'options' => $s3UploadOptions($profilesDriver),
             'throw' => env('FILESYSTEM_PROFILES_THROW', true),
             'report' => false,
         ],
