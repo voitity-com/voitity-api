@@ -7579,9 +7579,163 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Profile Domains",
+      "description": "Configure, inspect, verify, and disconnect a profile custom domain. In local mode, Configure returns pending_dns and Verify promotes the domain to active. In production, queued jobs manage a CloudFront distribution tenant, DNS validation, and the managed certificate.",
+      "item": [
+        {
+          "name": "Get Profile Domain",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Domain settings are returned', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Domain is null or a safe settings object', function () {",
+                  "  const domain = pm.response.json().data.domain;",
+                  "  pm.expect(domain === null || typeof domain === 'object').to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/domain",
+              "host": ["{{base_url}}"],
+              "path": ["api", "profile", "{{profile_id}}", "domain"]
+            },
+            "description": "Returns the current custom-domain state, DNS record, certificate state, timestamps, and safe retry error. Requires profile:read and profile ownership or admin role."
+          },
+          "response": []
+        },
+        {
+          "name": "Configure Profile Domain",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Domain provisioning is queued', function () { pm.response.to.have.status(202); });",
+                  "const domain = pm.response.json().data.domain;",
+                  "pm.test('Normalized domain is returned', function () {",
+                  "  pm.expect(domain.hostname).to.eql(pm.collectionVariables.get('profile_domain_hostname').toLowerCase());",
+                  "  pm.expect(domain.dns_records).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hostname\": \"{{profile_domain_hostname}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/domain",
+              "host": ["{{base_url}}"],
+              "path": ["api", "profile", "{{profile_id}}", "domain"]
+            },
+            "description": "Creates one custom domain for the profile and queues provider provisioning. Send only an ASCII/Punycode hostname without scheme, port, path, or wildcard. Requires profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Profile Domain",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Domain verification is queued', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/domain/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "profile", "{{profile_id}}", "domain", "verify"]
+            },
+            "description": "Queues an immediate DNS, certificate, and tenant activation check. In local mode it simulates successful verification. Requires profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Public Profile by Domain",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Active domain resolves publicly', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().data.alias).to.be.a('string').and.not.empty;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/by-domain/{{profile_domain_hostname}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "public", "profiles", "by-domain", "{{profile_domain_hostname}}"]
+            },
+            "description": "Public lookup used by the web application when it is loaded on a verified custom hostname. Only active domains attached to active, published profiles resolve."
+          },
+          "response": []
+        },
+        {
+          "name": "Disconnect Profile Domain",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Domain disconnection is queued', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/domain",
+              "host": ["{{base_url}}"],
+              "path": ["api", "profile", "{{profile_id}}", "domain"]
+            },
+            "description": "Queues disable-and-delete cleanup for the CloudFront distribution tenant. Remove the DNS record at the external provider after cleanup. Requires profile:write."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
+    {
+      "key": "profile_domain_hostname",
+      "value": "profile.example.org",
+      "type": "string"
+    },
     {
       "key": "avatar_image_file_path",
       "value": "",

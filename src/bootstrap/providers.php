@@ -7,6 +7,7 @@ use App\Providers\ConversationInsightsServiceProvider;
 use App\Providers\EmbeddingServiceProvider;
 use App\Providers\EventServiceProvider;
 use App\Providers\PaymentServiceProvider;
+use App\Providers\ProfileDomainServiceProvider;
 use App\Providers\ProfileKnowledgeAIServiceProvider;
 use App\Providers\UsdCopRateServiceProvider;
 use App\Providers\VideoAIServiceProvider;
@@ -22,6 +23,7 @@ return [
     ConversationInsightsServiceProvider::class,
     EmbeddingServiceProvider::class,
     ProfileKnowledgeAIServiceProvider::class,
+    ProfileDomainServiceProvider::class,
     VoiceSampleServiceProvider::class,
     VoiceServiceProvider::class,
     VideoAIServiceProvider::class,

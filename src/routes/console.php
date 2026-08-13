@@ -7,10 +7,13 @@ use App\Classes\Subscriptions\SubscriptionTrialService;
 use App\Classes\Subscriptions\SubscriptionUsageAccountingRepairService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\UsdCopRateService\UsdCopRateService;
+use App\Enums\ProfileDomainStatus;
 use App\Jobs\Payments\RecordPaymentQueueHeartbeat;
+use App\Jobs\ProfileDomains\RefreshProfileDomain;
 use App\Jobs\Subscriptions\BillDueRecurringSubscriptions;
 use App\Mail\TestMailConfiguration;
 use App\Models\Message;
+use App\Models\ProfileDomain;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileProduct;
 use App\Models\Subscription;
@@ -30,6 +33,37 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('profile-domains:refresh {--active}', function (): int {
+    $statuses = [
+        ProfileDomainStatus::PendingDns->value,
+        ProfileDomainStatus::PendingCertificate->value,
+        ProfileDomainStatus::Activating->value,
+        ProfileDomainStatus::Failed->value,
+    ];
+
+    if ($this->option('active')) {
+        $statuses[] = ProfileDomainStatus::Active->value;
+    }
+
+    $queued = 0;
+    ProfileDomain::query()
+        ->whereIn('status', $statuses)
+        ->where(function ($query): void {
+            $query->where('status', '!=', ProfileDomainStatus::Failed->value)
+                ->orWhere('last_error_code', '!=', 'disconnect')
+                ->orWhereNull('last_error_code');
+        })
+        ->orderBy('id')
+        ->eachById(function (ProfileDomain $domain) use (&$queued): void {
+            RefreshProfileDomain::dispatch($domain->id);
+            $queued++;
+        });
+
+    $this->info("Profile domain verifications queued: {$queued}");
+
+    return Command::SUCCESS;
+})->purpose('Queue DNS, certificate, and activation checks for profile domains');
 
 Artisan::command('dev:create-test-user {email} {password}', function (string $email, string $password): int {
     try {
@@ -347,6 +381,8 @@ Artisan::command('integrations:refresh-youtube', function (YouTubeIntegrationSer
 Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('insights:close-inactive-chats')->everyFiveMinutes()->withoutOverlapping(5)->onOneServer();
 Schedule::command('ai-knowledge:index --pending')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
+Schedule::command('profile-domains:refresh')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
+Schedule::command('profile-domains:refresh --active')->hourly()->withoutOverlapping(10)->onOneServer();
 Schedule::command('integrations:refresh-youtube')->dailyAt('02:20')->withoutOverlapping(60)->onOneServer();
 Schedule::command('subscriptions:bill-recurring')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('subscriptions:expire-ended')->everyMinute()->withoutOverlapping(10)->onOneServer();

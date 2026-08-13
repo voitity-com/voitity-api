@@ -2,6 +2,7 @@
 
 namespace App\Classes\PublicProfiles;
 
+use App\Enums\ProfileDomainStatus;
 use App\Enums\ProfileStatus;
 use App\Models\Profile;
 
@@ -13,6 +14,19 @@ class PublicProfileAccess
             ->where('alias', $alias)
             ->where('active', true)
             ->where('status', ProfileStatus::Published->value)
+            ->first();
+    }
+
+    public function findByDomain(string $hostname): ?Profile
+    {
+        $normalized = strtolower(rtrim(trim($hostname), '.'));
+
+        return Profile::query()
+            ->where('active', true)
+            ->where('status', ProfileStatus::Published->value)
+            ->whereHas('domain', fn ($query) => $query
+                ->where('hostname', $normalized)
+                ->where('status', ProfileDomainStatus::Active->value))
             ->first();
     }
 
