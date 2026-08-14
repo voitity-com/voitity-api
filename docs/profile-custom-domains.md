@@ -283,7 +283,7 @@ Antes de producción se debe usar IAM Access Analyzer para reducir `Resource: "*
 
 El tenant se crea con `Enabled=true`, aunque el dominio continúa `inactive` hasta completar la validación DNS y emitir el certificado. Esto es necesario para que CloudFront atienda `/.well-known/pki-validation/*` durante la validación HTTP administrada por ACM. Antes de la emisión, CloudFront no sirve el perfil en el hostname del cliente; únicamente mantiene disponible el flujo de validación.
 
-La aplicación solo marca el dominio `active` cuando coinciden las cuatro señales: certificado `issued`, DNS `valid-configuration`, tenant habilitado y desplegado, y `Domains[].Status=active` para el hostname. Mientras CloudFront propaga la asociación, el estado permanece `activating` aunque ACM y DNS ya estén listos.
+Cuando ACM informa `issued` y el DNS es `valid-configuration`, el job adjunta explícitamente el ARN administrado mediante `UpdateDistributionTenant.Customizations.Certificate`. La aplicación solo marca el dominio `active` cuando coinciden las cuatro señales: certificado `issued`, DNS válido, tenant habilitado y desplegado, y `Domains[].Status=active` para el hostname. Mientras CloudFront propaga esa asociación, el estado permanece `activating`.
 
 ### Variables de producción
 
