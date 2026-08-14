@@ -33,6 +33,9 @@ class FeatureControllerTest extends TestAPI
             ->patchJson('/api/admin/features', [
                 'features' => [
                     'products' => false,
+                    'domains' => [
+                        'custom' => false,
+                    ],
                     'integrations' => [
                         'instagram' => true,
                         'tiktok' => false,
@@ -45,12 +48,17 @@ class FeatureControllerTest extends TestAPI
 
         $features = $response->json('data.features');
         $this->assertFalse($this->feature($features, FeatureService::PRODUCTS)['enabled']);
+        $this->assertFalse($this->feature($features, FeatureService::DOMAINS_CUSTOM)['enabled']);
         $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_INSTAGRAM)['enabled']);
         $this->assertFalse($this->feature($features, FeatureService::INTEGRATIONS_TIKTOK)['enabled']);
         $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_ONLYFANS)['enabled']);
         $this->assertTrue($this->feature($features, FeatureService::INTEGRATIONS_OTHER)['enabled']);
         $this->assertDatabaseHas('feature_flags', [
             'key' => FeatureService::PRODUCTS,
+            'enabled' => false,
+        ]);
+        $this->assertDatabaseHas('feature_flags', [
+            'key' => FeatureService::DOMAINS_CUSTOM,
             'enabled' => false,
         ]);
     }
@@ -92,6 +100,15 @@ class FeatureControllerTest extends TestAPI
         $this->assertTrue($instagram['available']);
         $this->assertFalse($instagram['enabled']);
         $this->assertFalse($instagram['effective']);
+
+        $customDomain = $this->feature(
+            $response->json('data.features'),
+            FeatureService::DOMAINS_CUSTOM,
+        );
+        $this->assertTrue($customDomain['available']);
+        $this->assertTrue($customDomain['enabled']);
+        $this->assertTrue($customDomain['effective']);
+        $this->assertFalse($customDomain['profile_configurable']);
 
         $response = $this->withToken($token)
             ->patchJson("/api/profile/{$profile->id}/features", [

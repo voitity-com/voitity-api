@@ -100,10 +100,13 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonPath('data.publication.is_published', false);
         $settings = collect($response->json('data.feature_settings'))->keyBy('key');
 
-        $featureKeys = array_keys(app(FeatureService::class)->catalog());
-        $this->assertCount(count($featureKeys), $settings);
+        $catalog = collect(app(FeatureService::class)->catalog());
+        $profileFeatureKeys = $catalog
+            ->filter(fn (array $feature): bool => (bool) ($feature['profile_configurable'] ?? true))
+            ->keys();
+        $this->assertCount($catalog->count(), $settings);
 
-        foreach ($featureKeys as $featureKey) {
+        foreach ($profileFeatureKeys as $featureKey) {
             $this->assertTrue($settings->has($featureKey));
             $this->assertTrue($settings[$featureKey]['available']);
             $this->assertFalse($settings[$featureKey]['enabled']);
@@ -114,6 +117,14 @@ class ProfileControllerTest extends TestAPI
                 'enabled' => false,
             ]);
         }
+        $this->assertTrue($settings[FeatureService::DOMAINS_CUSTOM]['available']);
+        $this->assertTrue($settings[FeatureService::DOMAINS_CUSTOM]['enabled']);
+        $this->assertTrue($settings[FeatureService::DOMAINS_CUSTOM]['effective']);
+        $this->assertFalse($settings[FeatureService::DOMAINS_CUSTOM]['profile_configurable']);
+        $this->assertDatabaseMissing('profile_feature_settings', [
+            'profile_id' => $new_profile->id,
+            'feature_key' => FeatureService::DOMAINS_CUSTOM,
+        ]);
         $this->assertDatabaseHas('profile_widgets', [
             'profile_id' => $new_profile->id,
             'enabled' => false,

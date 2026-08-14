@@ -10,6 +10,7 @@ use App\Jobs\ProfileDomains\RefreshProfileDomain;
 use App\Models\Profile;
 use App\Models\ProfileDomain;
 use App\Models\User;
+use App\Services\Features\FeatureService;
 use RuntimeException;
 
 class ProfileDomainControllerTest extends TestAPI
@@ -90,6 +91,25 @@ class ProfileDomainControllerTest extends TestAPI
         $this->withToken($otherToken)
             ->getJson("/api/profile/{$profile->id}/domain")
             ->assertNotFound();
+    }
+
+    public function test_new_domain_configuration_is_blocked_when_the_global_feature_is_disabled(): void
+    {
+        config(['profile-domains.default' => 'local']);
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('domain', ['profile:write'])->plainTextToken;
+
+        app(FeatureService::class)->updateGlobalFeatures([
+            FeatureService::DOMAINS_CUSTOM => false,
+        ]);
+
+        $this->withToken($token)
+            ->postJson("/api/profile/{$profile->id}/domain", ['hostname' => 'profile.example.org'])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Custom domains are not available right now.');
+
+        $this->assertDatabaseMissing('profile_domains', ['profile_id' => $profile->id]);
     }
 
     public function test_public_domain_lookup_only_exposes_active_published_profile(): void
