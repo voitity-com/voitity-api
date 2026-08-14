@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Features\FeatureService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class AdminFeatureController extends Controller
 {
@@ -32,6 +33,8 @@ class AdminFeatureController extends Controller
 
         $validated = $request->validate([
             'features' => ['required', 'array'],
+            'features.domains' => ['nullable', 'array'],
+            'features.domains.custom' => ['nullable', 'boolean'],
             'features.integrations' => ['nullable', 'array'],
             'features.products' => ['nullable', 'boolean'],
             'features.integrations.instagram' => ['nullable', 'boolean'],
@@ -41,10 +44,18 @@ class AdminFeatureController extends Controller
             'features.integrations.youtube' => ['nullable', 'boolean'],
         ]);
 
+        $featureInput = $this->flattenFeatureInput($validated['features']);
+        $rows = $features->updateGlobalFeatures($featureInput);
+
+        Log::info('Global feature flags updated.', [
+            'actor_user_id' => $request->user()?->id,
+            'features' => $featureInput,
+        ]);
+
         return response()->json([
             'message' => 'Feature flags updated successfully.',
             'data' => [
-                'features' => $features->updateGlobalFeatures($this->flattenFeatureInput($validated['features'])),
+                'features' => $rows,
             ],
         ]);
     }
@@ -74,6 +85,10 @@ class AdminFeatureController extends Controller
 
         if (array_key_exists('products', $features)) {
             $flattened['products'] = (bool) $features['products'];
+        }
+
+        foreach (($features['domains'] ?? []) as $domainFeature => $enabled) {
+            $flattened["domains.{$domainFeature}"] = (bool) $enabled;
         }
 
         foreach (($features['integrations'] ?? []) as $provider => $enabled) {

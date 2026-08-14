@@ -1291,7 +1291,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"features\": {\n    \"products\": true,\n    \"integrations\": {\n      \"instagram\": true,\n      \"tiktok\": true,\n      \"onlyfans\": true,\n      \"other\": true,\n      \"youtube\": true\n    }\n  }\n}",
+              "raw": "{\n  \"features\": {\n    \"products\": true,\n    \"domains\": {\n      \"custom\": true\n    },\n    \"integrations\": {\n      \"instagram\": true,\n      \"tiktok\": true,\n      \"onlyfans\": true,\n      \"other\": true,\n      \"youtube\": true\n    }\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1309,7 +1309,7 @@
                 "features"
               ]
             },
-            "description": "Updates one or more global product or integration feature flags. AI knowledge retrieval is controlled only by technical configuration and index health."
+            "description": "Updates one or more global product, custom domain, or integration feature flags. Disabling custom domains blocks new configurations without interrupting domains that are already active. AI knowledge retrieval is controlled only by technical configuration and index health."
           },
           "response": []
         },

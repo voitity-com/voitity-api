@@ -8,6 +8,16 @@ La URL original de Bigmelo continúa funcionando. El dominio personalizado no ca
 
 Solo se admite un dominio personalizado por perfil y un mismo dominio no puede asignarse a dos perfiles.
 
+### Control desde Nuevas funcionalidades
+
+El catálogo global contiene `domains.custom`, agrupado como `domains` y marcado con `profile_configurable=false`. Un administrador puede activarlo o desactivarlo en **Dashboard > Nuevas funcionalidades > Dominios personalizados**.
+
+- Activado: la pestaña **Dominio** aparece en Configuración y se aceptan nuevas configuraciones.
+- Desactivado: la pestaña se oculta y `POST /api/profile/{profile}/domain` responde `403`.
+- Los dominios que ya están activos continúan resolviendo por HTTPS cuando el flag se desactiva. Esto evita que una operación administrativa interrumpa sitios publicados.
+- La verificación automática, la consulta del estado y la desconexión de configuraciones existentes permanecen disponibles en la API. Para gestionarlas desde el admin se debe reactivar temporalmente el flag.
+- No se crea una fila de `profile_feature_settings` por perfil porque es una disponibilidad global, no una preferencia individual.
+
 ## Flujo para el usuario
 
 1. Entrar en **Perfil > Configuración > Dominio**.
@@ -20,6 +30,22 @@ Solo se admite un dominio personalizado por perfil y un mismo dominio no puede a
 8. Cuando está Activo, **Abrir dominio** permite comprobar el perfil por HTTPS.
 
 La propagación DNS y la emisión del certificado pueden tardar desde algunos minutos hasta 24 horas. Un dominio que ya sirve otro sitio puede tener una interrupción durante el cambio de DNS y la validación inicial.
+
+### Ejemplo en GoDaddy
+
+Para conectar `bigmelo.abeldev.com` cuando `abeldev.com` está administrado en GoDaddy:
+
+1. Abrir **Mis productos**, seleccionar `abeldev.com`, entrar en **DNS** y después en **Administrar DNS**.
+2. Seleccionar **Agregar nuevo registro** y elegir **CNAME**.
+3. En **Nombre** escribir `bigmelo`. GoDaddy completa el dominio base y forma `bigmelo.abeldev.com`.
+4. En **Valor** o **Datos** pegar exactamente el routing endpoint mostrado por Bigmelo, sin `http://`, `https://`, rutas ni espacios.
+5. Mantener el TTL predeterminado o seleccionar una hora.
+6. Eliminar solamente otro registro A, AAAA o CNAME que tenga exactamente el mismo nombre `bigmelo`. No eliminar MX, TXT ni registros de correo.
+7. Guardar, esperar la propagación y seleccionar **Verificar configuración** en Bigmelo hasta que el estado sea **Activo**.
+
+No se debe usar **Reenvío de dominio**, **Forwarding** ni enmascaramiento. Tampoco se cambian los nameservers. Bigmelo necesita un registro DNS real para validar el hostname, emitir el certificado HTTPS y renovarlo automáticamente.
+
+GoDaddy no permite un CNAME tradicional en el dominio raíz representado por `@`. Para ese caso se recomienda usar un subdominio como `perfil.tudominio.com` o administrar el DNS en un proveedor que ofrezca ALIAS, ANAME o CNAME flattening.
 
 ### Registro DNS
 
@@ -172,10 +198,12 @@ La CloudFront Function `infra/cloudfront/viewer-request.js` conserva los assets 
 
 `voitity-web/infra/cloudfront/custom-profile-domains.yml` crea:
 
+- bucket privado y retenido para logs de acceso de CloudFront, con cifrado y expiración a 90 días.
 - Origin Access Control para el bucket web privado.
 - distribución CloudFront `tenant-only` con HTTPS redirect, HTTP/2 y HTTP/3, IPv6, función viewer-request, política de cache y política de headers.
 - `index.html` como documento raíz para que `/` funcione igual que las rutas internas del perfil.
 - Connection Group habilitado.
+- políticas inline para que el rol EC2 de la API gestione tenants y el rol de GitHub invalide la distribución durante despliegues web.
 - outputs para ID de distribución, ID y routing endpoint del Connection Group, OAC y ARN de la distribución.
 
 Los IDs de políticas se reciben como parámetros. No están codificados en el template. AWS WAF se conecta opcionalmente mediante `WebAclArn`.
@@ -195,7 +223,8 @@ El stack usa el bucket web existente. Su bucket policy debe permitir al nuevo AR
   "Resource": "arn:aws:s3:::WEB_BUCKET/*",
   "Condition": {
     "StringEquals": {
-      "AWS:SourceArn": "DISTRIBUTION_ARN_OUTPUT"
+      "AWS:SourceArn": "DISTRIBUTION_ARN_OUTPUT",
+      "AWS:SourceAccount": "AWS_ACCOUNT_ID"
     }
   }
 }
@@ -243,6 +272,17 @@ PROFILE_DOMAIN_VALIDATION_TOKEN_HOST=cloudfront
 
 El routing endpoint es opcional: si falta, el driver lo consulta con `GetConnectionGroup`. No contiene secretos. Todos los procesos API, worker y scheduler deben recibir las mismas variables.
 
+En producción estos identificadores no secretos se guardan como variables de repositorio de GitHub:
+
+| Repositorio | Variable |
+| --- | --- |
+| `voitity-api` | `PROFILE_DOMAIN_DISTRIBUTION_ID` |
+| `voitity-api` | `PROFILE_DOMAIN_CONNECTION_GROUP_ID` |
+| `voitity-api` | `PROFILE_DOMAIN_ROUTING_ENDPOINT` |
+| `voitity-web` | `PROFILE_DOMAIN_DISTRIBUTION_ID` |
+
+El workflow de API descarga primero el entorno base desde Secrets Manager y después reemplaza únicamente las líneas `PROFILE_DOMAIN_*` con estas variables. Así no se muestran ni se reescriben secretos y app, queue y scheduler reciben la misma configuración desde el `.env` desplegado. El workflow web invalida tanto la distribución principal como la distribución multi-tenant para que `index.html` no quede obsoleto en dominios de clientes.
+
 ### Orden de despliegue
 
 1. Desplegar la migración y el código con `PROFILE_DOMAIN_DRIVER=local` o sin exponer todavía la UI en producción.
@@ -253,7 +293,7 @@ El routing endpoint es opcional: si falta, el driver lo consulta con `GetConnect
 6. Reiniciar app, queue worker y scheduler.
 7. Desplegar admin y web, incluyendo la CloudFront Function actualizada.
 8. Probar primero con un subdominio controlado, revisar HTTPS, chat, medios, SEO y desconexión.
-9. Activar AWS WAF y logging de acceso de CloudFront según la política operativa del entorno.
+9. Revisar los logs de acceso retenidos 90 días y activar AWS WAF según la política operativa del entorno.
 
 ## Logs y observabilidad
 

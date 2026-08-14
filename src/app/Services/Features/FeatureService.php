@@ -12,6 +12,8 @@ class FeatureService
 {
     public const PRODUCTS = 'products';
 
+    public const DOMAINS_CUSTOM = 'domains.custom';
+
     public const INTEGRATIONS_INSTAGRAM = 'integrations.instagram';
 
     public const INTEGRATIONS_TIKTOK = 'integrations.tiktok';
@@ -32,6 +34,12 @@ class FeatureService
                 'group' => 'products',
                 'key' => self::PRODUCTS,
                 'name' => 'Products',
+            ],
+            self::DOMAINS_CUSTOM => [
+                'group' => 'domains',
+                'key' => self::DOMAINS_CUSTOM,
+                'name' => 'Custom domain',
+                'profile_configurable' => false,
             ],
             self::INTEGRATIONS_INSTAGRAM => [
                 'group' => 'integrations',
@@ -177,13 +185,16 @@ class FeatureService
             ->get()
             ->keyBy('feature_key');
 
-        return collect($this->profileCatalog())
+        return collect($this->catalog())
             ->map(function (array $feature, string $key) use ($flags, $settings): array {
                 $globallyEnabled = (bool) ($flags->get($key)?->enabled ?? false);
+                $profileConfigurable = (bool) ($feature['profile_configurable'] ?? true);
                 $stored = $settings->get($key);
-                $enabled = $stored instanceof ProfileFeatureSetting
-                    ? (bool) $stored->enabled
-                    : $this->defaultProfileFeatureEnabled();
+                $enabled = $profileConfigurable
+                    ? ($stored instanceof ProfileFeatureSetting
+                        ? (bool) $stored->enabled
+                        : $this->defaultProfileFeatureEnabled())
+                    : $globallyEnabled;
 
                 return [
                     ...$feature,
@@ -191,6 +202,7 @@ class FeatureService
                     'enabled' => $enabled,
                     'effective' => $globallyEnabled && $enabled,
                     'globally_enabled' => $globallyEnabled,
+                    'profile_configurable' => $profileConfigurable,
                 ];
             })
             ->values()

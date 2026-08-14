@@ -13,6 +13,7 @@ use App\Jobs\ProfileDomains\RefreshProfileDomain;
 use App\Models\Profile;
 use App\Models\ProfileDomain;
 use App\Models\User;
+use App\Services\Features\FeatureService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,9 +76,21 @@ class ProfileDomainController extends Controller
         StoreProfileDomainRequest $request,
         Profile $profile,
         ProfileDomainProvider $provider,
+        FeatureService $features,
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
+        }
+
+        if (! $features->isGlobalEnabled(FeatureService::DOMAINS_CUSTOM)) {
+            Log::notice('Profile domain configuration rejected because the global feature is disabled.', [
+                'actor_user_id' => $request->user()?->id,
+                'profile_id' => $profile->id,
+            ]);
+
+            return response()->json([
+                'message' => 'Custom domains are not available right now.',
+            ], 403);
         }
 
         $hostname = (string) $request->validated('hostname');
