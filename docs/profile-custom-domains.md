@@ -281,7 +281,7 @@ En producción estos identificadores no secretos se guardan como variables de re
 | `voitity-api` | `PROFILE_DOMAIN_ROUTING_ENDPOINT` |
 | `voitity-web` | `PROFILE_DOMAIN_DISTRIBUTION_ID` |
 
-El workflow de API descarga primero el entorno base desde Secrets Manager y después reemplaza únicamente las líneas `PROFILE_DOMAIN_*` con estas variables. Así no se muestran ni se reescriben secretos y app, queue y scheduler reciben la misma configuración desde el `.env` desplegado. El workflow web invalida tanto la distribución principal como la distribución multi-tenant para que `index.html` no quede obsoleto en dominios de clientes.
+El workflow de API descarga primero el entorno base desde Secrets Manager y después reemplaza únicamente las líneas `PROFILE_DOMAIN_*` con estas variables. Así no se muestran ni se reescriben secretos y app, queue y scheduler reciben la misma configuración desde el `.env` desplegado. El workflow web invalida la distribución principal y enumera los tenants asociados exclusivamente a la distribución multi-tenant de Bigmelo para invalidar cada uno con `CreateInvalidationForDistributionTenant`. Una distribución `tenant-only` no acepta `CreateInvalidation` directamente sobre el ID de su distribución base.
 
 ### Orden de despliegue
 
