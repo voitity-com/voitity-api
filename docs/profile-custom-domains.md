@@ -252,12 +252,34 @@ El IAM role del servicio API necesita estas acciones CloudFront. Se deben limita
         "cloudfront:TagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "acm:RequestCertificate",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "acm:DescribeCertificate",
+      "Resource": "arn:aws:acm:us-east-1:AWS_ACCOUNT_ID:certificate/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
     }
   ]
 }
 ```
 
 Antes de producción se debe usar IAM Access Analyzer para reducir `Resource: "*"` donde CloudFront lo soporte. La API no necesita `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` si corre con instance role.
+
+`acm:RequestCertificate` y `acm:DescribeCertificate` son acciones dependientes cuando `CreateDistributionTenant` incluye `ManagedCertificateRequest`: CloudFront llama a ACM en nombre del role que crea el tenant. En infraestructura se limitan a `us-east-1`, que es la región obligatoria para certificados de CloudFront; `DescribeCertificate` se limita además a certificados de la cuenta. No se requieren llamadas ACM directas desde el código de la aplicación.
 
 ### Variables de producción
 
