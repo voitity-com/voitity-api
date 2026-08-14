@@ -30,7 +30,9 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
                     'Name' => 'profileId',
                     'Value' => (string) $domain->profile_id,
                 ]],
-                'Enabled' => false,
+                // CloudFront must answer the HTTP validation path while the
+                // custom domain is still inactive and the certificate is pending.
+                'Enabled' => true,
                 'ManagedCertificateRequest' => [
                     'ValidationTokenHost' => (string) config(
                         'profile-domains.drivers.cloudfront.validation_token_host',
@@ -93,6 +95,7 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
             $dnsStatus = $this->normalizedString($dns['Status'] ?? null);
             $enabled = (bool) ($tenant['Enabled'] ?? false);
             $providerStatus = $this->normalizedString($tenant['Status'] ?? null);
+            $domainStatus = $this->domainStatus($tenant, $domain->hostname);
 
             if ($certificateStatus === 'issued' && $dnsStatus === 'valid-configuration' && ! $enabled) {
                 $this->client->updateDistributionTenant([
@@ -104,12 +107,18 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
                 $providerStatus = 'activating';
             }
 
-            $domainStatus = $this->status($certificateStatus, $dnsStatus, $enabled, $providerStatus);
+            $profileDomainStatus = $this->status(
+                $certificateStatus,
+                $dnsStatus,
+                $enabled,
+                $providerStatus,
+                $domainStatus,
+            );
             $endpoint = $domain->routing_endpoint
                 ?: $this->routingEndpoint($this->requiredConfig('connection_group_id'));
 
             return new ProfileDomainProvisioningResult(
-                status: $domainStatus,
+                status: $profileDomainStatus,
                 tenantId: $tenantId,
                 tenantArn: $this->string($tenant['Arn'] ?? $domain->provider_tenant_arn),
                 routingEndpoint: $endpoint,
@@ -160,8 +169,13 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
         return 'cloudfront';
     }
 
-    private function status(?string $certificate, ?string $dns, bool $enabled, ?string $provider): ProfileDomainStatus
-    {
+    private function status(
+        ?string $certificate,
+        ?string $dns,
+        bool $enabled,
+        ?string $provider,
+        ?string $domain,
+    ): ProfileDomainStatus {
         if ($certificate === 'failed' || $certificate === 'validation-timed-out' || $certificate === 'revoked') {
             return ProfileDomainStatus::Failed;
         }
@@ -174,11 +188,21 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
             return ProfileDomainStatus::PendingCertificate;
         }
 
-        if (! $enabled || ! in_array($provider, ['deployed', 'active'], true)) {
+        if (! $enabled || ! in_array($provider, ['deployed', 'active'], true) || $domain !== 'active') {
             return ProfileDomainStatus::Activating;
         }
 
         return ProfileDomainStatus::Active;
+    }
+
+    /** @param array<string, mixed> $tenant */
+    private function domainStatus(array $tenant, string $hostname): ?string
+    {
+        $domain = collect((array) ($tenant['Domains'] ?? []))->first(
+            fn (mixed $item): bool => is_array($item) && ($item['Domain'] ?? null) === $hostname
+        );
+
+        return $this->normalizedString(is_array($domain) ? ($domain['Status'] ?? null) : null);
     }
 
     private function routingEndpoint(string $connectionGroupId): string
