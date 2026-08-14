@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 class CloudFrontProfileDomainProviderTest extends TestCase
 {
-    public function test_it_provisions_a_disabled_tenant_and_returns_the_connection_group_record(): void
+    public function test_it_provisions_an_enabled_tenant_for_http_certificate_validation(): void
     {
         config([
             'profile-domains.drivers.cloudfront.distribution_id' => 'EDISTRIBUTION',
@@ -26,14 +26,14 @@ class CloudFrontProfileDomainProviderTest extends TestCase
         $handler = new MockHandler;
         $handler->append(function (Command $command): Result {
             $this->assertSame([['Name' => 'profileId', 'Value' => '22']], $command['Parameters']);
-            $this->assertFalse($command['Enabled']);
+            $this->assertTrue($command['Enabled']);
 
             return new Result([
                 'DistributionTenant' => [
                     'Id' => 'DTENANT',
                     'Arn' => 'arn:aws:cloudfront::123456789012:distribution-tenant/DTENANT',
                     'Status' => 'InProgress',
-                    'Enabled' => false,
+                    'Enabled' => true,
                 ],
             ]);
         });
@@ -61,6 +61,7 @@ class CloudFrontProfileDomainProviderTest extends TestCase
                 'Arn' => 'arn:aws:cloudfront::123456789012:distribution-tenant/DTENANT',
                 'Status' => 'Deployed',
                 'Enabled' => true,
+                'Domains' => [['Domain' => 'profile.example.org', 'Status' => 'active']],
             ],
         ]));
         $handler->append(new Result([
@@ -85,6 +86,37 @@ class CloudFrontProfileDomainProviderTest extends TestCase
         $this->assertSame(ProfileDomainStatus::Active, $result->status);
         $this->assertSame('issued', $result->certificateStatus);
         $this->assertSame('valid-configuration', $result->dnsStatus);
+    }
+
+    public function test_it_waits_until_cloudfront_activates_the_domain_association(): void
+    {
+        $handler = new MockHandler;
+        $handler->append(new Result([
+            'ETag' => 'etag-1',
+            'DistributionTenant' => [
+                'Id' => 'DTENANT',
+                'Status' => 'Deployed',
+                'Enabled' => true,
+                'Domains' => [['Domain' => 'profile.example.org', 'Status' => 'inactive']],
+            ],
+        ]));
+        $handler->append(new Result([
+            'ManagedCertificateDetails' => ['CertificateStatus' => 'issued'],
+        ]));
+        $handler->append(new Result([
+            'DnsConfigurationList' => [[
+                'Domain' => 'profile.example.org',
+                'Status' => 'valid-configuration',
+            ]],
+        ]));
+        $provider = new CloudFrontProfileDomainProvider($this->client($handler));
+
+        $result = $provider->refresh($this->domain([
+            'provider_tenant_id' => 'DTENANT',
+            'routing_endpoint' => 'd111111abcdef8.cloudfront.net',
+        ]));
+
+        $this->assertSame(ProfileDomainStatus::Activating, $result->status);
     }
 
     public function test_it_deletes_an_already_disabled_tenant(): void
@@ -123,7 +155,7 @@ class CloudFrontProfileDomainProviderTest extends TestCase
                 'ConnectionGroupId' => 'CGROUP',
                 'Parameters' => [['Name' => 'profileId', 'Value' => '22']],
                 'Status' => 'InProgress',
-                'Enabled' => false,
+                'Enabled' => true,
             ],
         ]));
         $handler->append(new Result([
