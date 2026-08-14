@@ -92,19 +92,36 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
                 ->get('DnsConfigurationList');
             $dns = (array) ($dnsConfigurations[0] ?? []);
             $certificateStatus = $this->normalizedString($certificate['CertificateStatus'] ?? null);
+            $certificateArn = $this->string($certificate['CertificateArn'] ?? null);
             $dnsStatus = $this->normalizedString($dns['Status'] ?? null);
             $enabled = (bool) ($tenant['Enabled'] ?? false);
             $providerStatus = $this->normalizedString($tenant['Status'] ?? null);
             $domainStatus = $this->domainStatus($tenant, $domain->hostname);
+            $attachedCertificateArn = $this->string(
+                ((array) (($tenant['Customizations'] ?? [])['Certificate'] ?? []))['Arn'] ?? null
+            );
+            $shouldAttachCertificate = $certificateStatus === 'issued'
+                && $dnsStatus === 'valid-configuration'
+                && $certificateArn !== null
+                && $attachedCertificateArn !== $certificateArn;
 
-            if ($certificateStatus === 'issued' && $dnsStatus === 'valid-configuration' && ! $enabled) {
-                $this->client->updateDistributionTenant([
+            if (! $enabled || $shouldAttachCertificate) {
+                $update = [
                     'Id' => $tenantId,
                     'IfMatch' => (string) $tenantResult->get('ETag'),
                     'Enabled' => true,
-                ]);
+                ];
+
+                if ($shouldAttachCertificate) {
+                    $customizations = (array) ($tenant['Customizations'] ?? []);
+                    $customizations['Certificate'] = ['Arn' => $certificateArn];
+                    $update['Customizations'] = $customizations;
+                }
+
+                $this->client->updateDistributionTenant($update);
                 $enabled = true;
                 $providerStatus = 'activating';
+                $domainStatus = 'inactive';
             }
 
             $profileDomainStatus = $this->status(
@@ -122,7 +139,7 @@ class CloudFrontProfileDomainProvider implements ProfileDomainProvider
                 tenantId: $tenantId,
                 tenantArn: $this->string($tenant['Arn'] ?? $domain->provider_tenant_arn),
                 routingEndpoint: $endpoint,
-                certificateArn: $this->string($certificate['CertificateArn'] ?? null),
+                certificateArn: $certificateArn,
                 certificateStatus: $certificateStatus,
                 dnsStatus: $dnsStatus,
                 dnsRecords: [$this->dnsRecord($domain, $endpoint)],

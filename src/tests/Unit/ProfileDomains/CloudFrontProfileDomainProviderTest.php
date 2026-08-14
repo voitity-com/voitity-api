@@ -62,6 +62,11 @@ class CloudFrontProfileDomainProviderTest extends TestCase
                 'Status' => 'Deployed',
                 'Enabled' => true,
                 'Domains' => [['Domain' => 'profile.example.org', 'Status' => 'active']],
+                'Customizations' => [
+                    'Certificate' => [
+                        'Arn' => 'arn:aws:acm:us-east-1:123456789012:certificate/example',
+                    ],
+                ],
             ],
         ]));
         $handler->append(new Result([
@@ -88,7 +93,7 @@ class CloudFrontProfileDomainProviderTest extends TestCase
         $this->assertSame('valid-configuration', $result->dnsStatus);
     }
 
-    public function test_it_waits_until_cloudfront_activates_the_domain_association(): void
+    public function test_it_attaches_the_issued_certificate_and_waits_for_domain_activation(): void
     {
         $handler = new MockHandler;
         $handler->append(new Result([
@@ -101,7 +106,10 @@ class CloudFrontProfileDomainProviderTest extends TestCase
             ],
         ]));
         $handler->append(new Result([
-            'ManagedCertificateDetails' => ['CertificateStatus' => 'issued'],
+            'ManagedCertificateDetails' => [
+                'CertificateArn' => 'arn:aws:acm:us-east-1:123456789012:certificate/example',
+                'CertificateStatus' => 'issued',
+            ],
         ]));
         $handler->append(new Result([
             'DnsConfigurationList' => [[
@@ -109,6 +117,16 @@ class CloudFrontProfileDomainProviderTest extends TestCase
                 'Status' => 'valid-configuration',
             ]],
         ]));
+        $handler->append(function (Command $command): Result {
+            $this->assertTrue($command['Enabled']);
+            $this->assertSame([
+                'Certificate' => [
+                    'Arn' => 'arn:aws:acm:us-east-1:123456789012:certificate/example',
+                ],
+            ], $command['Customizations']);
+
+            return new Result([]);
+        });
         $provider = new CloudFrontProfileDomainProvider($this->client($handler));
 
         $result = $provider->refresh($this->domain([
@@ -117,6 +135,7 @@ class CloudFrontProfileDomainProviderTest extends TestCase
         ]));
 
         $this->assertSame(ProfileDomainStatus::Activating, $result->status);
+        $this->assertSame(0, count($handler));
     }
 
     public function test_it_deletes_an_already_disabled_tenant(): void
