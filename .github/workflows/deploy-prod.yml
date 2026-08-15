@@ -5,6 +5,12 @@ on:
     branches:
       - prod
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the built image to the production EC2 host
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -50,6 +56,7 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:prod
 
       - name: Deploy on EC2 and run migrations
+        if: github.event_name == 'push' || inputs.deploy
         env:
           PROFILE_DOMAIN_CONNECTION_GROUP_ID: ${{ vars.PROFILE_DOMAIN_CONNECTION_GROUP_ID }}
           PROFILE_DOMAIN_DISTRIBUTION_ID: ${{ vars.PROFILE_DOMAIN_DISTRIBUTION_ID }}
