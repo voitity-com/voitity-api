@@ -663,6 +663,94 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame('https://example.com/media.jpg', $response['media'][0]['image_url']);
     }
 
+    public function test_rag_shows_instagram_media_when_spanish_request_uses_publicaciones(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => 'Profile',
+            'description' => 'Desc',
+            'genre' => 'general',
+            'personality' => 'friendly',
+            'locale' => 'es',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame tus publicaciones de Instagram',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_user_id' => '17841400000000000',
+            'username' => 'bigmelo',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+            'provider_media_id' => 'publication',
+            'media_type' => 'IMAGE',
+            'media_url' => 'https://example.com/publication.jpg',
+            'permalink' => 'https://www.instagram.com/p/publication/',
+            'observation' => 'A July photo published by bigmelo.',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')
+            ->once()
+            ->with($profile, 'Muéstrame tus publicaciones de Instagram', $question->chat_id, $question->id)
+            ->andReturn(new ChatAIAnswer(
+                source: 'openai',
+                answer: json_encode([
+                    'answer' => 'No hay publicaciones de Instagram disponibles en este momento.',
+                    'media_request' => true,
+                    'media_action' => 'none',
+                    'media_ids' => [],
+                    'product_request' => false,
+                    'product_action' => 'none',
+                    'product_ids' => [],
+                    'references' => [],
+                    'constraints' => [
+                        'include_providers' => [],
+                        'exclude_providers' => [],
+                        'include_source_types' => [],
+                        'exclude_source_types' => [],
+                        'require_unseen' => false,
+                    ],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                status: 'success',
+                response: [
+                    '_bigmelo' => [
+                        'knowledge' => [
+                            'mode' => 'rag',
+                            'retrieved_sources' => [[
+                                'source_type' => 'integration_media',
+                                'source_id' => (string) $media->id,
+                            ]],
+                        ],
+                    ],
+                ],
+            ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$media->id], collect($response['media'])->pluck('id')->all());
+        $this->assertSame('instagram', $response['media'][0]['provider_key']);
+        $this->assertStringNotContainsString('No hay publicaciones', $response['text']);
+    }
+
     public function test_get_answer_attaches_model_selected_instagram_media_id(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);

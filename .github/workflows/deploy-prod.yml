@@ -5,6 +5,12 @@ on:
     branches:
       - prod
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the built image to the production EC2 host
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -15,7 +21,6 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::139194331469:role/bigmelo-prod-github-actions-deploy-role
   ECR_REPOSITORY: bigmelo/voitity-api
   EC2_INSTANCE_ID: i-0133c4ba00b95904d
-  API_ENV_SECRET_ID: bigmelo/prod/api/env
 
 jobs:
   deploy:
@@ -50,16 +55,9 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:prod
 
       - name: Deploy on EC2 and run migrations
-        env:
-          PROFILE_DOMAIN_CONNECTION_GROUP_ID: ${{ vars.PROFILE_DOMAIN_CONNECTION_GROUP_ID }}
-          PROFILE_DOMAIN_DISTRIBUTION_ID: ${{ vars.PROFILE_DOMAIN_DISTRIBUTION_ID }}
-          PROFILE_DOMAIN_ROUTING_ENDPOINT: ${{ vars.PROFILE_DOMAIN_ROUTING_ENDPOINT }}
+        if: github.event_name == 'push' || inputs.deploy
         run: |
           set -euo pipefail
-
-          test -n "$PROFILE_DOMAIN_CONNECTION_GROUP_ID"
-          test -n "$PROFILE_DOMAIN_DISTRIBUTION_ID"
-          test -n "$PROFILE_DOMAIN_ROUTING_ENDPOINT"
 
           COMMAND_ID="$(aws ssm send-command \
             --region "$AWS_REGION" \
@@ -69,10 +67,7 @@ jobs:
             --parameters commands='[
               "set -euo pipefail",
               "cd /opt/bigmelo/api",
-              "dnf install -y awscli >/dev/null 2>&1 || true",
-              "aws secretsmanager get-secret-value --secret-id bigmelo/prod/api/env --region us-east-1 --query SecretString --output text > .env",
-              "sed -i /^PROFILE_DOMAIN_/d .env",
-              "echo PROFILE_DOMAIN_DRIVER=cloudfront >> .env && echo PROFILE_DOMAIN_AWS_REGION=us-east-1 >> .env && echo PROFILE_DOMAIN_CLOUDFRONT_DISTRIBUTION_ID=${{ vars.PROFILE_DOMAIN_DISTRIBUTION_ID }} >> .env && echo PROFILE_DOMAIN_CLOUDFRONT_CONNECTION_GROUP_ID=${{ vars.PROFILE_DOMAIN_CONNECTION_GROUP_ID }} >> .env && echo PROFILE_DOMAIN_CLOUDFRONT_ROUTING_ENDPOINT=${{ vars.PROFILE_DOMAIN_ROUTING_ENDPOINT }} >> .env && echo PROFILE_DOMAIN_VALIDATION_TOKEN_HOST=cloudfront >> .env",
+              "test -s .env",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 139194331469.dkr.ecr.us-east-1.amazonaws.com",
               "/usr/local/bin/docker-compose pull",
               "/usr/local/bin/docker-compose run --rm api php artisan optimize:clear",
