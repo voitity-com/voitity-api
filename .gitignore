@@ -29,3 +29,8 @@ Homestead.json
 .env.production
 .phpactor.json
 auth.json
+
+# Local Postman environments may contain API keys and access tokens.
+postman/*.postman_environment.json
+postman/*-environment.json
+.postman/

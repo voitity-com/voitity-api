@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8e12b7ec-3089-410b-8a48-cbfb453689a8",
     "name": "Runway API - Foto a Video Loop 5s",
-    "description": "Colección para generar imágenes desde una imagen base y videos de 5 segundos desde una foto usando Runway API. Usa promptImage como data URI o URL pública directa. Docs: https://docs.dev.runwayml.com/guides/using-the-api/",
+    "description": "Colección para generar imágenes desde una imagen base y videos de 5 segundos desde una foto usando Runway API. La colección no contiene credenciales. Configure RUNWAY_API_KEY únicamente en un Environment personal de Postman y no lo exporte ni lo versione. Usa promptImage como data URI o URL pública directa. Docs: https://docs.dev.runwayml.com/guides/using-the-api/",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -22,10 +22,14 @@
         "type": "text/javascript",
         "exec": [
           "// Variables requeridas:",
-          "// RUNWAY_API_KEY: tu API key de Runway",
+          "// RUNWAY_API_KEY: configúrala en un Environment personal de Postman. Nunca la guardes en esta colección.",
           "// promptImage: una URL pública directa de imagen o data URI base64. Ej:",
           "// data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...",
           "// No uses URLs de vista previa como https://drive.google.com/file/d/..., porque devuelven HTML.",
+          "",
+          "if (!pm.variables.get('RUNWAY_API_KEY')) {",
+          "  throw new Error('RUNWAY_API_KEY no está configurada. Agrégala como variable secreta en un Environment personal de Postman.');",
+          "}",
           "",
           "if (!pm.collectionVariables.get('baseUrl')) {",
           "  pm.collectionVariables.set('baseUrl', 'https://api.dev.runwayml.com');",
@@ -71,7 +75,7 @@
     },
     {
       "key": "RUNWAY_API_KEY",
-      "value": "key_928d7d7b0b32f44b0d50651afdd54147294593c7761748f78a8e3755f4e0496bbd3decc63e02e00b145ddf4db949e9f3d8fe3ff617b78e9537c0a73c4fbe2aa5",
+      "value": "",
       "type": "secret"
     },
     {
