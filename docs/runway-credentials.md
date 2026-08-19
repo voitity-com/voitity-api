@@ -9,7 +9,8 @@ elimine posteriormente del archivo actual.
 
 ## Entornos
 
-- Producción obtiene la credencial desde la configuración protegida del host.
+- Producción obtiene el archivo de entorno completo desde el secreto de AWS
+  Secrets Manager `bigmelo/prod/api/env` en cada despliegue a `prod`.
 - Desarrollo local utiliza `src/.env`, que está ignorado por Git.
 - Postman utiliza un Environment personal no exportado. La colección versionada
   conserva `RUNWAY_API_KEY` con valor vacío.
@@ -44,6 +45,27 @@ El control se ejecuta:
 
 GitHub Secret Scanning y Push Protection deben permanecer habilitados como una
 segunda barrera.
+
+## Sincronización de producción
+
+El workflow `.github/workflows/deploy-prod.yml` ejecuta
+`scripts/deploy/sync-production-env.sh` en la instancia EC2 antes de las
+migraciones y antes de recrear los contenedores. El script:
+
+1. descarga una versión fijada por commit del ejecutor oficial `asm-exec` y
+   valida su SHA-256;
+2. resuelve `AWSCURRENT` mediante una referencia dinámica, sin devolver el
+   contenido del secreto a GitHub Actions ni a SSM;
+3. valida las variables obligatorias y el formato de `RUNWAY_API_KEY`;
+4. incorpora la configuración no secreta de dominios personalizados;
+5. reemplaza `/opt/bigmelo/api/.env` de forma atómica y con permisos `0600`;
+6. continúa con limpieza de configuración, migraciones, recreación de
+   contenedores y reinicio de colas.
+
+Si la resolución, el checksum o una validación falla, el archivo `.env` vigente
+no se reemplaza y el despliegue termina con error. Actualizar el secreto no
+reinicia la aplicación por sí solo; el valor nuevo se aplica en el siguiente
+deploy a `prod` o en una ejecución manual del workflow con `deploy=true`.
 
 ## Respuesta a una exposición
 

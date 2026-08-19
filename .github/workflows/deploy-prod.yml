@@ -59,17 +59,30 @@ jobs:
 
       - name: Deploy on EC2 and run migrations
         if: github.event_name == 'push' || inputs.deploy
+        env:
+          PROFILE_DOMAIN_CONNECTION_GROUP_ID: ${{ vars.PROFILE_DOMAIN_CONNECTION_GROUP_ID }}
+          PROFILE_DOMAIN_DISTRIBUTION_ID: ${{ vars.PROFILE_DOMAIN_DISTRIBUTION_ID }}
+          PROFILE_DOMAIN_ROUTING_ENDPOINT: ${{ vars.PROFILE_DOMAIN_ROUTING_ENDPOINT }}
         run: |
           set -euo pipefail
 
-          COMMAND_ID="$(aws ssm send-command \
-            --region "$AWS_REGION" \
-            --instance-ids "$EC2_INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy $GITHUB_REPOSITORY@$GITHUB_SHA" \
-            --parameters commands='[
+          [[ "$PROFILE_DOMAIN_CONNECTION_GROUP_ID" =~ ^cg_[A-Za-z0-9]+$ ]]
+          [[ "$PROFILE_DOMAIN_DISTRIBUTION_ID" =~ ^E[A-Z0-9]+$ ]]
+          [[ "$PROFILE_DOMAIN_ROUTING_ENDPOINT" =~ ^[A-Za-z0-9.-]+$ ]]
+
+          BIGMELO_SYNC_SCRIPT_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/scripts/deploy/sync-production-env.sh"
+          BIGMELO_SYNC_COMMAND="\"\$BIGMELO_SYNC_SCRIPT\" /opt/bigmelo/api '$PROFILE_DOMAIN_DISTRIBUTION_ID' '$PROFILE_DOMAIN_CONNECTION_GROUP_ID' '$PROFILE_DOMAIN_ROUTING_ENDPOINT'"
+          BIGMELO_COMMANDS="$(jq -cn \
+            --arg sync_script_url "$BIGMELO_SYNC_SCRIPT_URL" \
+            --arg sync_command "$BIGMELO_SYNC_COMMAND" \
+            '[
               "set -euo pipefail",
               "cd /opt/bigmelo/api",
+              "BIGMELO_SYNC_SCRIPT=$(mktemp)",
+              "trap '\''rm -f \"$BIGMELO_SYNC_SCRIPT\"'\'' EXIT",
+              ("curl --fail --silent --show-error --location " + ($sync_script_url | @sh) + " --output \"$BIGMELO_SYNC_SCRIPT\""),
+              "chmod 700 \"$BIGMELO_SYNC_SCRIPT\"",
+              $sync_command,
               "test -s .env",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 139194331469.dkr.ecr.us-east-1.amazonaws.com",
               "/usr/local/bin/docker-compose pull",
@@ -79,7 +92,14 @@ jobs:
               "/usr/local/bin/docker-compose up -d --force-recreate --remove-orphans",
               "/usr/local/bin/docker-compose exec -T api php artisan queue:restart || /usr/local/bin/docker-compose run --rm api php artisan queue:restart",
               "docker image prune -f"
-            ]' \
+            ]')"
+
+          COMMAND_ID="$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy $GITHUB_REPOSITORY@$GITHUB_SHA" \
+            --parameters "$(jq -cn --argjson commands "$BIGMELO_COMMANDS" '{commands: $commands}')" \
             --query "Command.CommandId" \
             --output text)"
 
