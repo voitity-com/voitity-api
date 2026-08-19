@@ -54,8 +54,9 @@ migraciones y antes de recrear los contenedores. El script:
 
 1. descarga una versión fijada por commit del ejecutor oficial `asm-exec` y
    valida su SHA-256;
-2. resuelve `AWSCURRENT` mediante una referencia dinámica, sin devolver el
-   contenido del secreto a GitHub Actions ni a SSM;
+2. resuelve `AWSCURRENT` mediante una referencia dinámica con hasta tres
+   intentos para tolerar timeouts transitorios, sin devolver el contenido del
+   secreto a GitHub Actions ni a SSM;
 3. valida las variables obligatorias y el formato de `RUNWAY_API_KEY`;
 4. incorpora la configuración no secreta de dominios personalizados;
 5. reemplaza `/opt/bigmelo/api/.env` de forma atómica y con permisos `0600`;

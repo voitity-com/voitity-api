@@ -48,7 +48,10 @@ export BIGMELO_PROFILE_DOMAIN_DISTRIBUTION_ID="$profile_domain_distribution_id"
 export BIGMELO_PROFILE_DOMAIN_CONNECTION_GROUP_ID="$profile_domain_connection_group_id"
 export BIGMELO_PROFILE_DOMAIN_ROUTING_ENDPOINT="$profile_domain_routing_endpoint"
 
-"$asm_exec_path" -- python3 -c '
+resolution_succeeded="false"
+
+for attempt in 1 2 3; do
+    if "$asm_exec_path" -- python3 -c '
 import os
 import re
 from pathlib import Path
@@ -107,7 +110,21 @@ lines.extend(
 
 target.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 os.chmod(target, 0o600)
-'
+'; then
+        resolution_succeeded="true"
+        break
+    fi
+
+    if [[ "$attempt" -lt 3 ]]; then
+        echo "Secret resolution attempt ${attempt} failed; retrying." >&2
+        sleep $((attempt * 2))
+    fi
+done
+
+if [[ "$resolution_succeeded" != "true" ]]; then
+    echo "Unable to resolve the production environment after 3 attempts." >&2
+    exit 1
+fi
 
 unset BIGMELO_PRODUCTION_ENV
 
