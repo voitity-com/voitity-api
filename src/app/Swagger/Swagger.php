@@ -38,6 +38,12 @@ namespace App\Swagger;
  *     name="Authorization",
  *     description="Laravel Sanctum Bearer Token (format: Bearer {token})"
  * )
+ * @OA\SecurityScheme(
+ *     securityScheme="businessKey",
+ *     type="apiKey",
+ *     in="header",
+ *     name="X-Bigmelo-Business-Key"
+ * )
  *
  * @OA\Tag(
  *     name="Authentication",
@@ -59,4 +65,6 @@ namespace App\Swagger;
  *     name="Voice Processing",
  *     description="Voice cloning and AI processing workflows"
  * )
+ * @OA\Tag(name="Business Admin", description="Admin-only Business management")
+ * @OA\Tag(name="Business Runtime", description="Origin-restricted guided chatbot runtime")
  */

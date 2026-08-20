@@ -33,6 +33,7 @@ class AdminFeatureController extends Controller
 
         $validated = $request->validate([
             'features' => ['required', 'array'],
+            'features.business' => ['nullable', 'boolean'],
             'features.domains' => ['nullable', 'array'],
             'features.domains.custom' => ['nullable', 'boolean'],
             'features.integrations' => ['nullable', 'array'],
@@ -82,6 +83,10 @@ class AdminFeatureController extends Controller
     private function flattenFeatureInput(array $features): array
     {
         $flattened = [];
+
+        if (array_key_exists('business', $features)) {
+            $flattened['business'] = (bool) $features['business'];
+        }
 
         if (array_key_exists('products', $features)) {
             $flattened['products'] = (bool) $features['products'];

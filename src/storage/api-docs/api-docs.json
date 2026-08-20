@@ -566,6 +566,31 @@
                 ]
             }
         },
+        "/api/businesses": {
+            "get": {
+                "tags": [
+                    "Business Admin"
+                ],
+                "summary": "List businesses",
+                "operationId": "c071f5bb34f38b01e060617097ec68ea",
+                "responses": {
+                    "200": {
+                        "description": "Businesses ordered by update"
+                    },
+                    "403": {
+                        "description": "Admin required"
+                    },
+                    "404": {
+                        "description": "Feature disabled"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/credits/catalog": {
             "get": {
                 "tags": [
@@ -2275,6 +2300,155 @@
                 ]
             }
         },
+        "/api/profile/{profile}/domain": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Get the custom domain configuration for a profile",
+                "operationId": "bd970e45bb106d839e1053bb09eac0d1",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Domain configuration retrieved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Configure a custom domain for a profile",
+                "operationId": "f929a23631366dfa480097e1dfe1c009",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "hostname"
+                                ],
+                                "properties": {
+                                    "hostname": {
+                                        "type": "string",
+                                        "example": "perfil.example.com"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Domain provisioning queued"
+                    },
+                    "409": {
+                        "description": "Profile already has another domain"
+                    },
+                    "422": {
+                        "description": "Invalid or already assigned domain"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Disconnect the custom domain from a profile",
+                "operationId": "726ec62b91ac2e3fa99ca957136654f7",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Domain disconnection queued"
+                    },
+                    "404": {
+                        "description": "Profile or domain not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/profile/{profile}/domain/verify": {
+            "post": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Verify DNS and certificate status for a profile domain",
+                "operationId": "a115668f93517ba67aaa76b36e96f545",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Domain verification queued"
+                    },
+                    "404": {
+                        "description": "Profile or domain not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/profile/{profile}/insights": {
             "get": {
                 "tags": [
@@ -2702,6 +2876,199 @@
                 "security": [
                     {
                         "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/business/widget": {
+            "get": {
+                "tags": [
+                    "Business Runtime"
+                ],
+                "summary": "Get the active Business widget configuration",
+                "operationId": "d97d46b39b2aa499ea0799e8bac6649d",
+                "parameters": [
+                    {
+                        "name": "Origin",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "http://localhost:3001"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Widget appearance and locale"
+                    },
+                    "404": {
+                        "description": "Widget is disabled"
+                    }
+                },
+                "security": [
+                    {
+                        "businessKey": []
+                    }
+                ]
+            }
+        },
+        "/api/business/conversations": {
+            "post": {
+                "tags": [
+                    "Business Runtime"
+                ],
+                "summary": "Start a guided Business conversation",
+                "operationId": "6885220e81a9388a7f89779dc9a20557",
+                "parameters": [
+                    {
+                        "name": "Origin",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "http://localhost:3001"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "visitor_id": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Conversation and encrypted session created"
+                    },
+                    "403": {
+                        "description": "Origin not allowed"
+                    }
+                },
+                "security": [
+                    {
+                        "businessKey": []
+                    }
+                ]
+            }
+        },
+        "/api/business/conversations/{conversation}/messages": {
+            "post": {
+                "tags": [
+                    "Business Runtime"
+                ],
+                "summary": "Advance the published flow",
+                "operationId": "0c71e0f502a3c3c1853ea63a6cd5d052",
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Origin",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Bigmelo-Business-Session",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "message"
+                                ],
+                                "properties": {
+                                    "message": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Flow advanced"
+                    },
+                    "401": {
+                        "description": "Invalid session"
+                    }
+                },
+                "security": [
+                    {
+                        "businessKey": []
+                    }
+                ]
+            }
+        },
+        "/api/business/conversations/{conversation}/status": {
+            "get": {
+                "tags": [
+                    "Business Runtime"
+                ],
+                "summary": "Get conversation status",
+                "operationId": "a779aa456c0ba9624b1386826bcecefd",
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Origin",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Bigmelo-Business-Session",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Current status and finished flag"
+                    }
+                },
+                "security": [
+                    {
+                        "businessKey": []
                     }
                 ]
             }
@@ -3774,6 +4141,10 @@
             "description": "Avatar"
         },
         {
+            "name": "Business Admin",
+            "description": "Business Admin"
+        },
+        {
             "name": "Credits",
             "description": "Credits"
         },
@@ -3796,6 +4167,10 @@
         {
             "name": "Profile Insights",
             "description": "Profile Insights"
+        },
+        {
+            "name": "Business Runtime",
+            "description": "Business Runtime"
         },
         {
             "name": "Subscriptions",
