@@ -33,6 +33,8 @@ class LocalBusinessFlowAITest extends TestCase
             'Necesitamos un chat bot para soporte.',
             'Busco un asistente virtual que recopile datos.',
             'Queremos implementar un bot conversacional.',
+            'We need a virtual assistant for customer support.',
+            'We want an AI agent connected to our database.',
         ] as $message) {
             $this->assertSame('technology', $this->ai->classifyTechnology($message)->data['branch'], $message);
         }

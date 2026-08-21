@@ -39,6 +39,7 @@ flowchart LR
 - `BusinessFlowService`: inicializa, guarda, valida y publica versiones.
 - `BusinessFlowValidator`: verifica un único inicio, tipos válidos, salidas, ramas y nodos alcanzables.
 - `BusinessFlowRunner`: ejecuta el grafo, limita pasos y fija cada conversación a una versión publicada.
+- `BusinessLocalization`: resuelve `es`/`en`, mensajes por nodo, etiquetas de campos y textos dinámicos sin obligar al frontend a traducir respuestas.
 - `BusinessFlowAI`: interfaz desacoplada para clasificación, extracción y análisis. El driver local `LocalBusinessFlowAI` permite pruebas deterministas sin servicios externos.
 - `BusinessKnowledgeRetriever`: recuperación lexical local sobre chunks indexados.
 - `BusinessLeadService`: crea el lead y ejecuta notificaciones idempotentes.
@@ -60,7 +61,7 @@ Todas las tablas son propias del módulo:
 | `business_flow_versions` | Versiones inmutables publicadas y borrador editable. |
 | `business_flow_nodes` | Bloques, posiciones y configuración. |
 | `business_flow_edges` | Flechas, rama y destino. |
-| `business_conversations` | Estado, versión fijada, nodo actual y contexto. |
+| `business_conversations` | Estado, idioma activo, versión fijada, nodo actual y contexto. |
 | `business_messages` | Mensajes del visitante/asistente con tokens. |
 | `business_node_executions` | Auditoría de cada bloque ejecutado. |
 | `business_leads` | Nombre, email, teléfono, WhatsApp, empresa/sitio opcionales, problema y análisis interno de posible solución. |
@@ -102,17 +103,22 @@ Cada bloque tiene:
 - posición X/Y;
 - configuración JSON tipada por el runtime.
 
-Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar mensajes, espera de input, modo de decisión, ramas, acción, nodo inicial, conexiones y eliminación.
+Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, modo de decisión, ramas, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
 
 ### Flow inicial
 
 ```mermaid
 flowchart LR
-    Welcome["Indicación: saludar y preguntar la necesidad"] --> Qualify{"Decisión: necesidad tecnológica"}
+    Greeting["Indicación: saludar y pedir nombre"] --> Name["Acción: guardar nombre"]
+    Name --> Welcome["Indicación: preguntar la necesidad"]
+    Welcome --> Qualify{"Decisión: necesidad tecnológica"}
     Qualify -->|other| Redirect["Indicación: orientar a tecnología"]
     Redirect --> Qualify
     Qualify -->|technology| Capture["Acción: guardar el problema descrito"]
-    Capture --> Ask["Indicación: solicitar datos"]
+    Capture --> ProblemComplete{"Decisión: problema completo"}
+    ProblemComplete -->|incomplete| Clarify["Indicación: profundizar problema"]
+    Clarify --> Capture
+    ProblemComplete -->|complete| Ask["Indicación: solicitar datos"]
     Ask --> Extract["Acción: extraer datos"]
     Extract --> Complete{"Decisión: datos completos"}
     Complete -->|incomplete| Missing["Indicación: pedir datos faltantes"]
@@ -124,7 +130,7 @@ flowchart LR
 
 La publicación valida todo el grafo y crea automáticamente un nuevo borrador basado en la versión publicada. Las conversaciones que ya comenzaron continúan sobre la versión anterior.
 
-El flow inicial contiene 11 nodos y 12 flechas. Solo permite finalizar cuando existen todos estos valores válidos:
+La plantilla base contiene 13 nodos y 15 flechas. El flow publicado del negocio de demostración agrega la bienvenida y captura separada de nombre, para un total de 15 nodos y 17 flechas. Solo permite finalizar cuando existen todos estos valores válidos:
 
 - problema del cliente de al menos 20 caracteres;
 - nombre y apellido;
@@ -172,7 +178,7 @@ Devuelve título, botón, color, posición, locale y nombre del negocio. Devuelv
 ```http
 POST /api/business/conversations
 
-{"visitor_id":"visitor-123"}
+{"visitor_id":"visitor-123","locale":"en"}
 ```
 
 Respuesta relevante:
@@ -182,19 +188,32 @@ Respuesta relevante:
   "data": {
     "conversation_id": "uuid",
     "status": "in_progress",
+    "locale": "en",
     "session": "encrypted-token",
     "messages": [
       {
         "role": "assistant",
-        "content": "¡Hola! Cuéntanos qué problema quieres resolver.",
-        "required_fields": ["project_summary"]
+        "content": "Hello! I am the BIGMELOlabs bot. What is your name?",
+        "locale": "en",
+        "required_fields": ["full_name"],
+        "fields": [
+          {"key":"full_name","label":"Full name","type":"text","required":true}
+        ]
       }
     ]
   }
 }
 ```
 
-El integrador debe conservar `conversation_id` y `session`. `data.messages` contiene las indicaciones iniciales del asistente generadas al arrancar el flow. Cuando una indicación espera campos concretos, el mensaje incluye `required_fields` con los identificadores todavía pendientes. Puede incluir también `optional_fields`: esos controles deben mostrarse, pero no deben impedir el envío ni la finalización si quedan vacíos.
+El integrador debe conservar `conversation_id` y `session`. `locale` acepta `es` o `en`, queda persistido en la conversación y se devuelve a nivel de `data` y de cada mensaje. `data.messages` contiene las indicaciones iniciales del asistente generadas al arrancar el flow.
+
+Cuando una indicación espera campos concretos, el mensaje incluye tres representaciones complementarias:
+
+- `required_fields`: keys estables todavía obligatorias;
+- `optional_fields`: keys que deben mostrarse, pero no bloquean el avance;
+- `fields`: definiciones listas para renderizar con `key`, `label` traducido, `type` HTML y `required`.
+
+El frontend debe construir el formulario desde `fields`, no analizar el texto de `content` ni mantener traducciones duplicadas.
 
 ### Enviar mensaje
 
@@ -203,7 +222,12 @@ POST /api/business/conversations/{conversation_id}/messages
 X-Bigmelo-Business-Session: encrypted-token
 Idempotency-Key: request-uuid
 
-{"message":"Necesito automatizar un proceso con IA"}
+{
+  "locale": "en",
+  "fields": {
+    "project_summary": "We need a chatbot that answers from our knowledge base and captures qualified leads."
+  }
+}
 ```
 
 La respuesta incluye únicamente los mensajes del asistente producidos durante ese avance. No contiene el historial completo y el arreglo puede traer uno o varios elementos:
@@ -214,35 +238,42 @@ La respuesta incluye únicamente los mensajes del asistente producidos durante e
   "data": {
     "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
     "status": "in_progress",
+    "locale": "en",
     "finished": false,
     "messages": [
       {
         "id": 104,
         "role": "assistant",
-        "content": "Entiendo el problema que quieres resolver.",
-        "created_at": "2026-08-20T15:32:01.000000Z"
-      },
-      {
-        "id": 105,
-        "role": "assistant",
-        "content": "Para continuar, indícanos tus datos de contacto.",
+        "content": "Great! To continue, please provide: full name, valid email, phone with country code and WhatsApp with country code. You may also provide company and website; these fields are optional.",
+        "locale": "en",
         "created_at": "2026-08-20T15:32:01.000000Z",
         "required_fields": ["full_name", "email", "phone", "whatsapp"],
-        "optional_fields": ["company", "website"]
+        "optional_fields": ["company", "website"],
+        "fields": [
+          {"key":"full_name","label":"Full name","type":"text","required":true},
+          {"key":"email","label":"Email","type":"email","required":true},
+          {"key":"phone","label":"Phone with country code","type":"tel","required":true},
+          {"key":"whatsapp","label":"WhatsApp with country code","type":"tel","required":true},
+          {"key":"company","label":"Company","type":"text","required":false},
+          {"key":"website","label":"Website","type":"url","required":false}
+        ]
       }
     ]
   }
 }
 ```
 
-La interfaz cliente agrega esos elementos al chat en el orden recibido y conserva localmente los mensajes anteriores. `required_fields` y `optional_fields` aparecen dentro del mensaje que solicita los datos, no a nivel de `data`. Los primeros son obligatorios y, para una indicación dinámica de datos faltantes, contienen solamente lo aún incompleto; los segundos se muestran y se envían solo cuando el visitante los completa. El integrador debe dejar de pedir input cuando `finished` sea `true` o el estado deje de ser `in_progress`.
+La interfaz cliente agrega esos elementos al chat en el orden recibido y conserva localmente los mensajes anteriores. Puede enviar texto libre en `message` o valores de formulario en `fields`; al menos uno de ambos es obligatorio. Las keys admitidas son `full_name`, `email`, `phone`, `whatsapp`, `company`, `website` y `project_summary`. Los campos estructurados se validan y normalizan en el backend, por lo que no dependen del idioma de sus etiquetas.
+
+Debe enviarse `locale` también en cada turno. Si el usuario cambia el selector, el siguiente request usa el nuevo valor y todas las indicaciones y labels posteriores se devuelven en ese idioma, sin crear otra conversación. El integrador debe dejar de pedir input cuando `finished` sea `true` o el estado deje de ser `in_progress`.
 
 Una secuencia típica contiene varias llamadas al mismo endpoint:
 
-1. `{"message":"Soy Laura Gómez."}` devuelve la indicación para describir el problema.
-2. `{"message":"Procesamos facturas manualmente y queremos extraer los datos con IA."}` devuelve la solicitud de contacto.
-3. Una respuesta con datos incompletos devuelve exactamente los campos faltantes.
-4. Al completar los datos devuelve `status: "completed"`, `finished: true` y el mensaje final del asistente.
+1. `{"locale":"es","fields":{"full_name":"Laura Gómez"}}` devuelve la indicación para describir el problema.
+2. `{"locale":"es","fields":{"project_summary":"Procesamos facturas manualmente y queremos extraer y validar sus datos con IA."}}` devuelve la solicitud de contacto.
+3. Una respuesta estructurada con datos incompletos devuelve exactamente los campos faltantes, con labels en español.
+4. Si el siguiente request usa `"locale":"en"`, la indicación de faltantes y sus labels llegan en inglés.
+5. Al completar los datos devuelve `status: "completed"`, `finished: true` y el mensaje final del asistente en el idioma activo.
 
 La posible solución generada por IA es interna: se guarda en el lead y se envía al negocio, pero nunca aparece en `data.messages` para el visitante.
 
@@ -255,7 +286,7 @@ X-Bigmelo-Business-Session: encrypted-token
 
 Estados: `in_progress`, `completed`, `abandoned` y `failed`.
 
-El response de status incluye `current_node`, `started_at` y `completed_at`. No contiene `messages` y no permite recuperar el historial completo.
+El response de status incluye `locale`, `current_node`, `started_at` y `completed_at`. No contiene `messages` y no permite recuperar el historial completo.
 
 ## Widget incluido
 
@@ -276,6 +307,7 @@ El widget:
 - respeta color, título, texto y posición configurados;
 - es responsive y accesible por teclado;
 - conserva un visitor ID local sin guardar la key;
+- envía el `locale` configurado al iniciar y en cada mensaje;
 - maneja session, idempotencia, errores y finalización;
 - al finalizar oculta el compositor y muestra un estado explícito de conversación finalizada;
 - se sirve como script clásico tanto en desarrollo como en el build de producción.
@@ -308,13 +340,16 @@ Las notificaciones usan la cola de Laravel. En desarrollo local debe existir un 
 | Empresa y sitio web vacíos | Todos los obligatorios válidos | Finalizar y crear el lead con ambos opcionales en `null`. |
 | Empresa y sitio web diligenciados | Todos los obligatorios y opcionales | Finalizar y guardar ambos valores en el lead. |
 | Solución interna para chatbot | Problema menciona chatbot y datos de contacto | Priorizar una solución de asistente conversacional; no confundirla con un proyecto de arquitectura de datos. |
+| Conversación en inglés | Iniciar con `locale: en` | Todo `content` y `fields[].label` se devuelve en inglés. |
+| Cambio de idioma | Iniciar en español y enviar el siguiente turno con `locale: en` | Conservar conversación/contexto y responder desde ese turno en inglés. |
+| Formulario estructurado | Enviar `fields` sin `message` | Validar por key estable, guardar los valores y avanzar sin depender del texto traducido. |
 
 La posible solución permanece interna en todos los escenarios: se almacena en el lead y se incluye en la notificación al negocio, pero no se devuelve al visitante.
 
-- Unitarias: validador del grafo, extracción/normalización de teléfono y WhatsApp, separación entre problema y datos de contacto, y heurísticas deterministas del driver local.
-- Feature API: feature toggle, rol, listado, creación, Fuentes, descarga/eliminación de archivos, aislamiento de fuentes entre negocios, publicación, activación, hash de keys, CORS exacto, origen bloqueado, conversación incompleta/completa, lead, solución interna, correos, status, rango de Uso y validación de fechas.
+- Unitarias: validador del grafo, mensajes localizados, extracción/normalización de teléfono y WhatsApp, separación entre problema y datos de contacto, y heurísticas deterministas en español e inglés.
+- Feature API: feature toggle, rol, listado, creación, Fuentes, descarga/eliminación de archivos, aislamiento de fuentes entre negocios, publicación, activación, hash de keys, CORS exacto, origen bloqueado, conversación incompleta/completa, locale inicial, cambio de idioma, campos estructurados/localizados, lead, solución interna, correos, status, rango de Uso y validación de fechas.
 - Build: TypeScript, ESLint, Vite admin y Vite web.
-- Funcionales/visuales: editor real con 11 bloques y 12 flechas, inspector sincronizado con el nodo inicial, publicación, canvas navegable en ambos ejes, configuración, fuente, activación, widget real, rama no tecnológica, datos faltantes, finalización, Leads, cambio de estado, Uso y Docs.
+- Funcionales/visuales: editor real con 15 bloques y 17 flechas, mensajes español/inglés en el inspector, publicación, canvas navegable en ambos ejes, configuración, fuente, activación, widget real, rama no tecnológica, aclaración de problemas breves, formularios localizados, cambio de idioma durante una conversación, datos faltantes, finalización, Leads, cambio de estado, Uso y Docs.
 
 ### Ciclos de QA local ejecutados
 
@@ -325,7 +360,7 @@ La posible solución permanece interna en todos los escenarios: se almacena en e
 5. Conversación pública real: reorientación no tecnológica, captura del problema, bloqueo por WhatsApp faltante, solución interna y finalización; corrección del script clásico del widget en desarrollo.
 6. Verificación de Leads, estado `contacted`, métricas de Uso, Docs y sustitución del input deshabilitado por el estado visible “Conversación finalizada”.
 
-La regresión final se ejecutó en dos procesos para evitar la acumulación de memoria del runner monolítico: 438 pruebas unitarias con 1.675 assertions y 454 pruebas feature con 2.713 assertions. El total fue de **892 pruebas y 4.388 assertions aprobadas**, además de typecheck, ESLint y builds de admin y web aprobados.
+La regresión final se ejecutó en dos procesos para evitar la acumulación de memoria del runner monolítico: 442 pruebas unitarias con 1.686 assertions y 460 pruebas feature con 2.838 assertions. El total fue de **902 pruebas y 4.524 assertions aprobadas**, además de typecheck, ESLint y builds de admin, sitio público y widget aprobados.
 
 ### QA de paridad visual con Perfiles
 

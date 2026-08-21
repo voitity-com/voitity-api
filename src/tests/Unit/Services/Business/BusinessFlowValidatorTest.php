@@ -34,6 +34,16 @@ class BusinessFlowValidatorTest extends TestCase
         $this->assertStringContainsString('technology', implode(' ', $result['errors']));
     }
 
+    public function test_instruction_can_use_localized_messages_without_the_legacy_message(): void
+    {
+        $graph = (new BusinessFlowTemplate)->graph();
+        unset($graph['nodes'][0]['config']['message']);
+
+        $result = (new BusinessFlowValidator)->validate($graph['nodes'], $graph['edges']);
+
+        $this->assertTrue($result['valid']);
+    }
+
     public function test_it_rejects_unsupported_decision_modes_and_actions_before_publish(): void
     {
         $graph = (new BusinessFlowTemplate)->graph();

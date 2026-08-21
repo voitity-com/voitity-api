@@ -38,8 +38,13 @@ class BusinessFlowValidator
             if (($config['start'] ?? false) === true) {
                 $startNodes[] = $key;
             }
-            if ($type === BusinessFlowNodeType::Instruction->value && trim((string) ($config['message'] ?? '')) === '') {
-                $errors[] = "La indicación {$key} no tiene mensaje.";
+            if ($type === BusinessFlowNodeType::Instruction->value) {
+                $messages = is_array($config['messages'] ?? null) ? $config['messages'] : [];
+                $hasMessage = collect([$config['message'] ?? null, $messages['es'] ?? null, $messages['en'] ?? null])
+                    ->contains(fn (mixed $message): bool => is_string($message) && trim($message) !== '');
+                if (! $hasMessage) {
+                    $errors[] = "La indicación {$key} no tiene mensaje.";
+                }
             }
             if ($type === BusinessFlowNodeType::Decision->value) {
                 $mode = trim((string) ($config['mode'] ?? ''));

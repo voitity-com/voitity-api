@@ -479,6 +479,163 @@ class BusinessControllerTest extends TestAPI
         $this->assertNull($lead->website);
     }
 
+    public function test_public_chat_uses_english_messages_and_structured_localized_fields(): void
+    {
+        Mail::fake();
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'English site',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', [
+            'locale' => 'en',
+            'visitor_id' => 'english-visitor',
+        ])->assertCreated()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.messages.0.locale', 'en')
+            ->assertJsonPath('data.messages.0.content', 'Hello! Tell us what problem you want to solve or how you think we could help.')
+            ->assertJsonPath('data.messages.0.fields.0.key', 'project_summary')
+            ->assertJsonPath('data.messages.0.fields.0.label', 'Project or problem')
+            ->assertJsonPath('data.messages.0.fields.0.type', 'textarea')
+            ->assertJsonPath('data.messages.0.fields.0.required', true);
+
+        $conversation = $start->json('data.conversation_id');
+        $headers = [
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ];
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'locale' => 'en',
+                'fields' => [
+                    'project_summary' => 'We need a chatbot that answers from our knowledge base and captures qualified leads for our sales team.',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.messages.0.locale', 'en')
+            ->assertJsonPath('data.messages.0.fields.0.label', 'Full name')
+            ->assertJsonPath('data.messages.0.fields.4.label', 'Company')
+            ->assertJsonPath('data.messages.0.fields.4.required', false)
+            ->assertJsonPath('data.messages.0.fields.5.label', 'Website')
+            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email, phone with country code and WhatsApp with country code. You may also provide company and website; these fields are optional.']);
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'locale' => 'en',
+                'fields' => [
+                    'full_name' => 'Jane Smith',
+                    'email' => 'JANE@EXAMPLE.COM',
+                    'phone' => '+1 202 555 0198',
+                    'whatsapp' => '+1 202 555 0142',
+                    'company' => 'Acme Inc',
+                    'website' => 'https://acme.example',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true)
+            ->assertJsonPath('data.messages.0.locale', 'en')
+            ->assertJsonPath('data.messages.0.content', 'Thank you. We will analyze the information and contact you. The goal is to have a rapid prototype in no more than two weeks, then continue improving and refining it.');
+
+        $this->assertDatabaseHas('business_leads', [
+            'business_id' => $business->id,
+            'email' => 'jane@example.com',
+            'full_name' => 'Jane Smith',
+            'phone' => '+12025550198',
+            'whatsapp' => '+12025550142',
+            'company' => 'Acme Inc',
+            'website' => 'https://acme.example',
+        ]);
+    }
+
+    public function test_public_chat_can_switch_from_spanish_to_english_in_the_same_conversation(): void
+    {
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Bilingual site',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['locale' => 'es'])
+            ->assertCreated()
+            ->assertJsonPath('data.locale', 'es');
+
+        $conversation = $start->json('data.conversation_id');
+        $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ])->postJson("/api/business/conversations/{$conversation}/messages", [
+            'locale' => 'en',
+            'message' => 'We need cloud software to process customer data automatically and show operational analytics.',
+        ])->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.messages.0.locale', 'en')
+            ->assertJsonPath('data.messages.0.fields.0.label', 'Full name')
+            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email, phone with country code and WhatsApp with country code. You may also provide company and website; these fields are optional.']);
+
+        $this->assertDatabaseHas('business_conversations', ['uuid' => $conversation, 'locale' => 'en']);
+    }
+
+    public function test_public_chat_rejects_unsupported_locales_and_empty_structured_fields(): void
+    {
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Validated locale',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $headers = ['Origin' => 'http://localhost:5173', 'X-Bigmelo-Business-Key' => $key];
+        $this->withHeaders($headers)
+            ->postJson('/api/business/conversations', ['locale' => 'fr'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrorFor('locale');
+
+        $start = $this->withHeaders($headers)
+            ->postJson('/api/business/conversations', ['locale' => 'en'])
+            ->assertCreated();
+
+        $conversationHeaders = [...$headers, 'X-Bigmelo-Business-Session' => $start->json('data.session')];
+        $conversationUrl = "/api/business/conversations/{$start->json('data.conversation_id')}/messages";
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson($conversationUrl, [
+                'locale' => 'en',
+                'fields' => [],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrorFor('fields');
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson($conversationUrl, [
+                'locale' => 'en',
+                'fields' => ['phone' => '3133929826'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['fields.phone'])
+            ->assertJsonFragment(['Phone must include + and the country code, for example +573001234567.']);
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson($conversationUrl, [
+                'locale' => 'es',
+                'fields' => ['whatsapp' => '573133929826'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['fields.whatsapp'])
+            ->assertJsonFragment(['WhatsApp debe incluir + y el indicativo de país, por ejemplo +573001234567.']);
+    }
+
     public function test_public_api_rejects_an_unlisted_origin(): void
     {
         $business = $this->createPublishedBusiness();

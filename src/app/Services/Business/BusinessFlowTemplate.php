@@ -11,6 +11,10 @@ class BusinessFlowTemplate
             'nodes' => [
                 $this->node('welcome', 'instruction', 'Bienvenida', 400, 300, [
                     'message' => '¡Hola! Cuéntanos qué problema quieres resolver o en qué crees que podemos ayudarte.',
+                    'messages' => [
+                        'es' => '¡Hola! Cuéntanos qué problema quieres resolver o en qué crees que podemos ayudarte.',
+                        'en' => 'Hello! Tell us what problem you want to solve or how you think we could help.',
+                    ],
                     'wait_for_input' => true,
                     'required_fields' => ['project_summary'],
                     'start' => true,
@@ -21,6 +25,10 @@ class BusinessFlowTemplate
                 ]),
                 $this->node('redirect', 'instruction', 'Orientar al usuario', 1120, 90, [
                     'message' => 'Estamos para ayudarte con tecnología y automatización, como desarrollo de software, IA, datos e infraestructura. Cuéntanos si tienes una necesidad relacionada.',
+                    'messages' => [
+                        'es' => 'Estamos para ayudarte con tecnología y automatización, como desarrollo de software, IA, datos e infraestructura. Cuéntanos si tienes una necesidad relacionada.',
+                        'en' => 'We can help with technology and automation, such as software development, AI, data, and infrastructure. Tell us if you have a related need.',
+                    ],
                     'wait_for_input' => true,
                 ]),
                 $this->node('capture_problem', 'action', 'Guardar el problema descrito', 1120, 500, [
@@ -33,11 +41,16 @@ class BusinessFlowTemplate
                 ]),
                 $this->node('request_problem_details', 'instruction', 'Profundizar en el problema', 1840, 260, [
                     'message' => 'Para poder ayudarte bien, cuéntanos un poco más: ¿qué situación o proceso quieres resolver, quién lo usa y qué resultado esperas obtener?',
+                    'messages' => [
+                        'es' => 'Para poder ayudarte bien, cuéntanos un poco más: ¿qué situación o proceso quieres resolver, quién lo usa y qué resultado esperas obtener?',
+                        'en' => 'To help you well, tell us a little more: what situation or process do you want to improve, who uses it, and what result do you expect?',
+                    ],
                     'wait_for_input' => true,
                     'required_fields' => ['project_summary'],
                 ]),
                 $this->node('request_details', 'instruction', 'Solicitar datos', 1840, 620, [
                     'message' => '{{contact_request}}',
+                    'messages' => ['es' => '{{contact_request}}', 'en' => '{{contact_request}}'],
                     'wait_for_input' => true,
                     'required_fields' => ['full_name', 'email', 'phone', 'whatsapp'],
                     'optional_fields' => ['company', 'website'],
@@ -54,6 +67,10 @@ class BusinessFlowTemplate
                 ]),
                 $this->node('missing_details', 'instruction', 'Solicitar datos faltantes', 2920, 260, [
                     'message' => 'Para continuar necesitamos: {{missing_fields}}.{{phone_hint}}',
+                    'messages' => [
+                        'es' => 'Para continuar necesitamos: {{missing_fields}}.{{phone_hint}}',
+                        'en' => 'To continue, we need: {{missing_fields}}.{{phone_hint}}',
+                    ],
                     'wait_for_input' => true,
                     'dynamic' => 'missing_fields',
                 ]),
@@ -63,6 +80,10 @@ class BusinessFlowTemplate
                 ]),
                 $this->node('closing', 'instruction', 'Confirmación final', 3280, 800, [
                     'message' => 'Muchas gracias. Analizaremos la información y te contactaremos. La idea es tener un prototipo rápido en máximo dos semanas y luego seguir mejorándolo y puliéndolo.',
+                    'messages' => [
+                        'es' => 'Muchas gracias. Analizaremos la información y te contactaremos. La idea es tener un prototipo rápido en máximo dos semanas y luego seguir mejorándolo y puliéndolo.',
+                        'en' => 'Thank you. We will analyze the information and contact you. The goal is to have a rapid prototype in no more than two weeks, then continue improving and refining it.',
+                    ],
                     'wait_for_input' => false,
                 ]),
                 $this->node('finalize', 'action', 'Crear lead y enviar correos', 3640, 800, [

@@ -24,10 +24,11 @@ class BusinessFlowRunner
         private readonly BusinessLeadService $leads,
         private readonly BusinessUsageRecorder $usage,
         private readonly BusinessKnowledgeRetriever $knowledge,
+        private readonly BusinessLocalization $localization,
     ) {}
 
     /** @return array{conversation: BusinessConversation, messages: array<int, BusinessMessage>} */
-    public function start(Business $business, BusinessApiClient $client, string $origin, ?string $visitorId = null): array
+    public function start(Business $business, BusinessApiClient $client, string $origin, ?string $visitorId = null, string $locale = 'es'): array
     {
         $version = $business->flow?->publishedVersion?->load(['nodes', 'edges']);
         if (! $version) {
@@ -38,12 +39,13 @@ class BusinessFlowRunner
             throw ValidationException::withMessages(['flow' => 'El flow publicado no tiene nodo inicial.']);
         }
 
-        return DB::transaction(function () use ($business, $client, $origin, $visitorId, $version, $start): array {
+        return DB::transaction(function () use ($business, $client, $origin, $visitorId, $locale, $version, $start): array {
             $conversation = $business->conversations()->create([
                 'uuid' => (string) Str::uuid(),
                 'business_flow_version_id' => $version->id,
                 'business_api_client_id' => $client->id,
                 'status' => BusinessConversationStatus::InProgress,
+                'locale' => $this->localization->normalize($locale),
                 'current_node_key' => $start->node_key,
                 'context' => ['lead_data' => []],
                 'origin' => $origin,
@@ -58,12 +60,21 @@ class BusinessFlowRunner
     }
 
     /** @return array{conversation: BusinessConversation, messages: array<int, BusinessMessage>} */
-    public function receive(BusinessConversation $conversation, string $content, ?string $idempotencyKey = null): array
-    {
-        return DB::transaction(function () use ($conversation, $content, $idempotencyKey): array {
+    public function receive(
+        BusinessConversation $conversation,
+        string $content,
+        ?string $idempotencyKey = null,
+        array $fields = [],
+        ?string $locale = null,
+    ): array {
+        return DB::transaction(function () use ($conversation, $content, $idempotencyKey, $fields, $locale): array {
             $conversation = BusinessConversation::query()->lockForUpdate()->findOrFail($conversation->id);
             if ($conversation->status !== BusinessConversationStatus::InProgress) {
                 throw ValidationException::withMessages(['conversation' => 'La conversación ya finalizó.']);
+            }
+
+            if ($locale !== null) {
+                $conversation->update(['locale' => $this->localization->normalize($locale, $conversation->locale ?: 'es')]);
             }
 
             if ($idempotencyKey) {
@@ -76,12 +87,20 @@ class BusinessFlowRunner
                 }
             }
 
+            $structuredFields = $this->normalizeStructuredFields($fields);
             $tokens = $this->usage->estimateTokens($content);
+            $messageData = ['locale' => $conversation->locale];
+            if ($idempotencyKey) {
+                $messageData['idempotency_key'] = $idempotencyKey;
+            }
+            if ($structuredFields !== []) {
+                $messageData['fields'] = $structuredFields;
+            }
             $visitorMessage = $conversation->messages()->create([
                 'node_key' => $conversation->current_node_key,
                 'role' => 'visitor',
                 'content' => $content,
-                'data' => $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : [],
+                'data' => $messageData,
                 'input_tokens' => $tokens,
                 'total_tokens' => $tokens,
             ]);
@@ -177,10 +196,11 @@ class BusinessFlowRunner
     {
         $requiredFields = $this->instructionRequiredFields($conversation, $node);
         $optionalFields = $this->instructionOptionalFields($conversation, $node, $requiredFields);
-        $messageText = $this->interpolate((string) ($node->config['message'] ?? ''), $conversation->context ?? []);
-        $messageText = str_replace('{{contact_request}}', $this->contactRequest($requiredFields, $optionalFields), $messageText);
+        $locale = $this->localization->normalize($conversation->locale);
+        $messageText = $this->interpolate($this->localization->nodeMessage($node->config ?? [], $locale), $conversation->context ?? [], $locale);
+        $messageText = str_replace('{{contact_request}}', $this->localization->contactRequest($requiredFields, $optionalFields, $locale), $messageText);
         $tokens = $this->usage->estimateTokens($messageText);
-        $messageData = [];
+        $messageData = ['locale' => $locale];
         if ($requiredFields !== []) {
             $messageData['required_fields'] = $requiredFields;
         }
@@ -316,11 +336,14 @@ class BusinessFlowRunner
     {
         $action = (string) ($node->config['action'] ?? '');
         if ($action === 'capture_problem' || $action === 'extract_fields') {
-            $latest = (string) $conversation->messages()->where('role', 'visitor')->latest('id')->value('content');
+            $latestMessage = $conversation->messages()->where('role', 'visitor')->latest('id')->first();
+            $latest = (string) $latestMessage?->content;
             $known = $conversation->context['lead_data'] ?? [];
+            $structuredFields = $this->normalizeStructuredFields($latestMessage?->data['fields'] ?? []);
+            $known = array_merge($known, $structuredFields);
             $result = $this->ai->extractLeadData($latest, $known, $action === 'capture_problem');
             $context = $conversation->context ?? [];
-            $context['lead_data'] = $result->data['lead_data'] ?? $known;
+            $context['lead_data'] = array_merge($result->data['lead_data'] ?? $known, $structuredFields);
             $conversation->update(['context' => $context, 'current_node_key' => $node->node_key]);
             $this->recordAI($conversation, $action === 'capture_problem' ? 'problem_extraction' : 'field_extraction', $result);
 
@@ -384,18 +407,12 @@ class BusinessFlowRunner
     }
 
     /** @param array<string, mixed> $context */
-    private function interpolate(string $message, array $context): string
+    private function interpolate(string $message, array $context, string $locale): string
     {
-        $labels = [
-            'full_name' => 'nombre y apellido', 'email' => 'email válido',
-            'phone' => 'teléfono con indicativo de país', 'whatsapp' => 'WhatsApp con indicativo de país',
-            'company' => 'empresa', 'website' => 'sitio web', 'project_summary' => 'descripción completa del problema',
-        ];
-        $missing = collect($context['missing_fields'] ?? [])->map(fn (string $field): string => $labels[$field] ?? $field)->implode(', ');
         $missingFields = is_array($context['missing_fields'] ?? null) ? $context['missing_fields'] : [];
-        $phoneHint = collect(['phone', 'whatsapp'])->contains(fn (string $field): bool => in_array($field, $missingFields, true))
-            ? ' Recuerda incluir el indicativo de país en teléfono y WhatsApp.'
-            : '';
+        $missing = $this->localization->fieldPhrases($missingFields, $locale);
+        $missing = $this->localizedHumanList($missing, $locale);
+        $phoneHint = $this->localization->phoneHint($missingFields, $locale);
 
         return str_replace(['{{missing_fields}}', '{{phone_hint}}'], [$missing, $phoneHint], $message);
     }
@@ -425,36 +442,8 @@ class BusinessFlowRunner
         };
     }
 
-    /** @param array<int, string> $required @param array<int, string> $optional */
-    private function contactRequest(array $required, array $optional): string
-    {
-        $labels = [
-            'full_name' => 'nombre y apellido',
-            'email' => 'email válido',
-            'phone' => 'teléfono con indicativo de país',
-            'whatsapp' => 'WhatsApp con indicativo de país',
-            'company' => 'empresa',
-            'website' => 'sitio web',
-            'project_summary' => 'descripción completa del problema',
-        ];
-        $requiredList = $this->humanList(collect($required)->map(fn (string $field): string => $labels[$field] ?? $field)->all());
-        $optionalList = $this->humanList(collect($optional)->map(fn (string $field): string => $labels[$field] ?? $field)->all());
-
-        if ($requiredList !== '' && $optionalList !== '') {
-            return "¡Perfecto! Para continuar indícanos: {$requiredList}. También puedes indicarnos {$optionalList}; son opcionales.";
-        }
-        if ($requiredList !== '') {
-            return "¡Perfecto! Para continuar indícanos: {$requiredList}.";
-        }
-        if ($optionalList !== '') {
-            return "¡Perfecto! Ya tenemos los datos obligatorios. Si quieres, también puedes indicarnos {$optionalList}; son opcionales.";
-        }
-
-        return '¡Perfecto! Ya tenemos los datos necesarios para continuar.';
-    }
-
     /** @param array<int, string> $values */
-    private function humanList(array $values): string
+    private function localizedHumanList(array $values, string $locale): string
     {
         if (count($values) < 2) {
             return $values[0] ?? '';
@@ -462,7 +451,30 @@ class BusinessFlowRunner
 
         $last = array_pop($values);
 
-        return implode(', ', $values).' y '.$last;
+        return implode(', ', $values).($locale === 'en' ? ' and ' : ' y ').$last;
+    }
+
+    /** @return array<string, string> */
+    private function normalizeStructuredFields(mixed $fields): array
+    {
+        if (! is_array($fields)) {
+            return [];
+        }
+
+        $allowed = ['full_name', 'email', 'phone', 'whatsapp', 'company', 'website', 'project_summary'];
+
+        return collect($fields)
+            ->filter(fn (mixed $value, mixed $field): bool => is_string($field) && in_array($field, $allowed, true) && filled($value))
+            ->map(function (mixed $value, string $field): string {
+                $value = trim((string) $value);
+
+                return match ($field) {
+                    'email' => mb_strtolower($value),
+                    'phone', 'whatsapp' => '+'.preg_replace('/\D+/', '', $value),
+                    default => $value,
+                };
+            })
+            ->all();
     }
 
     private function fail(BusinessConversation $conversation, string $reason): void

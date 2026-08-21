@@ -12,7 +12,7 @@ class BusinessConversation extends Model
 {
     protected $fillable = [
         'uuid', 'business_id', 'business_flow_version_id', 'business_api_client_id', 'status',
-        'current_node_key', 'context', 'origin', 'visitor_id_hash', 'started_at', 'last_activity_at',
+        'locale', 'current_node_key', 'context', 'origin', 'visitor_id_hash', 'started_at', 'last_activity_at',
         'completed_at', 'end_reason',
     ];
 
