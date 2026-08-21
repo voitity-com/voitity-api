@@ -166,6 +166,7 @@ La publicación valida todo el grafo y crea automáticamente un nuevo borrador b
 2. Se genera un embedding de esa consulta y se buscan candidatos entre chunks activos del mismo Business.
 3. Se combinan la similitud semántica y la lexical; se descartan resultados por debajo del umbral y se limita el contexto enviado.
 4. La IA recibe la pregunta exacta del nodo, la descripción habilitada, el problema, los mensajes recientes y los fragmentos relevantes. Las fuentes completas nunca se envían indiscriminadamente.
+   La evidencia conserva roles separados: el problema y los mensajes representan lo que dijo el visitante; la descripción y las fuentes solo explican lo que sabe u ofrece el Business y nunca completan datos ausentes del visitante. Si la pregunta evalúa si el problema está suficientemente descrito, una necesidad vacía o genérica de menos de ocho palabras toma directamente la rama segura `no`. Para descripciones más amplias, la IA debe encontrar en el texto del visitante una situación o proceso concreto y el resultado esperado; no puede inferirlos desde las fuentes.
 5. La salida estructurada obliga a devolver `answer`, `confidence`, `reason` y `source_chunk_ids`. Una respuesta inválida, un error o confianza insuficiente toma la rama segura `no`.
 6. La ejecución del nodo registra la rama tomada, confianza y chunks usados; luego avanza por la flecha `yes` o `no`.
 

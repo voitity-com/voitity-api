@@ -11,6 +11,7 @@ class LocalBusinessDecisionAI implements BusinessDecisionAI
     public function __construct(
         private readonly BusinessFlowAI $flowAI,
         private readonly BusinessUsageRecorder $usage,
+        private readonly BusinessDecisionEvidencePolicy $evidencePolicy,
     ) {}
 
     public function evaluate(
@@ -22,6 +23,11 @@ class LocalBusinessDecisionAI implements BusinessDecisionAI
         array $knowledge,
         string $locale,
     ): BusinessDecisionResult {
+        if ($this->evidencePolicy->asksWhetherVisitorProblemIsSufficient($question)
+            && ! $this->evidencePolicy->visitorProblemHasMinimumDetail($problem)) {
+            return $this->evidencePolicy->insufficientResult();
+        }
+
         $classification = $this->flowAI->classifyTechnology(trim(($problem ?: '')."\n".$visitorContext));
         $knowledgeScore = (float) collect($knowledge)->max('score');
         $answer = ($classification->data['branch'] ?? 'other') === 'technology'
