@@ -12,12 +12,12 @@ class BusinessLead extends Model
     protected $fillable = [
         'business_id', 'business_conversation_id', 'status', 'full_name', 'email', 'phone', 'whatsapp',
         'company', 'website', 'project_summary', 'ai_solution_summary', 'data', 'contacted_at', 'sold_at',
-        'no_response_at',
+        'no_response_at', 'closed_at',
     ];
 
     protected $casts = [
         'status' => BusinessLeadStatus::class, 'data' => 'array', 'contacted_at' => 'datetime',
-        'sold_at' => 'datetime', 'no_response_at' => 'datetime',
+        'sold_at' => 'datetime', 'no_response_at' => 'datetime', 'closed_at' => 'datetime',
     ];
 
     public function conversation(): BelongsTo

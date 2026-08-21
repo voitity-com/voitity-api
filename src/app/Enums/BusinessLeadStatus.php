@@ -8,4 +8,5 @@ enum BusinessLeadStatus: string
     case Contacted = 'contacted';
     case Sale = 'sale';
     case NoResponse = 'no_response';
+    case Closed = 'closed';
 }

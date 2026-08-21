@@ -12,6 +12,7 @@ class BusinessFlowTemplate
                 $this->node('welcome', 'instruction', 'Bienvenida', 400, 300, [
                     'message' => '¡Hola! Cuéntanos qué problema quieres resolver o en qué crees que podemos ayudarte.',
                     'wait_for_input' => true,
+                    'required_fields' => ['project_summary'],
                     'start' => true,
                 ]),
                 $this->node('qualify', 'decision', '¿Es una necesidad tecnológica?', 760, 300, [
@@ -25,33 +26,46 @@ class BusinessFlowTemplate
                 $this->node('capture_problem', 'action', 'Guardar el problema descrito', 1120, 500, [
                     'action' => 'capture_problem',
                 ]),
-                $this->node('request_details', 'instruction', 'Solicitar datos', 1480, 500, [
-                    'message' => '¡Perfecto! Para continuar indícanos tu nombre y apellido, email, teléfono con indicativo de país y WhatsApp con indicativo de país. Empresa y sitio web son opcionales.',
-                    'wait_for_input' => true,
+                $this->node('problem_complete', 'decision', '¿El problema está suficientemente descrito?', 1480, 500, [
+                    'mode' => 'required_fields_complete',
+                    'required_fields' => ['project_summary'],
+                    'branches' => ['complete', 'incomplete'],
                 ]),
-                $this->node('extract_details', 'action', 'Obtener datos de la respuesta', 1840, 500, [
+                $this->node('request_problem_details', 'instruction', 'Profundizar en el problema', 1840, 260, [
+                    'message' => 'Para poder ayudarte bien, cuéntanos un poco más: ¿qué situación o proceso quieres resolver, quién lo usa y qué resultado esperas obtener?',
+                    'wait_for_input' => true,
+                    'required_fields' => ['project_summary'],
+                ]),
+                $this->node('request_details', 'instruction', 'Solicitar datos', 1840, 620, [
+                    'message' => '{{contact_request}}',
+                    'wait_for_input' => true,
+                    'required_fields' => ['full_name', 'email', 'phone', 'whatsapp'],
+                    'optional_fields' => ['company', 'website'],
+                ]),
+                $this->node('extract_details', 'action', 'Obtener datos de la respuesta', 2200, 620, [
                     'action' => 'extract_fields',
                     'required_fields' => ['full_name', 'email', 'phone', 'whatsapp', 'project_summary'],
+                    'optional_fields' => ['company', 'website'],
                 ]),
-                $this->node('details_complete', 'decision', '¿Los datos están completos?', 2200, 500, [
+                $this->node('details_complete', 'decision', '¿Los datos están completos?', 2560, 620, [
                     'mode' => 'required_fields_complete',
                     'required_fields' => ['full_name', 'email', 'phone', 'whatsapp', 'project_summary'],
                     'branches' => ['complete', 'incomplete'],
                 ]),
-                $this->node('missing_details', 'instruction', 'Solicitar datos faltantes', 2560, 260, [
-                    'message' => 'Para continuar necesitamos: {{missing_fields}}. Recuerda incluir el indicativo de país en teléfono y WhatsApp.',
+                $this->node('missing_details', 'instruction', 'Solicitar datos faltantes', 2920, 260, [
+                    'message' => 'Para continuar necesitamos: {{missing_fields}}.{{phone_hint}}',
                     'wait_for_input' => true,
                     'dynamic' => 'missing_fields',
                 ]),
-                $this->node('analyze_solution', 'action', 'Plantear solución interna con IA', 2560, 700, [
+                $this->node('analyze_solution', 'action', 'Plantear solución interna con IA', 2920, 800, [
                     'action' => 'analyze_solution',
                     'visibility' => 'internal',
                 ]),
-                $this->node('closing', 'instruction', 'Confirmación final', 2920, 700, [
+                $this->node('closing', 'instruction', 'Confirmación final', 3280, 800, [
                     'message' => 'Muchas gracias. Analizaremos la información y te contactaremos. La idea es tener un prototipo rápido en máximo dos semanas y luego seguir mejorándolo y puliéndolo.',
                     'wait_for_input' => false,
                 ]),
-                $this->node('finalize', 'action', 'Crear lead y enviar correos', 3280, 700, [
+                $this->node('finalize', 'action', 'Crear lead y enviar correos', 3640, 800, [
                     'action' => 'finalize_lead',
                     'operations' => ['create_lead', 'notify_business', 'notify_visitor', 'complete_conversation'],
                 ]),
@@ -61,7 +75,10 @@ class BusinessFlowTemplate
                 $this->edge('qualify-redirect', 'qualify', 'redirect', 'other', 'No relacionado'),
                 $this->edge('qualify-capture', 'qualify', 'capture_problem', 'technology', 'Tecnología'),
                 $this->edge('redirect-qualify', 'redirect', 'qualify'),
-                $this->edge('capture-details', 'capture_problem', 'request_details'),
+                $this->edge('capture-problem-check', 'capture_problem', 'problem_complete'),
+                $this->edge('problem-check-details', 'problem_complete', 'request_details', 'complete', 'Problema completo'),
+                $this->edge('problem-check-clarify', 'problem_complete', 'request_problem_details', 'incomplete', 'Falta contexto'),
+                $this->edge('problem-clarify-capture', 'request_problem_details', 'capture_problem'),
                 $this->edge('details-extract', 'request_details', 'extract_details'),
                 $this->edge('extract-check', 'extract_details', 'details_complete'),
                 $this->edge('check-missing', 'details_complete', 'missing_details', 'incomplete', 'Faltan datos'),

@@ -45,6 +45,14 @@ class BusinessLeadService
             );
         });
         $lead = $lead instanceof BusinessLead ? $lead : $conversation->lead()->firstOrFail();
+        if ($lead->wasRecentlyCreated) {
+            $lead->histories()->create([
+                'changed_by_user_id' => null,
+                'from_status' => null,
+                'to_status' => BusinessLeadStatus::Created->value,
+                'note' => null,
+            ]);
+        }
         $lead->load('business.settings');
 
         $recipient = $lead->business->settings?->lead_recipient_email;

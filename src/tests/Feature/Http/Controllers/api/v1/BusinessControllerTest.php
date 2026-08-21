@@ -61,8 +61,8 @@ class BusinessControllerTest extends TestAPI
         ])->assertCreated()->assertJsonPath('data.status', 'draft');
 
         $business = Business::query()->findOrFail($response->json('data.id'));
-        $this->assertCount(11, $business->flow->draftVersion->nodes);
-        $this->assertCount(12, $business->flow->draftVersion->edges);
+        $this->assertCount(13, $business->flow->draftVersion->nodes);
+        $this->assertCount(15, $business->flow->draftVersion->edges);
 
         $this->withToken($this->token)
             ->postJson("/api/businesses/{$business->id}/flow/publish")
@@ -211,7 +211,8 @@ class BusinessControllerTest extends TestAPI
         ])->postJson('/api/business/conversations', ['visitor_id' => 'visitor-1'])
             ->assertCreated()
             ->assertJsonPath('data.status', 'in_progress')
-            ->assertJsonCount(1, 'data.messages');
+            ->assertJsonCount(1, 'data.messages')
+            ->assertJsonPath('data.messages.0.required_fields', ['project_summary']);
 
         $conversation = $start->json('data.conversation_id');
         $session = $start->json('data.session');
@@ -227,7 +228,9 @@ class BusinessControllerTest extends TestAPI
             ])
             ->assertOk()
             ->assertJsonPath('data.status', 'in_progress')
-            ->assertJsonPath('data.messages.0.role', 'assistant');
+            ->assertJsonPath('data.messages.0.role', 'assistant')
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
 
         $this->withHeaders($headers)
             ->postJson("/api/business/conversations/{$conversation}/messages", [
@@ -236,6 +239,7 @@ class BusinessControllerTest extends TestAPI
             ->assertOk()
             ->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.finished', false)
+            ->assertJsonPath('data.messages.0.required_fields', ['whatsapp'])
             ->assertJsonFragment(['content' => 'Para continuar necesitamos: WhatsApp con indicativo de país. Recuerda incluir el indicativo de país en teléfono y WhatsApp.']);
 
         $completed = $this->withHeaders($headers)
@@ -270,6 +274,56 @@ class BusinessControllerTest extends TestAPI
         });
         Mail::assertQueued(BusinessVisitorConfirmation::class);
 
+        $this->assertDatabaseHas('business_lead_status_histories', [
+            'business_lead_id' => $lead->id,
+            'from_status' => null,
+            'to_status' => 'created',
+        ]);
+
+        $lead->timestamps = false;
+        $lead->forceFill(['created_at' => now()->subMonths(2)])->saveQuietly();
+        $lead->timestamps = true;
+
+        $this->withToken($this->token)
+            ->patchJson("/api/businesses/{$business->id}/leads/{$lead->id}", [
+                'status' => 'closed',
+                'note' => 'El cliente decidió cerrar el proceso después de la revisión técnica.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'closed')
+            ->assertJsonPath('data.histories.0.from_status', null)
+            ->assertJsonPath('data.histories.0.to_status', 'created')
+            ->assertJsonPath('data.histories.1.from_status', 'created')
+            ->assertJsonPath('data.histories.1.to_status', 'closed')
+            ->assertJsonPath('data.histories.1.note', 'El cliente decidió cerrar el proceso después de la revisión técnica.')
+            ->assertJsonPath('data.histories.1.changed_by.id', $this->admin->id)
+            ->assertJsonStructure(['data' => ['closed_at', 'created_at', 'updated_at']]);
+
+        $today = now()->toDateString();
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/leads?date_field=created_at&from={$today}&to={$today}&statuses[]=closed")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/leads?date_field=updated_at&from={$today}&to={$today}&statuses[]=closed&statuses[]=sale")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $lead->id)
+            ->assertJsonPath('data.0.status', 'closed')
+            ->assertJsonCount(2, 'data.0.histories');
+
+        $bogotaToday = now('America/Bogota')->toDateString();
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/leads?date_field=updated_at&from={$bogotaToday}&to={$bogotaToday}&timezone=America%2FBogota&statuses[]=closed")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $lead->id);
+
+        $lead->timestamps = false;
+        $lead->forceFill(['created_at' => now()])->saveQuietly();
+        $lead->timestamps = true;
+
         $this->withHeaders($headers)
             ->getJson("/api/business/conversations/{$conversation}/status")
             ->assertOk()
@@ -279,6 +333,150 @@ class BusinessControllerTest extends TestAPI
             ->getJson("/api/businesses/{$business->id}/usage")
             ->assertOk()
             ->assertJsonPath('data.leads', 1);
+    }
+
+    public function test_public_chat_clarifies_a_short_problem_before_contact_and_allows_optional_fields_to_be_blank(): void
+    {
+        Mail::fake();
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Escenarios locales',
+            'origins' => ['http://localhost:3000'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['visitor_id' => 'short-problem'])
+            ->assertCreated();
+        $conversation = $start->json('data.conversation_id');
+        $headers = [
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ];
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Quiero un chatbot',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.messages.0.content', 'Para poder ayudarte bien, cuéntanos un poco más: ¿qué situación o proceso quieres resolver, quién lo usa y qué resultado esperas obtener?')
+            ->assertJsonPath('data.messages.0.required_fields', ['project_summary'])
+            ->assertJsonMissingPath('data.messages.0.optional_fields');
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Queremos atender preguntas frecuentes de clientes, derivar casos complejos y recopilar sus datos de contacto.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.messages.0.content', '¡Perfecto! Para continuar indícanos: nombre y apellido, email válido, teléfono con indicativo de país y WhatsApp con indicativo de país. También puedes indicarnos empresa y sitio web; son opcionales.')
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Me llamo Laura Gómez, teléfono +57 300 111 2233 y WhatsApp +57 310 555 6677.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.finished', false)
+            ->assertJsonPath('data.messages.0.required_fields', ['email'])
+            ->assertJsonPath('data.messages.0.content', 'Para continuar necesitamos: email válido.')
+            ->assertJsonMissingPath('data.messages.0.optional_fields');
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Mi email es laura@example.com.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true);
+
+        $lead = $business->leads()->where('email', 'laura@example.com')->firstOrFail();
+        $this->assertNull($lead->company);
+        $this->assertNull($lead->website);
+        $this->assertStringStartsWith('Queremos atender preguntas frecuentes', $lead->project_summary);
+    }
+
+    public function test_public_chat_redirects_a_non_technology_request_and_recovers_when_technology_is_described(): void
+    {
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Ramas locales',
+            'origins' => ['http://localhost:3000'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['visitor_id' => 'redirect-recovery'])
+            ->assertCreated();
+        $conversation = $start->json('data.conversation_id');
+        $headers = [
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ];
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Quiero organizar una fiesta de cumpleaños.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.messages.0.content', 'Estamos para ayudarte con tecnología y automatización, como desarrollo de software, IA, datos e infraestructura. Cuéntanos si tienes una necesidad relacionada.')
+            ->assertJsonMissingPath('data.messages.0.required_fields');
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Necesito un chatbot para recibir pedidos, consultar inventario y derivar conversaciones a una persona.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+    }
+
+    public function test_public_chat_can_offer_only_optional_fields_when_required_data_was_provided_early(): void
+    {
+        Mail::fake();
+        $business = $this->createPublishedBusiness();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Datos anticipados',
+            'origins' => ['http://localhost:3000'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['visitor_id' => 'early-fields'])
+            ->assertCreated();
+        $conversation = $start->json('data.conversation_id');
+        $headers = [
+            'Origin' => 'http://localhost:3000',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ];
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => "Problema: Necesitamos un chatbot para atender preguntas frecuentes y derivar casos complejos.\nNombre: Mario Casas\nEmail: mario@example.com\nTeléfono: +57 300 222 3344\nWhatsApp: +57 310 222 3344",
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.messages.0.content', '¡Perfecto! Ya tenemos los datos obligatorios. Si quieres, también puedes indicarnos empresa y sitio web; son opcionales.')
+            ->assertJsonMissingPath('data.messages.0.required_fields')
+            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+
+        $this->withHeaders($headers)
+            ->postJson("/api/business/conversations/{$conversation}/messages", [
+                'message' => 'Continuar sin datos opcionales',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true);
+
+        $lead = $business->leads()->where('email', 'mario@example.com')->firstOrFail();
+        $this->assertNull($lead->company);
+        $this->assertNull($lead->website);
     }
 
     public function test_public_api_rejects_an_unlisted_origin(): void

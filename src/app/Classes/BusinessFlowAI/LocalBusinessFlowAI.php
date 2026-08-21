@@ -15,6 +15,8 @@ class LocalBusinessFlowAI implements BusinessFlowAI
             'software', 'desarrollo', 'aplicación', 'app', 'web', 'automat', 'inteligencia artificial',
             ' ia ', 'ai', 'datos', 'data', 'infraestructura', 'cloud', 'nube', 'api', 'integración',
             'sistema', 'tecnología', 'tecnologico', 'tecnológico', 'base de datos', 'mapeo', 'mateo',
+            'chatbot', 'chat bot', 'bot conversacional', 'asistente virtual', 'asistente conversacional',
+            'agente de ia', 'agente de ai',
         ];
         $branch = collect($keywords)->contains(fn (string $keyword): bool => str_contains(" {$normalized} ", $keyword))
             ? 'technology'
@@ -44,10 +46,17 @@ class LocalBusinessFlowAI implements BusinessFlowAI
         if (preg_match('/(?:sitio\s+web|website|p[aá]gina\s+web|web)\s*(?:es|:|-)?\s*((?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s,;]*)?)/iu', $message, $match)) {
             $data['website'] = $this->normalizeWebsite($match[1]);
         }
-        if (! isset($data['project_summary']) && preg_match('/(?:proyecto|problema|necesidad)\s*(?:es|:|-)\s*(.{20,})/isu', $message, $match)) {
-            $data['project_summary'] = $this->cleanCaptured($match[1]);
-        } elseif ($allowMessageAsProblem && mb_strlen(trim($message)) >= 30 && ! isset($data['project_summary'])) {
-            $data['project_summary'] = trim($message);
+        $projectCandidate = null;
+        if (preg_match('/(?:proyecto|problema|necesidad)\s*(?:es|:|-)\s*(.+)/isu', $message, $match)) {
+            $projectCandidate = $this->cleanCaptured($match[1]);
+        } elseif ($allowMessageAsProblem) {
+            $projectCandidate = trim($message);
+        }
+        if (filled($projectCandidate)) {
+            $knownProject = trim((string) ($data['project_summary'] ?? ''));
+            if ($knownProject === '' || mb_strlen($knownProject) < 20 || mb_strlen($projectCandidate) > mb_strlen($knownProject)) {
+                $data['project_summary'] = $projectCandidate;
+            }
         }
 
         return $this->result($message, ['lead_data' => $data]);
@@ -58,6 +67,7 @@ class LocalBusinessFlowAI implements BusinessFlowAI
         $project = trim((string) ($leadData['project_summary'] ?? $message));
         $normalized = mb_strtolower($project);
         $focus = match (true) {
+            str_contains($normalized, 'chatbot'), str_contains($normalized, 'chat bot'), str_contains($normalized, 'bot conversacional'), str_contains($normalized, 'asistente virtual'), str_contains($normalized, 'asistente conversacional') => 'diseñar un asistente conversacional con respuestas basadas en información del negocio, captura estructurada de datos, derivación a personas y trazabilidad de cada conversación',
             str_contains($normalized, 'base de datos'), str_contains($normalized, 'datos') => 'diseñar una arquitectura de datos, automatizar la ingesta y transformación, y exponer indicadores verificables',
             str_contains($normalized, 'infraestructura'), str_contains($normalized, 'nube'), str_contains($normalized, 'cloud') => 'definir una arquitectura cloud segura, automatizar su despliegue y habilitar observabilidad y control de costos',
             str_contains($normalized, ' ia '), str_contains($normalized, 'ai'), str_contains($normalized, 'inteligencia artificial') => 'construir un flujo asistido por IA con datos de referencia, validaciones, trazabilidad y revisión humana',

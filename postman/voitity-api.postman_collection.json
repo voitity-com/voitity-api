@@ -153,8 +153,11 @@
         },
         {
           "name": "List Leads",
-          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.[0]?.id) pm.collectionVariables.set('business_lead_id', json.data[0].id);"]}}],
-          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads"]}},
+          "event": [
+            {"listen":"prerequest","script":{"type":"text/javascript","exec":["const to = new Date();","const from = new Date(to);","from.setMonth(from.getMonth() - 1);","pm.collectionVariables.set('business_leads_from', from.toISOString().slice(0, 10));","pm.collectionVariables.set('business_leads_to', to.toISOString().slice(0, 10));"]}},
+            {"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.[0]?.id) pm.collectionVariables.set('business_lead_id', json.data[0].id);"]}}
+          ],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads?date_field=created_at&from={{business_leads_from}}&to={{business_leads_to}}&timezone=America%2FBogota&statuses[]=created&statuses[]=contacted","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads"],"query":[{"key":"date_field","value":"created_at","description":"Use created_at or updated_at."},{"key":"from","value":"{{business_leads_from}}"},{"key":"to","value":"{{business_leads_to}}"},{"key":"timezone","value":"America/Bogota","description":"IANA timezone used to interpret from and to."},{"key":"statuses[]","value":"created"},{"key":"statuses[]","value":"contacted"}]}},
           "response": []
         },
         {
@@ -162,7 +165,7 @@
           "request": {
             "method":"PATCH",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
-            "body":{"mode":"raw","raw":"{\n  \"status\": \"contacted\",\n  \"note\": \"Contactado desde Postman\"\n}"},
+            "body":{"mode":"raw","raw":"{\n  \"status\": \"closed\",\n  \"note\": \"Proceso cerrado desde Postman después de confirmar con el cliente.\"\n}"},
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads/{{business_lead_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads","{{business_lead_id}}"]}
           },
           "response": []
@@ -186,9 +189,10 @@
         {
           "name": "Start Public Conversation",
           "auth":{"type":"noauth"},
-          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.conversation_id) pm.collectionVariables.set('business_conversation_id', json.data.conversation_id);","if (json.data?.session) pm.collectionVariables.set('business_session', json.data.session);"]}}],
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.conversation_id) pm.collectionVariables.set('business_conversation_id', json.data.conversation_id);","if (json.data?.session) pm.collectionVariables.set('business_session', json.data.session);","pm.test('Initial assistant message declares required fields', () => {","  pm.expect(json.data?.messages?.[0]?.required_fields).to.be.an('array');","});"]}}],
           "request": {
             "method":"POST",
+            "description":"The initial assistant message includes required_fields when the first instruction requests structured data.",
             "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"Content-Type","value":"application/json"}],
             "body":{"mode":"raw","raw":"{\n  \"visitor_id\": \"postman-visitor\"\n}"},
             "url":{"raw":"{{base_url}}/api/business/conversations","host":["{{base_url}}"],"path":["api","business","conversations"]}
@@ -198,8 +202,10 @@
         {
           "name": "Send Public Message",
           "auth":{"type":"noauth"},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","pm.test('Requested fields are returned with the assistant message', () => {","  const message = json.data?.messages?.find((item) => Array.isArray(item.required_fields));","  pm.expect(message?.required_fields).to.be.an('array').that.is.not.empty;","  pm.expect(message?.optional_fields).to.eql(['company', 'website']);","});"]}}],
           "request": {
             "method":"POST",
+            "description":"Each assistant message that asks for data includes messages[].required_fields with pending mandatory identifiers and may include messages[].optional_fields for controls that must be shown without blocking progress.",
             "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"},{"key":"Idempotency-Key","value":"{{$guid}}"},{"key":"Content-Type","value":"application/json"}],
             "body":{"mode":"raw","raw":"{\n  \"message\": \"Necesito automatizar un proceso con IA\"\n}"},
             "url":{"raw":"{{base_url}}/api/business/conversations/{{business_conversation_id}}/messages","host":["{{base_url}}"],"path":["api","business","conversations","{{business_conversation_id}}","messages"]}
@@ -209,6 +215,7 @@
         {
           "name": "Send Contact Data Missing WhatsApp",
           "auth":{"type":"noauth"},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","pm.test('Only WhatsApp remains required', () => {","  pm.expect(json.data?.messages?.[0]?.required_fields).to.eql(['whatsapp']);","});"]}}],
           "request": {
             "method":"POST",
             "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"},{"key":"Idempotency-Key","value":"{{$guid}}"},{"key":"Content-Type","value":"application/json"}],

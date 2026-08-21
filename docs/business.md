@@ -64,7 +64,7 @@ Todas las tablas son propias del módulo:
 | `business_messages` | Mensajes del visitante/asistente con tokens. |
 | `business_node_executions` | Auditoría de cada bloque ejecutado. |
 | `business_leads` | Nombre, email, teléfono, WhatsApp, empresa/sitio opcionales, problema y análisis interno de posible solución. |
-| `business_lead_status_histories` | Cambios de estado del lead. |
+| `business_lead_status_histories` | Creación y cambios de estado del lead, usuario responsable y observaciones. |
 | `business_usage_events` | Consumo granular por tipo de evento. |
 | `business_action_runs` | Idempotencia, intentos y errores de acciones. |
 
@@ -81,7 +81,7 @@ Muestra nombre, estado y última actualización. **Agregar** solicita nombre y d
 - **General**: edita nombre y descripción.
 - **Fuentes**: conserva el mismo patrón visual de Perfiles. El alta abre un modal para cargar PDF, TXT, Markdown, CSV, JSON o texto pegado; la tabla permite descargar fuentes con archivo y exige confirmación antes de eliminar una fuente y sus chunks.
 - **Flow**: canvas gráfico editable.
-- **Leads**: lista contacto, teléfono, WhatsApp, empresa/sitio, problema y posible solución interna; permite cambiar estado a `created`, `contacted`, `sale` o `no_response`.
+- **Leads**: tabla compacta con contacto, empresa, estado, creación y actualización. Filtra por rango sobre la fecha de creación o actualización y por varios estados (`created`, `contacted`, `sale`, `no_response`, `closed`). Al abrir un lead, el modal separa toda la información y el historial desde la creación; cada cambio de estado exige confirmación y admite observaciones.
 - **Uso**: tokens, fuentes, mensajes, conversaciones, leads, conversaciones sin lead y desglose de eventos. Incluye rango `Desde`/`Hasta`, carga por defecto el último mes calendario y conserva el rango en la URL.
 - **Configuración**: se organiza en las pestañas **Correo**, **Widget** y **API**. Correo contiene receptor/remitente, Widget contiene apariencia y activación, y API administra keys y orígenes.
 - **Docs**: documentación integrada del runtime.
@@ -183,10 +183,18 @@ Respuesta relevante:
     "conversation_id": "uuid",
     "status": "in_progress",
     "session": "encrypted-token",
-    "messages": [{"role":"assistant","content":"¡Hola!..."}]
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "¡Hola! Cuéntanos qué problema quieres resolver.",
+        "required_fields": ["project_summary"]
+      }
+    ]
   }
 }
 ```
+
+El integrador debe conservar `conversation_id` y `session`. `data.messages` contiene las indicaciones iniciales del asistente generadas al arrancar el flow. Cuando una indicación espera campos concretos, el mensaje incluye `required_fields` con los identificadores todavía pendientes. Puede incluir también `optional_fields`: esos controles deben mostrarse, pero no deben impedir el envío ni la finalización si quedan vacíos.
 
 ### Enviar mensaje
 
@@ -198,13 +206,45 @@ Idempotency-Key: request-uuid
 {"message":"Necesito automatizar un proceso con IA"}
 ```
 
-La respuesta incluye todos los mensajes del asistente producidos durante ese avance y:
+La respuesta incluye únicamente los mensajes del asistente producidos durante ese avance. No contiene el historial completo y el arreglo puede traer uno o varios elementos:
 
 ```json
-{"data":{"status":"completed","finished":true,"messages":[]}}
+{
+  "message": "Business message processed successfully.",
+  "data": {
+    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "in_progress",
+    "finished": false,
+    "messages": [
+      {
+        "id": 104,
+        "role": "assistant",
+        "content": "Entiendo el problema que quieres resolver.",
+        "created_at": "2026-08-20T15:32:01.000000Z"
+      },
+      {
+        "id": 105,
+        "role": "assistant",
+        "content": "Para continuar, indícanos tus datos de contacto.",
+        "created_at": "2026-08-20T15:32:01.000000Z",
+        "required_fields": ["full_name", "email", "phone", "whatsapp"],
+        "optional_fields": ["company", "website"]
+      }
+    ]
+  }
+}
 ```
 
-El integrador debe dejar de pedir input cuando `finished` sea `true` o el estado deje de ser `in_progress`.
+La interfaz cliente agrega esos elementos al chat en el orden recibido y conserva localmente los mensajes anteriores. `required_fields` y `optional_fields` aparecen dentro del mensaje que solicita los datos, no a nivel de `data`. Los primeros son obligatorios y, para una indicación dinámica de datos faltantes, contienen solamente lo aún incompleto; los segundos se muestran y se envían solo cuando el visitante los completa. El integrador debe dejar de pedir input cuando `finished` sea `true` o el estado deje de ser `in_progress`.
+
+Una secuencia típica contiene varias llamadas al mismo endpoint:
+
+1. `{"message":"Soy Laura Gómez."}` devuelve la indicación para describir el problema.
+2. `{"message":"Procesamos facturas manualmente y queremos extraer los datos con IA."}` devuelve la solicitud de contacto.
+3. Una respuesta con datos incompletos devuelve exactamente los campos faltantes.
+4. Al completar los datos devuelve `status: "completed"`, `finished: true` y el mensaje final del asistente.
+
+La posible solución generada por IA es interna: se guarda en el lead y se envía al negocio, pero nunca aparece en `data.messages` para el visitante.
 
 ### Consultar estado
 
@@ -214,6 +254,8 @@ X-Bigmelo-Business-Session: encrypted-token
 ```
 
 Estados: `in_progress`, `completed`, `abandoned` y `failed`.
+
+El response de status incluye `current_node`, `started_at` y `completed_at`. No contiene `messages` y no permite recuperar el historial completo.
 
 ## Widget incluido
 
@@ -251,6 +293,23 @@ La posible solución nunca se incluye en la conversación ni en el correo de con
 Las notificaciones usan la cola de Laravel. En desarrollo local debe existir un worker para procesarlas.
 
 ## Pruebas
+
+### Matriz funcional del flow publicado
+
+| Escenario | Entrada representativa | Respuesta o resultado esperado |
+| --- | --- | --- |
+| Nombre | `Peter Parker` | Solicitar `project_summary`. |
+| Necesidad tecnológica demasiado breve | `Quiero un chatbot` | Pedir de inmediato situación/proceso, usuarios y resultado esperado; no solicitar todavía contacto. |
+| Chatbot suficientemente descrito | `Necesito un chatbot para recibir pedidos, consultar inventario y derivar conversaciones` | Solicitar Email, Teléfono y WhatsApp; mostrar Empresa y Sitio web como opcionales si el nombre ya fue capturado. |
+| Software, IA, datos o cloud suficientemente descritos | Descripción concreta del proceso y resultado | Avanzar a contacto con `required_fields` y `optional_fields`. |
+| Solicitud no tecnológica | `Quiero organizar una fiesta` | Explicar el alcance tecnológico y permitir que el visitante reformule. |
+| Recuperación después de una solicitud no tecnológica | Una nueva descripción tecnológica | Retomar el flow, guardar esa descripción y solicitar contacto. |
+| Contacto parcial por API | Faltan uno o más obligatorios | Responder solamente con los `required_fields` pendientes; mostrar recordatorio de indicativo únicamente si falta teléfono o WhatsApp. |
+| Empresa y sitio web vacíos | Todos los obligatorios válidos | Finalizar y crear el lead con ambos opcionales en `null`. |
+| Empresa y sitio web diligenciados | Todos los obligatorios y opcionales | Finalizar y guardar ambos valores en el lead. |
+| Solución interna para chatbot | Problema menciona chatbot y datos de contacto | Priorizar una solución de asistente conversacional; no confundirla con un proyecto de arquitectura de datos. |
+
+La posible solución permanece interna en todos los escenarios: se almacena en el lead y se incluye en la notificación al negocio, pero no se devuelve al visitante.
 
 - Unitarias: validador del grafo, extracción/normalización de teléfono y WhatsApp, separación entre problema y datos de contacto, y heurísticas deterministas del driver local.
 - Feature API: feature toggle, rol, listado, creación, Fuentes, descarga/eliminación de archivos, aislamiento de fuentes entre negocios, publicación, activación, hash de keys, CORS exacto, origen bloqueado, conversación incompleta/completa, lead, solución interna, correos, status, rango de Uso y validación de fechas.

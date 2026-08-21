@@ -143,11 +143,29 @@ class PublicBusinessChatController extends Controller
     /** @param iterable<BusinessMessage> $messages @return array<int, array<string, mixed>> */
     private function messages(iterable $messages): array
     {
-        return collect($messages)->map(fn ($message): array => [
-            'id' => $message->id,
-            'role' => $message->role,
-            'content' => $message->content,
-            'created_at' => $message->created_at?->toISOString(),
-        ])->values()->all();
+        return collect($messages)->map(function ($message): array {
+            $payload = [
+                'id' => $message->id,
+                'role' => $message->role,
+                'content' => $message->content,
+                'created_at' => $message->created_at?->toISOString(),
+            ];
+            $requiredFields = collect($message->data['required_fields'] ?? [])
+                ->filter(fn (mixed $field): bool => is_string($field) && $field !== '')
+                ->values()
+                ->all();
+            if ($requiredFields !== []) {
+                $payload['required_fields'] = $requiredFields;
+            }
+            $optionalFields = collect($message->data['optional_fields'] ?? [])
+                ->filter(fn (mixed $field): bool => is_string($field) && $field !== '')
+                ->values()
+                ->all();
+            if ($optionalFields !== []) {
+                $payload['optional_fields'] = $optionalFields;
+            }
+
+            return $payload;
+        })->values()->all();
     }
 }

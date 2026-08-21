@@ -175,12 +175,23 @@ class BusinessFlowRunner
     /** @param array<int, BusinessMessage> $messages @return array<string, mixed> */
     private function instruction(BusinessConversation $conversation, BusinessFlowNode $node, array &$messages): array
     {
+        $requiredFields = $this->instructionRequiredFields($conversation, $node);
+        $optionalFields = $this->instructionOptionalFields($conversation, $node, $requiredFields);
         $messageText = $this->interpolate((string) ($node->config['message'] ?? ''), $conversation->context ?? []);
+        $messageText = str_replace('{{contact_request}}', $this->contactRequest($requiredFields, $optionalFields), $messageText);
         $tokens = $this->usage->estimateTokens($messageText);
+        $messageData = [];
+        if ($requiredFields !== []) {
+            $messageData['required_fields'] = $requiredFields;
+        }
+        if ($optionalFields !== []) {
+            $messageData['optional_fields'] = $optionalFields;
+        }
         $message = $conversation->messages()->create([
             'node_key' => $node->node_key,
             'role' => 'assistant',
             'content' => $messageText,
+            'data' => $messageData,
             'output_tokens' => $tokens,
             'total_tokens' => $tokens,
         ]);
@@ -199,6 +210,80 @@ class BusinessFlowRunner
         }
 
         return ['next' => $this->nextNodeKey($conversation, $node->node_key, null)];
+    }
+
+    /** @return array<int, string> */
+    private function instructionRequiredFields(BusinessConversation $conversation, BusinessFlowNode $node): array
+    {
+        $context = is_array($conversation->context) ? $conversation->context : [];
+        if (($node->config['dynamic'] ?? null) === 'missing_fields') {
+            return $this->normalizeFieldIdentifiers($context['missing_fields'] ?? []);
+        }
+
+        $required = $this->normalizeFieldIdentifiers($node->config['required_fields'] ?? []);
+        if ($required === []) {
+            $nextNodeKey = $this->nextNodeKey($conversation, $node->node_key, null);
+            $nextNode = $nextNodeKey
+                ? $conversation->version->nodes()->where('node_key', $nextNodeKey)->first()
+                : null;
+
+            if ($nextNode?->type === BusinessFlowNodeType::Action
+                && ($nextNode->config['action'] ?? null) === 'extract_fields') {
+                $required = $this->normalizeFieldIdentifiers($nextNode->config['required_fields'] ?? []);
+            }
+        }
+
+        $leadData = is_array($context['lead_data'] ?? null) ? $context['lead_data'] : [];
+
+        return $this->missingRequiredFields($required, $leadData);
+    }
+
+    /** @param array<int, string> $requiredFields @return array<int, string> */
+    private function instructionOptionalFields(
+        BusinessConversation $conversation,
+        BusinessFlowNode $node,
+        array $requiredFields,
+    ): array {
+        if (($node->config['dynamic'] ?? null) === 'missing_fields') {
+            return [];
+        }
+
+        $optional = $this->normalizeFieldIdentifiers($node->config['optional_fields'] ?? []);
+        if ($optional === []) {
+            $nextNodeKey = $this->nextNodeKey($conversation, $node->node_key, null);
+            $nextNode = $nextNodeKey
+                ? $conversation->version->nodes()->where('node_key', $nextNodeKey)->first()
+                : null;
+
+            if ($nextNode?->type === BusinessFlowNodeType::Action
+                && ($nextNode->config['action'] ?? null) === 'extract_fields') {
+                $optional = $this->normalizeFieldIdentifiers($nextNode->config['optional_fields'] ?? []);
+            }
+        }
+
+        $context = is_array($conversation->context) ? $conversation->context : [];
+        $leadData = is_array($context['lead_data'] ?? null) ? $context['lead_data'] : [];
+
+        return collect($optional)
+            ->reject(fn (string $field): bool => in_array($field, $requiredFields, true))
+            ->filter(fn (string $field): bool => ! $this->isCompleteField($field, $leadData[$field] ?? null))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private function normalizeFieldIdentifiers(mixed $fields): array
+    {
+        if (! is_array($fields)) {
+            return [];
+        }
+
+        return collect($fields)
+            ->filter(fn (mixed $field): bool => is_string($field) && trim($field) !== '')
+            ->map(fn (string $field): string => trim($field))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** @return array<string, mixed> */
@@ -307,8 +392,12 @@ class BusinessFlowRunner
             'company' => 'empresa', 'website' => 'sitio web', 'project_summary' => 'descripción completa del problema',
         ];
         $missing = collect($context['missing_fields'] ?? [])->map(fn (string $field): string => $labels[$field] ?? $field)->implode(', ');
+        $missingFields = is_array($context['missing_fields'] ?? null) ? $context['missing_fields'] : [];
+        $phoneHint = collect(['phone', 'whatsapp'])->contains(fn (string $field): bool => in_array($field, $missingFields, true))
+            ? ' Recuerda incluir el indicativo de país en teléfono y WhatsApp.'
+            : '';
 
-        return str_replace('{{missing_fields}}', $missing, $message);
+        return str_replace(['{{missing_fields}}', '{{phone_hint}}'], [$missing, $phoneHint], $message);
     }
 
     /** @param array<int, string> $required @param array<string, mixed> $data @return array<int, string> */
@@ -334,6 +423,46 @@ class BusinessFlowRunner
             'project_summary' => mb_strlen($value) >= 20,
             default => true,
         };
+    }
+
+    /** @param array<int, string> $required @param array<int, string> $optional */
+    private function contactRequest(array $required, array $optional): string
+    {
+        $labels = [
+            'full_name' => 'nombre y apellido',
+            'email' => 'email válido',
+            'phone' => 'teléfono con indicativo de país',
+            'whatsapp' => 'WhatsApp con indicativo de país',
+            'company' => 'empresa',
+            'website' => 'sitio web',
+            'project_summary' => 'descripción completa del problema',
+        ];
+        $requiredList = $this->humanList(collect($required)->map(fn (string $field): string => $labels[$field] ?? $field)->all());
+        $optionalList = $this->humanList(collect($optional)->map(fn (string $field): string => $labels[$field] ?? $field)->all());
+
+        if ($requiredList !== '' && $optionalList !== '') {
+            return "¡Perfecto! Para continuar indícanos: {$requiredList}. También puedes indicarnos {$optionalList}; son opcionales.";
+        }
+        if ($requiredList !== '') {
+            return "¡Perfecto! Para continuar indícanos: {$requiredList}.";
+        }
+        if ($optionalList !== '') {
+            return "¡Perfecto! Ya tenemos los datos obligatorios. Si quieres, también puedes indicarnos {$optionalList}; son opcionales.";
+        }
+
+        return '¡Perfecto! Ya tenemos los datos necesarios para continuar.';
+    }
+
+    /** @param array<int, string> $values */
+    private function humanList(array $values): string
+    {
+        if (count($values) < 2) {
+            return $values[0] ?? '';
+        }
+
+        $last = array_pop($values);
+
+        return implode(', ', $values).' y '.$last;
     }
 
     private function fail(BusinessConversation $conversation, string $reason): void
