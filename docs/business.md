@@ -17,14 +17,17 @@ Los perfiles y usuarios normales no reciben abilities de Business.
 flowchart LR
     Admin["Admin web"] -->|Sanctum + abilities| AdminAPI["Business Admin API"]
     AdminAPI --> DB[("Tablas business_*")]
-    AdminAPI --> Sources["Indexación local de fuentes"]
+    AdminAPI --> Sources["Cola de indexación de fuentes"]
+    Sources --> Embeddings["Embeddings + pgvector"]
     AdminAPI --> Versions["Borrador y versiones publicadas"]
 
     Host["Sitio permitido"] --> Widget["Business widget en Shadow DOM"]
     Widget -->|Key + Origin + Session| Runtime["Business Runtime API"]
     Runtime --> Runner["BusinessFlowRunner"]
     Runner --> AI["BusinessFlowAI"]
-    Runner --> Sources
+    Runner --> DecisionAI["BusinessDecisionAI"]
+    Runner --> Retrieval["Recuperación híbrida semántica + lexical"]
+    Retrieval --> Embeddings
     Runner --> Actions["Acciones idempotentes"]
     Runner --> DB
     Actions --> Leads["Lead"]
@@ -40,8 +43,10 @@ flowchart LR
 - `BusinessFlowValidator`: verifica un único inicio, tipos válidos, salidas, ramas y nodos alcanzables.
 - `BusinessFlowRunner`: ejecuta el grafo, limita pasos y fija cada conversación a una versión publicada.
 - `BusinessLocalization`: resuelve `es`/`en`, mensajes por nodo, etiquetas de campos y textos dinámicos sin obligar al frontend a traducir respuestas.
-- `BusinessFlowAI`: interfaz desacoplada para clasificación, extracción y análisis. El driver local `LocalBusinessFlowAI` permite pruebas deterministas sin servicios externos.
-- `BusinessKnowledgeRetriever`: recuperación lexical local sobre chunks indexados.
+- `BusinessFlowAI`: interfaz desacoplada para extracción de datos y análisis de la posible solución. El driver local permite pruebas deterministas sin servicios externos.
+- `BusinessKnowledgeIndexer`: divide cada fuente, calcula embeddings por lotes y guarda chunks versionados por hash. La indexación se ejecuta en cola y deja la fuente en `processing`, `indexed` o `failed`.
+- `BusinessKnowledgeRetriever`: hace búsqueda híbrida. Combina similitud vectorial, coincidencia lexical y límites de relevancia, cantidad de chunks y contexto antes de consultar la IA.
+- `BusinessDecisionAI`: responde exclusivamente `yes` o `no` a la pregunta escrita en el nodo; recibe descripción, problema, mensajes recientes y solo los chunks recuperados. También devuelve confianza, motivo e IDs de chunks utilizados.
 - `BusinessLeadService`: crea el lead y ejecuta notificaciones idempotentes.
 - `BusinessUsageRecorder`: registra tokens de fuentes, mensajes, recuperación, decisiones, extracción y análisis.
 
@@ -56,7 +61,7 @@ Todas las tablas son propias del módulo:
 | `business_api_clients` | Key pública almacenada únicamente como SHA-256, expiración y uso. |
 | `business_api_client_origins` | Orígenes HTTP/HTTPS exactos permitidos. |
 | `business_sources` | Archivo/texto extraído y estado de indexación. |
-| `business_knowledge_chunks` | Fragmentos recuperables de las fuentes. |
+| `business_knowledge_chunks` | Fragmentos, hash, embedding vectorial, modelo, dimensiones, estado y metadatos de recuperación. En PostgreSQL usa `pgvector` e índice HNSW. |
 | `business_flows` | Punteros al borrador y a la versión publicada. |
 | `business_flow_versions` | Versiones inmutables publicadas y borrador editable. |
 | `business_flow_nodes` | Bloques, posiciones y configuración. |
@@ -80,7 +85,7 @@ Muestra nombre, estado y última actualización. **Agregar** solicita nombre y d
 ### Submenú
 
 - **General**: edita nombre y descripción.
-- **Fuentes**: conserva el mismo patrón visual de Perfiles. El alta abre un modal para cargar PDF, TXT, Markdown, CSV, JSON o texto pegado; la tabla permite descargar fuentes con archivo y exige confirmación antes de eliminar una fuente y sus chunks.
+- **Fuentes**: conserva el mismo patrón visual de Perfiles. El alta abre un modal para cargar PDF, TXT, Markdown, CSV, JSON o texto pegado. El texto pegado se persiste además como `.txt`, con nombre seguro derivado del nombre de la fuente. La fuente queda en procesamiento mientras una tarea genera sus chunks y embeddings; la tabla se actualiza automáticamente hasta `indexed` o `failed`. Permite descargar tanto archivos subidos como fuentes de texto y exige confirmación antes de eliminar una fuente y sus chunks. Las fuentes de texto históricas sin archivo físico se descargan directamente desde `extracted_text`.
 - **Flow**: canvas gráfico editable.
 - **Leads**: tabla compacta con contacto, empresa, estado, creación y actualización. Filtra por rango sobre la fecha de creación o actualización y por varios estados (`created`, `contacted`, `sale`, `no_response`, `closed`). Al abrir un lead, el modal separa toda la información y el historial desde la creación; cada cambio de estado exige confirmación y admite observaciones.
 - **Uso**: tokens, fuentes, mensajes, conversaciones, leads, conversaciones sin lead y desglose de eventos. Incluye rango `Desde`/`Hasta`, carga por defecto el último mes calendario y conserva el rango en la URL.
@@ -95,6 +100,8 @@ El menú lateral, su estado seleccionado, colores, iconos, ancho, separación, c
 
 El canvas usa HTML, pointer events y SVG, sin una dependencia remota. Se puede navegar horizontal y verticalmente arrastrando con el mouse cualquier zona vacía del fondo; durante el paneo el cursor cambia de mano abierta a mano cerrada. Las barras de scroll nativas continúan disponibles. El gesto no se activa al presionar un nodo, de modo que el drag de bloques conserva su comportamiento independiente. El plano se recalcula y expande en las cuatro direcciones cuando un bloque se mueve, incluyendo coordenadas negativas, por lo que no existe un límite funcional fijo de navegación.
 
+Las conexiones existentes también son editables directamente en el canvas. Al hacer clic sobre una flecha queda seleccionada y aparece un punto en su punta final; ese punto se puede arrastrar hasta otro bloque. Durante el gesto se dibuja la conexión provisional y se resalta el destino válido. Soltar sobre el fondo cancela el cambio. Solo cambia `target`: se conservan el nodo origen, la rama, la etiqueta, la key y la configuración de la flecha. La punta inicial no es arrastrable y el gesto no activa el paneo del canvas.
+
 Cada bloque tiene:
 
 - identificador estable;
@@ -103,7 +110,30 @@ Cada bloque tiene:
 - posición X/Y;
 - configuración JSON tipada por el runtime.
 
-Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, modo de decisión, ramas, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, modo de decisión, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+
+Un nodo de decisión ofrece dos modos definidos y comprensibles, sin identificadores internos creados manualmente:
+
+- **Pregunta Sí/No con IA y fuentes**: el usuario escribe la pregunta en español e inglés y elige si la evaluación puede usar la descripción del Business y las fuentes indexadas. Sus ramas son fijas: `yes` y `no`.
+- **Validar campos obligatorios**: comprueba de forma determinista los campos indicados. Sus ramas son fijas: `complete` e `incomplete`.
+
+El validador impide publicar una pregunta vacía, ramas diferentes de las esperadas, dos flechas para la misma rama, una rama sin destino o nodos inalcanzables. Al cambiar de modo en el editor, se eliminan las conexiones salientes incompatibles para que el usuario vuelva a conectar los destinos correctos.
+
+Ejemplo de configuración persistida para una decisión basada en conocimiento:
+
+```json
+{
+  "mode": "knowledge_yes_no",
+  "question": "¿El problema descrito corresponde a un producto, servicio o problema que este negocio puede solucionar?",
+  "questions": {
+    "es": "¿El problema descrito corresponde a un producto, servicio o problema que este negocio puede solucionar?",
+    "en": "Does the described problem match a product, service, or problem that this business can solve?"
+  },
+  "use_business_description": true,
+  "use_sources": true,
+  "branches": ["yes", "no"]
+}
+```
 
 ### Flow inicial
 
@@ -111,10 +141,10 @@ Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decis
 flowchart LR
     Greeting["Indicación: saludar y pedir nombre"] --> Name["Acción: guardar nombre"]
     Name --> Welcome["Indicación: preguntar la necesidad"]
-    Welcome --> Qualify{"Decisión: necesidad tecnológica"}
-    Qualify -->|other| Redirect["Indicación: orientar a tecnología"]
+    Welcome --> Qualify{"Decisión: pregunta Sí/No con descripción y fuentes"}
+    Qualify -->|no| Redirect["Indicación: orientar al usuario"]
     Redirect --> Qualify
-    Qualify -->|technology| Capture["Acción: guardar el problema descrito"]
+    Qualify -->|yes| Capture["Acción: guardar el problema descrito"]
     Capture --> ProblemComplete{"Decisión: problema completo"}
     ProblemComplete -->|incomplete| Clarify["Indicación: profundizar problema"]
     Clarify --> Capture
@@ -129,6 +159,18 @@ flowchart LR
 ```
 
 La publicación valida todo el grafo y crea automáticamente un nuevo borrador basado en la versión publicada. Las conversaciones que ya comenzaron continúan sobre la versión anterior.
+
+### Cómo se resuelve una pregunta Sí/No
+
+1. El runner arma una consulta con el problema guardado y los mensajes recientes del visitante.
+2. Se genera un embedding de esa consulta y se buscan candidatos entre chunks activos del mismo Business.
+3. Se combinan la similitud semántica y la lexical; se descartan resultados por debajo del umbral y se limita el contexto enviado.
+4. La IA recibe la pregunta exacta del nodo, la descripción habilitada, el problema, los mensajes recientes y los fragmentos relevantes. Las fuentes completas nunca se envían indiscriminadamente.
+   La evidencia conserva roles separados: el problema y los mensajes representan lo que dijo el visitante; la descripción y las fuentes solo explican lo que sabe u ofrece el Business y nunca completan datos ausentes del visitante. Si la pregunta evalúa si el problema está suficientemente descrito, una necesidad vacía o genérica de menos de ocho palabras toma directamente la rama segura `no`. Para descripciones más amplias, la IA debe encontrar en el texto del visitante una situación o proceso concreto y el resultado esperado; no puede inferirlos desde las fuentes.
+5. La salida estructurada obliga a devolver `answer`, `confidence`, `reason` y `source_chunk_ids`. Una respuesta inválida, un error o confianza insuficiente toma la rama segura `no`.
+6. La ejecución del nodo registra la rama tomada, confianza y chunks usados; luego avanza por la flecha `yes` o `no`.
+
+Las decisiones heredadas `technology_interest` siguen siendo legibles para conversaciones fijadas a versiones antiguas, pero el editor no permite crear nuevas y el comando de actualización las migra a `knowledge_yes_no`.
 
 La plantilla base contiene 13 nodos y 15 flechas. El flow publicado del negocio de demostración agrega la bienvenida y captura separada de nombre, para un total de 15 nodos y 17 flechas. Solo permite finalizar cuando existen todos estos valores válidos:
 
@@ -324,6 +366,18 @@ La posible solución nunca se incluye en la conversación ni en el correo de con
 
 Las notificaciones usan la cola de Laravel. En desarrollo local debe existir un worker para procesarlas.
 
+## Observabilidad y logs
+
+La implementación registra eventos estructurados sin guardar en el log el texto completo del problema ni de las fuentes:
+
+- inicio, terminación y fallo de indexación, con Business, fuente, modelo, dimensiones, chunks y tokens;
+- recuperación de conocimiento, con hash de la consulta, IDs de fuentes/chunks, puntajes, tokens de contexto y latencia;
+- evaluación de cada pregunta, con nodo, rama, respuesta, confianza, proveedor/modelo e IDs de chunks recuperados y citados;
+- respuesta inválida o error del proveedor, tomando la rama segura `no`;
+- eventos de uso separados para `source_indexed`, `source_retrieval` y `flow_decision`.
+
+Esto permite reconstruir por qué el flow tomó una rama desde `business_node_executions` y `business_usage_events`, sin exponer datos personales en los logs de aplicación.
+
 ## Pruebas
 
 ### Matriz funcional del flow publicado
@@ -346,8 +400,8 @@ Las notificaciones usan la cola de Laravel. En desarrollo local debe existir un 
 
 La posible solución permanece interna en todos los escenarios: se almacena en el lead y se incluye en la notificación al negocio, pero no se devuelve al visitante.
 
-- Unitarias: validador del grafo, mensajes localizados, extracción/normalización de teléfono y WhatsApp, separación entre problema y datos de contacto, y heurísticas deterministas en español e inglés.
-- Feature API: feature toggle, rol, listado, creación, Fuentes, descarga/eliminación de archivos, aislamiento de fuentes entre negocios, publicación, activación, hash de keys, CORS exacto, origen bloqueado, conversación incompleta/completa, locale inicial, cambio de idioma, campos estructurados/localizados, lead, solución interna, correos, status, rango de Uso y validación de fechas.
+- Unitarias: validador del grafo y de sus ramas fijas, chunking con solapamiento, contrato estructurado de la decisión IA, mensajes localizados, extracción/normalización de teléfono y WhatsApp, separación entre problema y datos de contacto, y heurísticas deterministas en español e inglés.
+- Feature API: feature toggle, rol, listado, creación, Fuentes, embeddings, recuperación vectorial, decisión apoyada por fuentes, migración de nodos heredados, descarga/eliminación de archivos, descarga `.txt` de texto nuevo e histórico, aislamiento de fuentes entre negocios, publicación, activación, hash de keys, CORS exacto, origen bloqueado, conversación incompleta/completa, locale inicial, cambio de idioma, campos estructurados/localizados, lead, solución interna, correos, status, rango de Uso y validación de fechas.
 - Build: TypeScript, ESLint, Vite admin y Vite web.
 - Funcionales/visuales: editor real con 15 bloques y 17 flechas, mensajes español/inglés en el inspector, publicación, canvas navegable en ambos ejes, configuración, fuente, activación, widget real, rama no tecnológica, aclaración de problemas breves, formularios localizados, cambio de idioma durante una conversación, datos faltantes, finalización, Leads, cambio de estado, Uso y Docs.
 
@@ -360,7 +414,7 @@ La posible solución permanece interna en todos los escenarios: se almacena en e
 5. Conversación pública real: reorientación no tecnológica, captura del problema, bloqueo por WhatsApp faltante, solución interna y finalización; corrección del script clásico del widget en desarrollo.
 6. Verificación de Leads, estado `contacted`, métricas de Uso, Docs y sustitución del input deshabilitado por el estado visible “Conversación finalizada”.
 
-La regresión final se ejecutó en dos procesos para evitar la acumulación de memoria del runner monolítico: 442 pruebas unitarias con 1.686 assertions y 460 pruebas feature con 2.838 assertions. El total fue de **902 pruebas y 4.524 assertions aprobadas**, además de typecheck, ESLint y builds de admin, sitio público y widget aprobados.
+La regresión final se ejecutó en dos procesos para evitar la acumulación de memoria del runner monolítico: 446 pruebas unitarias con 1.701 assertions y 463 pruebas feature con 2.896 assertions. El total fue de **909 pruebas y 4.597 assertions aprobadas**, además de typecheck, ESLint y build del admin aprobados.
 
 ### QA de paridad visual con Perfiles
 

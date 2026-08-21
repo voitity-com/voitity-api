@@ -31,7 +31,7 @@ class BusinessFlowValidatorTest extends TestCase
         $result = (new BusinessFlowValidator)->validate($graph['nodes'], $graph['edges']);
 
         $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('technology', implode(' ', $result['errors']));
+        $this->assertStringContainsString('yes', implode(' ', $result['errors']));
     }
 
     public function test_instruction_can_use_localized_messages_without_the_legacy_message(): void
@@ -57,5 +57,38 @@ class BusinessFlowValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('execute_arbitrary_prompt', implode(' ', $result['errors']));
         $this->assertStringContainsString('send_unconfigured_webhook', implode(' ', $result['errors']));
+    }
+
+    public function test_knowledge_decision_requires_a_question_and_fixed_yes_no_branches(): void
+    {
+        $graph = (new BusinessFlowTemplate)->graph();
+        $decision = array_search('qualify', array_column($graph['nodes'], 'key'), true);
+        $graph['nodes'][$decision]['config']['question'] = '';
+        $graph['nodes'][$decision]['config']['questions'] = ['es' => '', 'en' => ''];
+        $graph['nodes'][$decision]['config']['branches'] = ['maybe', 'later'];
+
+        $result = (new BusinessFlowValidator)->validate($graph['nodes'], $graph['edges']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('pregunta', implode(' ', $result['errors']));
+        $this->assertStringContainsString('yes y no', implode(' ', $result['errors']));
+    }
+
+    public function test_decision_requires_exactly_one_connection_per_configured_branch(): void
+    {
+        $graph = (new BusinessFlowTemplate)->graph();
+        $yesEdge = collect($graph['edges'])->firstWhere('key', 'qualify-capture');
+        $graph['edges'][] = [...$yesEdge, 'key' => 'qualify-capture-duplicate'];
+        $graph['edges'][] = [
+            ...$yesEdge,
+            'key' => 'qualify-unknown',
+            'source_handle' => 'unknown',
+        ];
+
+        $result = (new BusinessFlowValidator)->validate($graph['nodes'], $graph['edges']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('más de una conexión para la rama yes', implode(' ', $result['errors']));
+        $this->assertStringContainsString('rama no configurada', implode(' ', $result['errors']));
     }
 }

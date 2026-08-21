@@ -9,6 +9,7 @@ use App\Services\Business\BusinessSourceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BusinessSourceController extends BusinessAdminController
 {
@@ -30,16 +31,27 @@ class BusinessSourceController extends BusinessAdminController
             $request->validated('content'),
         );
 
-        return response()->json(['message' => 'Business source indexed successfully.', 'data' => $source], 201);
+        return response()->json(['message' => 'Business source created and queued for indexing successfully.', 'data' => $source], 201);
     }
 
-    public function file(Request $request, Business $business, BusinessSource $source)
+    public function file(Request $request, Business $business, BusinessSource $source): StreamedResponse
     {
         $this->ensureAvailable($request);
         abort_unless($source->business_id === $business->id, 404);
-        abort_unless($source->storage_path && Storage::disk('profiles')->exists($source->storage_path), 404);
 
-        return Storage::disk('profiles')->download($source->storage_path, $source->original_filename);
+        if ($source->storage_path && Storage::disk('profiles')->exists($source->storage_path)) {
+            return Storage::disk('profiles')->download($source->storage_path, $source->downloadFilename());
+        }
+
+        abort_unless($source->type === 'text' && filled($source->extracted_text), 404);
+
+        return response()->streamDownload(
+            static function () use ($source): void {
+                echo (string) $source->extracted_text;
+            },
+            $source->downloadFilename(),
+            ['Content-Type' => 'text/plain; charset=UTF-8'],
+        );
     }
 
     public function destroy(Request $request, Business $business, BusinessSource $source, BusinessSourceService $sources): JsonResponse

@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Classes\BusinessDecisionAI\BusinessDecisionAI;
+use App\Classes\BusinessDecisionAI\LocalBusinessDecisionAI;
+use App\Classes\BusinessDecisionAI\OpenAIBusinessDecisionAI;
 use App\Classes\BusinessFlowAI\BusinessFlowAI;
 use App\Classes\BusinessFlowAI\LocalBusinessFlowAI;
 use App\Models\Profile;
@@ -24,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(BusinessFlowAI::class, LocalBusinessFlowAI::class);
+        $this->app->bind(BusinessDecisionAI::class, function ($app): BusinessDecisionAI {
+            return config('business-ai.decision.driver') === 'local'
+                ? $app->make(LocalBusinessDecisionAI::class)
+                : $app->make(OpenAIBusinessDecisionAI::class);
+        });
     }
 
     /**

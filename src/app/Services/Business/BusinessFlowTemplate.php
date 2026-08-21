@@ -19,9 +19,16 @@ class BusinessFlowTemplate
                     'required_fields' => ['project_summary'],
                     'start' => true,
                 ]),
-                $this->node('qualify', 'decision', '¿Es una necesidad tecnológica?', 760, 300, [
-                    'mode' => 'technology_interest',
-                    'branches' => ['technology', 'other'],
+                $this->node('qualify', 'decision', 'Calificar problema con fuentes', 760, 300, [
+                    'mode' => 'knowledge_yes_no',
+                    'question' => '¿El problema descrito corresponde a un producto, servicio o problema que este negocio puede solucionar?',
+                    'questions' => [
+                        'es' => '¿El problema descrito corresponde a un producto, servicio o problema que este negocio puede solucionar?',
+                        'en' => 'Does the described problem match a product, service, or problem that this business can solve?',
+                    ],
+                    'use_business_description' => true,
+                    'use_sources' => true,
+                    'branches' => ['yes', 'no'],
                 ]),
                 $this->node('redirect', 'instruction', 'Orientar al usuario', 1120, 90, [
                     'message' => 'Estamos para ayudarte con tecnología y automatización, como desarrollo de software, IA, datos e infraestructura. Cuéntanos si tienes una necesidad relacionada.',
@@ -93,8 +100,8 @@ class BusinessFlowTemplate
             ],
             'edges' => [
                 $this->edge('welcome-qualify', 'welcome', 'qualify'),
-                $this->edge('qualify-redirect', 'qualify', 'redirect', 'other', 'No relacionado'),
-                $this->edge('qualify-capture', 'qualify', 'capture_problem', 'technology', 'Tecnología'),
+                $this->edge('qualify-redirect', 'qualify', 'redirect', 'no', 'No'),
+                $this->edge('qualify-capture', 'qualify', 'capture_problem', 'yes', 'Sí'),
                 $this->edge('redirect-qualify', 'redirect', 'qualify'),
                 $this->edge('capture-problem-check', 'capture_problem', 'problem_complete'),
                 $this->edge('problem-check-details', 'problem_complete', 'request_details', 'complete', 'Problema completo'),

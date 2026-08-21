@@ -58,11 +58,12 @@
         },
         {
           "name": "Create Text Source",
-          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.id) pm.collectionVariables.set('business_source_id', json.data.id);"]}}],
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.id) pm.collectionVariables.set('business_source_id', json.data.id);","pm.test('Text source is queued and downloadable as TXT', () => {","  pm.expect(['processing', 'indexed']).to.include(json.data?.status);","  pm.expect(json.data?.download_available).to.eql(true);","  pm.expect(json.data?.download_filename).to.match(/\\.txt$/i);","});"]}}],
           "request": {
             "method":"POST",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{\n  \"name\": \"Servicios\",\n  \"content\": \"Desarrollamos software, automatizaciones, soluciones de datos e inteligencia artificial.\"\n}"},
+            "description":"Crea una fuente de texto y encola su indexación vectorial. El response inicial puede tener status=processing; consulte List Sources hasta obtener indexed o failed. El API persiste una representación .txt y devuelve download_available=true y download_filename.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources"]}
           },
           "response": []
@@ -79,8 +80,9 @@
           "response": []
         },
         {
-          "name": "Download Source File",
-          "request": {"method":"GET","header":[{"key":"Accept","value":"application/octet-stream"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources/{{business_source_id}}/file","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources","{{business_source_id}}","file"]}},
+          "name": "Download Source",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Source download succeeds', () => {","  pm.response.to.have.status(200);","  pm.expect(pm.response.headers.get('Content-Disposition')).to.include('filename');","});"]}}],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/octet-stream"}],"description":"Descarga el archivo original o un .txt para fuentes creadas pegando texto. También soporta fuentes de texto históricas que solo conservan extracted_text.","url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources/{{business_source_id}}/file","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources","{{business_source_id}}","file"]}},
           "response": []
         },
         {
@@ -90,8 +92,8 @@
         },
         {
           "name": "Get Flow",
-          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.draft_version) {","  pm.collectionVariables.set('business_flow_graph', JSON.stringify({ nodes: json.data.draft_version.nodes, edges: json.data.draft_version.edges }, null, 2));","}"]}}],
-          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.draft_version) {","  const graph = { nodes: json.data.draft_version.nodes, edges: json.data.draft_version.edges };","  pm.collectionVariables.set('business_flow_graph', JSON.stringify(graph, null, 2));","  pm.test('Knowledge decisions use fixed yes/no branches', () => {","    const decisions = graph.nodes.filter((node) => node.type === 'decision' && node.config?.mode === 'knowledge_yes_no');","    decisions.forEach((node) => {","      pm.expect(node.config.questions?.es || node.config.question).to.be.a('string').and.not.empty;","      pm.expect(node.config.branches).to.eql(['yes', 'no']);","    });","  });","}"]}}],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"description":"Obtiene versiones publicada y borrador. Los nodos knowledge_yes_no contienen questions.es|en, use_business_description, use_sources y las ramas fijas yes/no.","url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}},
           "response": []
         },
         {
@@ -100,16 +102,19 @@
             "method":"PUT",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
+            "description":"Guarda el borrador. Una decisión knowledge_yes_no debe incluir una pregunta no vacía y exactamente las ramas yes/no; required_fields_complete exige complete/incomplete.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}
           },
           "response": []
         },
         {
           "name": "Validate Flow",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","pm.test('Flow is valid', () => {","  pm.expect(json.data?.valid).to.eql(true);","  pm.expect(json.data?.errors || []).to.be.empty;","});"]}}],
           "request": {
             "method":"POST",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
+            "description":"Valida nodo inicial, alcanzabilidad, configuración, ramas y una conexión de destino por cada rama antes de publicar.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow/validate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow","validate"]}
           },
           "response": []

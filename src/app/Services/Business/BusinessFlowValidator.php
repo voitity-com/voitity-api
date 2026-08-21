@@ -8,7 +8,7 @@ class BusinessFlowValidator
 {
     private const ACTIONS = ['capture_problem', 'extract_fields', 'analyze_solution', 'finalize_lead'];
 
-    private const DECISION_MODES = ['technology_interest', 'required_fields_complete'];
+    private const DECISION_MODES = ['knowledge_yes_no', 'required_fields_complete', 'technology_interest'];
 
     /** @param array<int, array<string, mixed>> $nodes @param array<int, array<string, mixed>> $edges */
     public function validate(array $nodes, array $edges): array
@@ -53,6 +53,21 @@ class BusinessFlowValidator
                 } elseif (! in_array($mode, self::DECISION_MODES, true)) {
                     $errors[] = "La decisión {$key} usa el modo no soportado {$mode}.";
                 }
+                if ($mode === 'knowledge_yes_no') {
+                    $questions = is_array($config['questions'] ?? null) ? $config['questions'] : [];
+                    $hasQuestion = collect([$config['question'] ?? null, $questions['es'] ?? null, $questions['en'] ?? null])
+                        ->contains(fn (mixed $question): bool => is_string($question) && trim($question) !== '');
+                    if (! $hasQuestion) {
+                        $errors[] = "La decisión {$key} no tiene una pregunta para evaluar.";
+                    }
+                    if (array_values($config['branches'] ?? []) !== ['yes', 'no']) {
+                        $errors[] = "La decisión {$key} debe usar exactamente las ramas yes y no.";
+                    }
+                }
+                if ($mode === 'required_fields_complete'
+                    && array_values($config['branches'] ?? []) !== ['complete', 'incomplete']) {
+                    $errors[] = "La decisión {$key} debe usar exactamente las ramas complete e incomplete.";
+                }
             }
             if ($type === BusinessFlowNodeType::Action->value) {
                 $action = trim((string) ($config['action'] ?? ''));
@@ -87,12 +102,21 @@ class BusinessFlowValidator
             $connections = $outgoing[$key] ?? [];
 
             if ($type === BusinessFlowNodeType::Decision->value) {
-                foreach (($config['branches'] ?? []) as $branch) {
-                    $hasBranch = collect($connections)->contains(
+                $branches = array_values($config['branches'] ?? []);
+                foreach ($branches as $branch) {
+                    $branchConnections = collect($connections)->filter(
                         fn (array $edge): bool => ($edge['source_handle'] ?? null) === $branch
                     );
-                    if (! $hasBranch) {
+                    if ($branchConnections->isEmpty()) {
                         $errors[] = "La decisión {$key} no tiene conexión para la rama {$branch}.";
+                    } elseif ($branchConnections->count() > 1) {
+                        $errors[] = "La decisión {$key} tiene más de una conexión para la rama {$branch}.";
+                    }
+                }
+                foreach ($connections as $connection) {
+                    $handle = $connection['source_handle'] ?? null;
+                    if (! is_string($handle) || ! in_array($handle, $branches, true)) {
+                        $errors[] = "La decisión {$key} tiene una conexión con una rama no configurada.";
                     }
                 }
             }
