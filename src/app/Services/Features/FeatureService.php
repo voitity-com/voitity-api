@@ -10,6 +10,8 @@ use Illuminate\Support\Collection;
 
 class FeatureService
 {
+    public const BUSINESS = 'business';
+
     public const PRODUCTS = 'products';
 
     public const DOMAINS_CUSTOM = 'domains.custom';
@@ -34,6 +36,12 @@ class FeatureService
                 'group' => 'products',
                 'key' => self::PRODUCTS,
                 'name' => 'Products',
+            ],
+            self::BUSINESS => [
+                'group' => 'business',
+                'key' => self::BUSINESS,
+                'name' => 'Business',
+                'profile_configurable' => false,
             ],
             self::DOMAINS_CUSTOM => [
                 'group' => 'domains',

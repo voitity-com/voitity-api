@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Classes\BusinessFlowAI\BusinessFlowAI;
+use App\Classes\BusinessFlowAI\LocalBusinessFlowAI;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileIntegrationMedia;
@@ -21,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(BusinessFlowAI::class, LocalBusinessFlowAI::class);
     }
 
     /**
@@ -69,6 +71,10 @@ class AppServiceProvider extends ServiceProvider
                 1,
                 (int) config('public-profiles.read_rate_limit_per_minute', 120)
             ))->by((string) $request->ip());
+        });
+
+        RateLimiter::for('business-chat', function (Request $request) {
+            return Limit::perMinute(60)->by((string) $request->ip().':'.(string) $request->header('X-Bigmelo-Business-Key'));
         });
 
         RateLimiter::for('profile-interactions', function (Request $request) {

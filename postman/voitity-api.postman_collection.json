@@ -17,6 +17,252 @@
   },
   "item": [
     {
+      "name": "Business",
+      "description": "Admin management and origin-restricted guided chatbot runtime. Enable the global business feature before using these requests.",
+      "item": [
+        {
+          "name": "Create Business",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.id) pm.collectionVariables.set('business_id', json.data.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body": {"mode":"raw","raw":"{\n  \"name\": \"Bigmelo Labs\",\n  \"description\": \"Automatización y desarrollo con IA\"\n}"},
+            "url": {"raw":"{{base_url}}/api/businesses","host":["{{base_url}}"],"path":["api","businesses"]}
+          },
+          "response": []
+        },
+        {
+          "name": "List Businesses",
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses","host":["{{base_url}}"],"path":["api","businesses"]}},
+          "response": []
+        },
+        {
+          "name": "Get Business",
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}"]}},
+          "response": []
+        },
+        {
+          "name": "Update Business",
+          "request": {
+            "method":"PATCH",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"name\": \"Bigmelo Labs\",\n  \"description\": \"Automatización, datos, infraestructura, software e IA\"\n}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "List Sources",
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources"]}},
+          "response": []
+        },
+        {
+          "name": "Create Text Source",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.id) pm.collectionVariables.set('business_source_id', json.data.id);"]}}],
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"name\": \"Servicios\",\n  \"content\": \"Desarrollamos software, automatizaciones, soluciones de datos e inteligencia artificial.\"\n}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Source File",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.id) pm.collectionVariables.set('business_source_id', json.data.id);"]}}],
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"formdata","formdata":[{"key":"name","value":"Documento de servicios","type":"text"},{"key":"file","src":"{{business_source_file_path}}","type":"file"}]},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Download Source File",
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/octet-stream"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources/{{business_source_id}}/file","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources","{{business_source_id}}","file"]}},
+          "response": []
+        },
+        {
+          "name": "Delete Source",
+          "request": {"method":"DELETE","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/sources/{{business_source_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","sources","{{business_source_id}}"]}},
+          "response": []
+        },
+        {
+          "name": "Get Flow",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.draft_version) {","  pm.collectionVariables.set('business_flow_graph', JSON.stringify({ nodes: json.data.draft_version.nodes, edges: json.data.draft_version.edges }, null, 2));","}"]}}],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}},
+          "response": []
+        },
+        {
+          "name": "Save Flow",
+          "request": {
+            "method":"PUT",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Flow",
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow/validate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow","validate"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Flow",
+          "request": {"method":"POST","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow/publish","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow","publish"]}},
+          "response": []
+        },
+        {
+          "name": "Configure Email and Widget",
+          "request": {
+            "method":"PATCH",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"lead_recipient_email\": \"leads@example.com\",\n  \"sender_email\": \"bot@example.com\",\n  \"sender_name\": \"Bigmelo Bot\",\n  \"widget_enabled\": true\n}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/configuration","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","configuration"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Get Configuration",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","const client = json.data?.api_clients?.[0];","if (client?.id) pm.collectionVariables.set('business_api_client_id', client.id);"]}}],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/configuration","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","configuration"]}},
+          "response": []
+        },
+        {
+          "name": "Create API Key",
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.key) pm.collectionVariables.set('business_api_key', json.data.key);","if (json.data?.client?.id) pm.collectionVariables.set('business_api_client_id', json.data.client.id);"]}}],
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"name\": \"Local widget\",\n  \"origins\": [\"{{business_origin}}\"]\n}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/api-clients","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","api-clients"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Business",
+          "request": {"method":"POST","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/activate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","activate"]}},
+          "response": []
+        },
+        {
+          "name": "List Leads",
+          "event": [
+            {"listen":"prerequest","script":{"type":"text/javascript","exec":["const to = new Date();","const from = new Date(to);","from.setMonth(from.getMonth() - 1);","pm.collectionVariables.set('business_leads_from', from.toISOString().slice(0, 10));","pm.collectionVariables.set('business_leads_to', to.toISOString().slice(0, 10));"]}},
+            {"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.[0]?.id) pm.collectionVariables.set('business_lead_id', json.data[0].id);"]}}
+          ],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads?date_field=created_at&from={{business_leads_from}}&to={{business_leads_to}}&timezone=America%2FBogota&statuses[]=created&statuses[]=contacted","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads"],"query":[{"key":"date_field","value":"created_at","description":"Use created_at or updated_at."},{"key":"from","value":"{{business_leads_from}}"},{"key":"to","value":"{{business_leads_to}}"},{"key":"timezone","value":"America/Bogota","description":"IANA timezone used to interpret from and to."},{"key":"statuses[]","value":"created"},{"key":"statuses[]","value":"contacted"}]}},
+          "response": []
+        },
+        {
+          "name": "Update Lead Status",
+          "request": {
+            "method":"PATCH",
+            "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"status\": \"closed\",\n  \"note\": \"Proceso cerrado desde Postman después de confirmar con el cliente.\"\n}"},
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads/{{business_lead_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads","{{business_lead_id}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage",
+          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const to = new Date();","const from = new Date(to);","from.setMonth(from.getMonth() - 1);","pm.collectionVariables.set('business_usage_from', from.toISOString().slice(0, 10));","pm.collectionVariables.set('business_usage_to', to.toISOString().slice(0, 10));"]}}],
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/usage?from={{business_usage_from}}&to={{business_usage_to}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","usage"],"query":[{"key":"from","value":"{{business_usage_from}}"},{"key":"to","value":"{{business_usage_to}}"}]}},
+          "response": []
+        },
+        {
+          "name": "Get Public Widget Configuration",
+          "auth":{"type":"noauth"},
+          "request": {
+            "method":"GET",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"}],
+            "url":{"raw":"{{base_url}}/api/business/widget","host":["{{base_url}}"],"path":["api","business","widget"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Start Public Conversation",
+          "auth":{"type":"noauth"},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.conversation_id) pm.collectionVariables.set('business_conversation_id', json.data.conversation_id);","if (json.data?.session) pm.collectionVariables.set('business_session', json.data.session);","pm.test('Initial assistant message is localized and declares form fields', () => {","  pm.expect(json.data?.locale).to.eql(pm.collectionVariables.get('business_locale'));","  pm.expect(json.data?.messages?.[0]?.required_fields).to.be.an('array');","  pm.expect(json.data?.messages?.[0]?.fields?.[0]).to.include.keys('key', 'label', 'type', 'required');","});"]}}],
+          "request": {
+            "method":"POST",
+            "description":"Send locale when starting. The API persists it and returns localized assistant content plus form-ready fields[].",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"Content-Type","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"visitor_id\": \"postman-visitor\",\n  \"locale\": \"{{business_locale}}\"\n}"},
+            "url":{"raw":"{{base_url}}/api/business/conversations","host":["{{base_url}}"],"path":["api","business","conversations"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Send Visitor Name as Structured Fields",
+          "auth":{"type":"noauth"},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","pm.test('Project field is returned with a localized definition', () => {","  const message = json.data?.messages?.find((item) => Array.isArray(item.required_fields));","  pm.expect(message?.required_fields).to.include('project_summary');","  pm.expect(message?.fields?.find((field) => field.key === 'project_summary')).to.include.keys('label', 'type', 'required');","});"]}}],
+          "request": {
+            "method":"POST",
+            "description":"Structured fields use stable keys and avoid parsing translated free text. Send locale on every turn so language changes take effect immediately.",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"},{"key":"Idempotency-Key","value":"{{$guid}}"},{"key":"Content-Type","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"locale\": \"{{business_locale}}\",\n  \"fields\": {\n    \"full_name\": \"Ana Torres\"\n  }\n}"},
+            "url":{"raw":"{{base_url}}/api/business/conversations/{{business_conversation_id}}/messages","host":["{{base_url}}"],"path":["api","business","conversations","{{business_conversation_id}}","messages"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Send Contact Data Missing WhatsApp",
+          "auth":{"type":"noauth"},
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","pm.test('Only WhatsApp remains required', () => {","  pm.expect(json.data?.messages?.[0]?.required_fields).to.eql(['whatsapp']);","});"]}}],
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"},{"key":"Idempotency-Key","value":"{{$guid}}"},{"key":"Content-Type","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"locale\": \"{{business_locale}}\",\n  \"fields\": {\n    \"project_summary\": \"Necesitamos un chatbot para responder preguntas frecuentes, consultar pedidos y derivar casos complejos al equipo.\",\n    \"email\": \"ana@example.com\",\n    \"phone\": \"+573001112233\",\n    \"company\": \"Datos Andinos\",\n    \"website\": \"https://example.com\"\n  }\n}"},
+            "url":{"raw":"{{base_url}}/api/business/conversations/{{business_conversation_id}}/messages","host":["{{base_url}}"],"path":["api","business","conversations","{{business_conversation_id}}","messages"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Contact Data With WhatsApp",
+          "auth":{"type":"noauth"},
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"},{"key":"Idempotency-Key","value":"{{$guid}}"},{"key":"Content-Type","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\n  \"locale\": \"{{business_locale}}\",\n  \"fields\": {\n    \"whatsapp\": \"+573004445566\"\n  }\n}"},
+            "url":{"raw":"{{base_url}}/api/business/conversations/{{business_conversation_id}}/messages","host":["{{base_url}}"],"path":["api","business","conversations","{{business_conversation_id}}","messages"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Get Public Conversation Status",
+          "auth":{"type":"noauth"},
+          "request": {
+            "method":"GET",
+            "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"X-Bigmelo-Business-Session","value":"{{business_session}}"}],
+            "url":{"raw":"{{base_url}}/api/business/conversations/{{business_conversation_id}}/status","host":["{{base_url}}"],"path":["api","business","conversations","{{business_conversation_id}}","status"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Pause Business",
+          "request": {"method":"POST","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/deactivate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","deactivate"]}},
+          "response": []
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {"method":"DELETE","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/api-clients/{{business_api_client_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","api-clients","{{business_api_client_id}}"]}},
+          "response": []
+        },
+        {
+          "name": "Delete Business",
+          "request": {"method":"DELETE","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}"]}},
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Health and Docs",
       "item": [
         {
@@ -8038,6 +8284,71 @@
     },
     {
       "key": "insights_to",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_api_key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "business_api_client_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_origin",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "business_locale",
+      "value": "es",
+      "type": "string"
+    },
+    {
+      "key": "business_source_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_source_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_flow_graph",
+      "value": "{}",
+      "type": "string"
+    },
+    {
+      "key": "business_lead_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_conversation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_session",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "business_usage_from",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_usage_to",
       "value": "",
       "type": "string"
     }

@@ -5,6 +5,12 @@ use App\Http\Controllers\api\v1\AdminUserController;
 use App\Http\Controllers\api\v1\AppNotificationController;
 use App\Http\Controllers\api\v1\AuthController;
 use App\Http\Controllers\api\v1\AvatarController;
+use App\Http\Controllers\api\v1\BusinessConfigurationController;
+use App\Http\Controllers\api\v1\BusinessController;
+use App\Http\Controllers\api\v1\BusinessFlowController;
+use App\Http\Controllers\api\v1\BusinessLeadController;
+use App\Http\Controllers\api\v1\BusinessSourceController;
+use App\Http\Controllers\api\v1\BusinessUsageController;
 use App\Http\Controllers\api\v1\ContactSubmissionController;
 use App\Http\Controllers\api\v1\CreditController;
 use App\Http\Controllers\api\v1\MessageController;
@@ -26,6 +32,7 @@ use App\Http\Controllers\api\v1\ProfileOtherIntegrationController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
 use App\Http\Controllers\api\v1\ProfileWidgetController;
+use App\Http\Controllers\api\v1\PublicBusinessChatController;
 use App\Http\Controllers\api\v1\PublicProfileController;
 use App\Http\Controllers\api\v1\PublicProfileInteractionController;
 use App\Http\Controllers\api\v1\PublicProfileWidgetController;
@@ -50,6 +57,39 @@ Route::get('health/payments', PaymentOperationsHealthController::class);
 Route::post('/contact-submissions', [ContactSubmissionController::class, 'store'])
     ->middleware('throttle:contact-submissions');
 Route::get('/subscription/public-plans', [SubscriptionPlansController::class, 'publicIndex']);
+
+Route::prefix('/business')->middleware(['business.client', 'throttle:business-chat'])->group(function () {
+    Route::options('/{any?}', fn () => response()->noContent())->where('any', '.*');
+    Route::get('/widget', [PublicBusinessChatController::class, 'widget']);
+    Route::post('/conversations', [PublicBusinessChatController::class, 'start']);
+    Route::post('/conversations/{conversation}/messages', [PublicBusinessChatController::class, 'message']);
+    Route::get('/conversations/{conversation}/status', [PublicBusinessChatController::class, 'status']);
+});
+
+Route::prefix('/businesses')->group(function () {
+    Route::get('', [BusinessController::class, 'index'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::post('', [BusinessController::class, 'store'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::get('/{business}', [BusinessController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::patch('/{business}', [BusinessController::class, 'update'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::delete('/{business}', [BusinessController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::post('/{business}/activate', [BusinessController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:business:activate']);
+    Route::post('/{business}/deactivate', [BusinessController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:business:activate']);
+    Route::get('/{business}/sources', [BusinessSourceController::class, 'index'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::post('/{business}/sources', [BusinessSourceController::class, 'store'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::get('/{business}/sources/{source}/file', [BusinessSourceController::class, 'file'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::delete('/{business}/sources/{source}', [BusinessSourceController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::get('/{business}/flow', [BusinessFlowController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::put('/{business}/flow', [BusinessFlowController::class, 'update'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::post('/{business}/flow/validate', [BusinessFlowController::class, 'validateFlow'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::post('/{business}/flow/publish', [BusinessFlowController::class, 'publish'])->middleware(['auth:sanctum', 'abilities:business:flow:publish']);
+    Route::get('/{business}/leads', [BusinessLeadController::class, 'index'])->middleware(['auth:sanctum', 'abilities:business:leads:read']);
+    Route::patch('/{business}/leads/{lead}', [BusinessLeadController::class, 'update'])->middleware(['auth:sanctum', 'abilities:business:leads:write']);
+    Route::get('/{business}/usage', [BusinessUsageController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:usage:read']);
+    Route::get('/{business}/configuration', [BusinessConfigurationController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:read']);
+    Route::patch('/{business}/configuration', [BusinessConfigurationController::class, 'update'])->middleware(['auth:sanctum', 'abilities:business:write']);
+    Route::post('/{business}/api-clients', [BusinessConfigurationController::class, 'storeClient'])->middleware(['auth:sanctum', 'abilities:business:keys:manage']);
+    Route::delete('/{business}/api-clients/{client}', [BusinessConfigurationController::class, 'revokeClient'])->middleware(['auth:sanctum', 'abilities:business:keys:manage']);
+});
 
 Route::prefix('/public')->group(function () {
     Route::get('/seo/profiles', [PublicProfileController::class, 'seoIndex'])

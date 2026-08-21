@@ -1,0 +1,109 @@
+<?php
+
+namespace App\Classes\BusinessFlowAI;
+
+use App\Services\Business\BusinessUsageRecorder;
+
+class LocalBusinessFlowAI implements BusinessFlowAI
+{
+    public function __construct(private readonly BusinessUsageRecorder $usage) {}
+
+    public function classifyTechnology(string $message): BusinessFlowAIResult
+    {
+        $normalized = mb_strtolower($message);
+        $keywords = [
+            'software', 'desarrollo', 'aplicación', 'app', 'web', 'automat', 'inteligencia artificial',
+            ' ia ', 'ai', 'datos', 'data', 'infraestructura', 'cloud', 'nube', 'api', 'integración',
+            'sistema', 'tecnología', 'tecnologico', 'tecnológico', 'base de datos', 'mapeo', 'mateo',
+            'chatbot', 'chat bot', 'bot conversacional', 'asistente virtual', 'asistente conversacional',
+            'agente de ia', 'agente de ai', 'virtual assistant', 'conversational assistant',
+            'ai agent', 'technology', 'database', 'analytics', 'data processing',
+        ];
+        $branch = collect($keywords)->contains(fn (string $keyword): bool => str_contains(" {$normalized} ", $keyword))
+            ? 'technology'
+            : 'other';
+
+        return $this->result($message, ['branch' => $branch, 'confidence' => $branch === 'technology' ? 0.86 : 0.64]);
+    }
+
+    public function extractLeadData(string $message, array $known = [], bool $allowMessageAsProblem = false): BusinessFlowAIResult
+    {
+        $data = array_filter($known, fn ($value): bool => filled($value));
+        if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu', $message, $match)) {
+            $data['email'] = mb_strtolower($match[0]);
+        }
+        if (preg_match('/(?:tel[eé]fono|tel|celular|phone)\s*(?:es|n[uú]mero|:|-)?\s*(\+\s*\d[\d\s().-]{7,}\d)/iu', $message, $match)) {
+            $data['phone'] = $this->normalizeInternationalPhone($match[1]);
+        }
+        if (preg_match('/(?:whats\s*app|whatsapp|wa)\s*(?:es|n[uú]mero|:|-)?\s*(\+\s*\d[\d\s().-]{7,}\d)/iu', $message, $match)) {
+            $data['whatsapp'] = $this->normalizeInternationalPhone($match[1]);
+        }
+        if (preg_match('/(?:me llamo|mi nombre es|nombre[:\s]+|my name is|name[:\s]+)\s*([\p{L}][\p{L}\s\'-]{1,80})/iu', $message, $match)) {
+            $data['full_name'] = $this->cleanCaptured($match[1]);
+        }
+        if (preg_match('/(?:empresa|compañía|compania|company)[:\s]+\s*([\p{L}0-9][^,;\n]{1,100})/iu', $message, $match)) {
+            $data['company'] = $this->cleanCaptured($match[1]);
+        }
+        if (preg_match('/(?:sitio\s+web|website|p[aá]gina\s+web|web)\s*(?:es|:|-)?\s*((?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s,;]*)?)/iu', $message, $match)) {
+            $data['website'] = $this->normalizeWebsite($match[1]);
+        }
+        $projectCandidate = null;
+        if (preg_match('/(?:proyecto|problema|necesidad|project|problem|need)\s*(?:es|is|:|-)\s*(.+)/isu', $message, $match)) {
+            $projectCandidate = $this->cleanCaptured($match[1]);
+        } elseif ($allowMessageAsProblem) {
+            $projectCandidate = trim($message);
+        }
+        if (filled($projectCandidate)) {
+            $knownProject = trim((string) ($data['project_summary'] ?? ''));
+            if ($knownProject === '' || mb_strlen($knownProject) < 20 || mb_strlen($projectCandidate) > mb_strlen($knownProject)) {
+                $data['project_summary'] = $projectCandidate;
+            }
+        }
+
+        return $this->result($message, ['lead_data' => $data]);
+    }
+
+    public function summarizeSolution(string $message, array $leadData = []): BusinessFlowAIResult
+    {
+        $project = trim((string) ($leadData['project_summary'] ?? $message));
+        $normalized = mb_strtolower($project);
+        $focus = match (true) {
+            str_contains($normalized, 'chatbot'), str_contains($normalized, 'chat bot'), str_contains($normalized, 'bot conversacional'), str_contains($normalized, 'asistente virtual'), str_contains($normalized, 'asistente conversacional'), str_contains($normalized, 'virtual assistant'), str_contains($normalized, 'conversational assistant') => 'diseñar un asistente conversacional con respuestas basadas en información del negocio, captura estructurada de datos, derivación a personas y trazabilidad de cada conversación',
+            str_contains($normalized, 'base de datos'), str_contains($normalized, 'database'), str_contains($normalized, 'datos'), str_contains($normalized, 'data') => 'diseñar una arquitectura de datos, automatizar la ingesta y transformación, y exponer indicadores verificables',
+            str_contains($normalized, 'infraestructura'), str_contains($normalized, 'nube'), str_contains($normalized, 'cloud') => 'definir una arquitectura cloud segura, automatizar su despliegue y habilitar observabilidad y control de costos',
+            str_contains($normalized, ' ia '), str_contains($normalized, 'ai'), str_contains($normalized, 'inteligencia artificial') => 'construir un flujo asistido por IA con datos de referencia, validaciones, trazabilidad y revisión humana',
+            default => 'modelar el proceso, construir el software mínimo necesario e integrar las fuentes y sistemas involucrados',
+        };
+        $summary = "Posible solución interna: {$focus}. Iniciar con un discovery técnico breve, definir métricas de éxito y entregar un prototipo funcional en un máximo de dos semanas. ";
+        $summary .= 'Necesidad detectada: '.mb_substr($project, 0, 700);
+
+        return $this->result($message, ['summary' => $summary]);
+    }
+
+    private function cleanCaptured(string $value): string
+    {
+        return trim((string) preg_replace('/(?:,|;)?\s+(?:mi|correo|email|tel[eé]fono|celular|whats\s*app|whatsapp|empresa|compañía|compania|sitio\s+web|website|proyecto|problema|necesidad)\b.*$/iu', '', $value));
+    }
+
+    private function normalizeInternationalPhone(string $value): string
+    {
+        return '+'.preg_replace('/\D+/', '', $value);
+    }
+
+    private function normalizeWebsite(string $value): string
+    {
+        return preg_match('/^https?:\/\//i', $value) ? $value : 'https://'.$value;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function result(string $input, array $data): BusinessFlowAIResult
+    {
+        $output = json_encode($data, JSON_UNESCAPED_UNICODE) ?: '';
+
+        return new BusinessFlowAIResult(
+            $data,
+            $this->usage->estimateTokens($input),
+            $this->usage->estimateTokens($output),
+        );
+    }
+}
