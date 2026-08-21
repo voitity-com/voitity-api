@@ -100,6 +100,8 @@ El menú lateral, su estado seleccionado, colores, iconos, ancho, separación, c
 
 El canvas usa HTML, pointer events y SVG, sin una dependencia remota. Se puede navegar horizontal y verticalmente arrastrando con el mouse cualquier zona vacía del fondo; durante el paneo el cursor cambia de mano abierta a mano cerrada. Las barras de scroll nativas continúan disponibles. El gesto no se activa al presionar un nodo, de modo que el drag de bloques conserva su comportamiento independiente. El plano se recalcula y expande en las cuatro direcciones cuando un bloque se mueve, incluyendo coordenadas negativas, por lo que no existe un límite funcional fijo de navegación.
 
+Las conexiones existentes también son editables directamente en el canvas. Al hacer clic sobre una flecha queda seleccionada y aparece un punto en su punta final; ese punto se puede arrastrar hasta otro bloque. Durante el gesto se dibuja la conexión provisional y se resalta el destino válido. Soltar sobre el fondo cancela el cambio. Solo cambia `target`: se conservan el nodo origen, la rama, la etiqueta, la key y la configuración de la flecha. La punta inicial no es arrastrable y el gesto no activa el paneo del canvas.
+
 Cada bloque tiene:
 
 - identificador estable;
