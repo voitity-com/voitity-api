@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\EmbeddingService\EmbeddingClient;
 use App\Mail\BusinessLeadNotification;
 use App\Mail\BusinessVisitorConfirmation;
 use App\Models\Business;
 use App\Models\BusinessApiClient;
+use App\Models\BusinessNodeExecution;
 use App\Models\FeatureFlag;
 use App\Models\User;
 use App\Services\Features\FeatureService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\FakeEmbeddingClient;
 
 class BusinessControllerTest extends TestAPI
 {
@@ -25,6 +29,16 @@ class BusinessControllerTest extends TestAPI
     protected function setUp(): void
     {
         parent::setUp();
+        Config::set('business-ai.decision.driver', 'local');
+        $dimensions = (int) config('ai-knowledge.embedding.dimensions', 1536);
+        app()->instance(EmbeddingClient::class, new FakeEmbeddingClient(function (string $input) use ($dimensions): array {
+            $normalized = mb_strtolower($input);
+            $unrelated = str_contains($normalized, 'fiesta') || str_contains($normalized, 'cumpleaños');
+            $vector = array_fill(0, $dimensions, 0.0);
+            $vector[$unrelated ? 1 : 0] = 1.0;
+
+            return $vector;
+        }));
         $this->admin = User::factory()->create(['role' => 'admin']);
         $this->token = $this->admin->createToken('business', config('roles.admin.abilities'))->plainTextToken;
         FeatureFlag::query()->where('key', FeatureService::BUSINESS)->update(['enabled' => true]);
@@ -77,8 +91,59 @@ class BusinessControllerTest extends TestAPI
             ->assertJsonPath('data.status', 'active');
     }
 
+    public function test_legacy_business_decision_can_be_upgraded_and_published_with_fixed_yes_no_branches(): void
+    {
+        $business = Business::query()->findOrFail(
+            $this->withToken($this->token)->postJson('/api/businesses', [
+                'name' => 'Flow heredado',
+                'description' => 'Servicios de software y datos.',
+            ])->assertCreated()->json('data.id'),
+        );
+        $draft = $business->flow->draftVersion;
+        $decision = $draft->nodes()->where('node_key', 'qualify')->firstOrFail();
+        $decision->update([
+            'title' => '¿Este problema lo puede solucionar el negocio?',
+            'config' => [
+                ...$decision->config,
+                'mode' => 'technology_interest',
+                'branches' => ['technology', 'other'],
+            ],
+        ]);
+        $draft->edges()->where('source_node_key', 'qualify')->where('source_handle', 'yes')
+            ->update(['source_handle' => 'technology', 'label' => 'Tecnología']);
+        $draft->edges()->where('source_node_key', 'qualify')->where('source_handle', 'no')
+            ->update(['source_handle' => 'other', 'label' => 'Otro']);
+
+        $this->artisan('business:upgrade-flow-decisions', [
+            'business' => $business->id,
+            '--publish' => true,
+        ])->assertExitCode(0);
+
+        $published = $business->flow->fresh()->publishedVersion;
+        $upgraded = $published->nodes()->where('node_key', 'qualify')->firstOrFail();
+        $this->assertSame('Calificar problema con fuentes', $upgraded->title);
+        $this->assertSame('knowledge_yes_no', $upgraded->config['mode']);
+        $this->assertSame('¿Este problema lo puede solucionar el negocio?', $upgraded->config['questions']['es']);
+        $this->assertSame(['yes', 'no'], $upgraded->config['branches']);
+        $this->assertTrue($upgraded->config['use_business_description']);
+        $this->assertTrue($upgraded->config['use_sources']);
+        $this->assertDatabaseHas('business_flow_edges', [
+            'business_flow_version_id' => $published->id,
+            'source_node_key' => 'qualify',
+            'source_handle' => 'yes',
+            'target_node_key' => 'capture_problem',
+        ]);
+        $this->assertDatabaseHas('business_flow_edges', [
+            'business_flow_version_id' => $published->id,
+            'source_node_key' => 'qualify',
+            'source_handle' => 'no',
+            'target_node_key' => 'redirect',
+        ]);
+    }
+
     public function test_admin_can_list_businesses_and_index_a_text_source(): void
     {
+        Storage::fake('profiles');
         $business = Business::query()->findOrFail(
             $this->withToken($this->token)->postJson('/api/businesses', [
                 'name' => 'Negocio de prueba',
@@ -93,13 +158,34 @@ class BusinessControllerTest extends TestAPI
             ->assertJsonPath('data.0.status', 'draft')
             ->assertJsonStructure(['data' => [['updated_at']]]);
 
-        $this->withToken($this->token)
+        $sourceText = 'Construimos software, automatizaciones e implementaciones de inteligencia artificial.';
+        $sourceResponse = $this->withToken($this->token)
             ->postJson("/api/businesses/{$business->id}/sources", [
                 'name' => 'Servicios',
-                'content' => 'Construimos software, automatizaciones e implementaciones de inteligencia artificial.',
+                'content' => $sourceText,
             ])
             ->assertCreated()
-            ->assertJsonPath('data.status', 'indexed');
+            ->assertJsonPath('data.status', 'indexed')
+            ->assertJsonPath('data.original_filename', 'Servicios.txt')
+            ->assertJsonPath('data.mime_type', 'text/plain')
+            ->assertJsonPath('data.download_available', true)
+            ->assertJsonPath('data.download_filename', 'Servicios.txt');
+
+        $source = $business->sources()->findOrFail($sourceResponse->json('data.id'));
+        Storage::disk('profiles')->assertExists($source->storage_path);
+        $this->assertSame($sourceText, Storage::disk('profiles')->get($source->storage_path));
+
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/sources")
+            ->assertOk()
+            ->assertJsonPath('data.0.download_available', true)
+            ->assertJsonPath('data.0.download_filename', 'Servicios.txt');
+
+        $download = $this->withToken($this->token)
+            ->get("/api/businesses/{$business->id}/sources/{$source->id}/file")
+            ->assertOk()
+            ->assertDownload('Servicios.txt');
+        $this->assertSame($sourceText, $download->streamedContent());
 
         $this->assertDatabaseHas('business_sources', [
             'business_id' => $business->id,
@@ -107,10 +193,49 @@ class BusinessControllerTest extends TestAPI
             'status' => 'indexed',
         ]);
         $this->assertDatabaseHas('business_knowledge_chunks', ['business_id' => $business->id]);
+        $chunk = $source->chunks()->firstOrFail();
+        $this->assertNotNull($chunk->content_hash);
+        $this->assertSame(config('ai-knowledge.embedding.model'), $chunk->embedding_model);
+        $this->assertNotNull($chunk->embedded_at);
+        $this->assertNotNull($chunk->getAttribute('embedding'));
         $this->assertDatabaseHas('business_usage_events', [
             'business_id' => $business->id,
             'event_type' => 'source_indexed',
         ]);
+    }
+
+    public function test_admin_can_download_legacy_text_source_without_a_stored_file(): void
+    {
+        Storage::fake('profiles');
+        $business = Business::query()->findOrFail(
+            $this->withToken($this->token)->postJson('/api/businesses', [
+                'name' => 'Fuentes históricas',
+                'description' => 'Negocio con fuentes creadas antes de almacenar archivos TXT.',
+            ])->assertCreated()->json('data.id'),
+        );
+        $legacyText = "Servicios heredados\nDesarrollo de software y automatización.";
+        $source = $business->sources()->create([
+            'user_id' => $this->admin->id,
+            'type' => 'text',
+            'name' => 'Legado / servicios',
+            'status' => 'indexed',
+            'extracted_text' => $legacyText,
+            'token_count' => 12,
+            'indexed_at' => now(),
+        ]);
+
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/sources")
+            ->assertOk()
+            ->assertJsonPath('data.0.download_available', true)
+            ->assertJsonPath('data.0.download_filename', 'Legado - servicios.txt');
+
+        $download = $this->withToken($this->token)
+            ->get("/api/businesses/{$business->id}/sources/{$source->id}/file")
+            ->assertOk()
+            ->assertDownload('Legado - servicios.txt')
+            ->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+        $this->assertSame($legacyText, $download->streamedContent());
     }
 
     public function test_admin_can_download_and_delete_an_uploaded_business_source(): void
@@ -128,7 +253,9 @@ class BusinessControllerTest extends TestAPI
                 'name' => 'Servicios',
                 'file' => UploadedFile::fake()->createWithContent('servicios.txt', 'Desarrollo de software e inteligencia artificial.'),
             ], ['Accept' => 'application/json'])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('data.download_available', true)
+            ->assertJsonPath('data.download_filename', 'servicios.txt');
 
         $source = $business->sources()->firstOrFail();
         Storage::disk('profiles')->assertExists($source->storage_path);
@@ -434,6 +561,51 @@ class BusinessControllerTest extends TestAPI
             ->assertOk()
             ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
             ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+    }
+
+    public function test_public_chat_answers_a_configured_decision_from_vectorized_business_sources(): void
+    {
+        $business = $this->createPublishedBusiness();
+        $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/sources", [
+            'name' => 'Problemas que solucionamos',
+            'content' => 'Ayudamos a las empresas a mejorar la calidad de las decisiones mediante reportes, analítica de datos e inteligencia artificial.',
+        ])->assertCreated()->assertJsonPath('data.status', 'indexed');
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
+            'name' => 'Decisiones con fuentes',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $start = $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['locale' => 'es'])
+            ->assertCreated();
+        $conversation = $start->json('data.conversation_id');
+
+        $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ])->postJson("/api/business/conversations/{$conversation}/messages", [
+            'fields' => ['project_summary' => 'Necesito tomar mejores deciciones en mi negocio y entender qué acciones ejecutar.'],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp']);
+
+        $conversationId = Business::query()->findOrFail($business->id)
+            ->conversations()->where('uuid', $conversation)->value('id');
+        $execution = BusinessNodeExecution::query()
+            ->where('business_conversation_id', $conversationId)
+            ->where('node_key', 'qualify')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('yes', $execution->output['branch']);
+        $this->assertNotEmpty($execution->output['retrieved_chunk_ids']);
+        $this->assertDatabaseHas('business_usage_events', [
+            'business_id' => $business->id,
+            'business_conversation_id' => $conversationId,
+            'event_type' => 'source_retrieval',
+        ]);
     }
 
     public function test_public_chat_can_offer_only_optional_fields_when_required_data_was_provided_early(): void

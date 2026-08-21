@@ -2,6 +2,8 @@
 
 namespace App\Services\Business;
 
+use App\Classes\BusinessDecisionAI\BusinessDecisionAI;
+use App\Classes\BusinessDecisionAI\BusinessDecisionResult;
 use App\Classes\BusinessFlowAI\BusinessFlowAI;
 use App\Classes\BusinessFlowAI\BusinessFlowAIResult;
 use App\Enums\BusinessConversationStatus;
@@ -14,6 +16,7 @@ use App\Models\BusinessFlowNode;
 use App\Models\BusinessMessage;
 use App\Models\BusinessNodeExecution;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +24,7 @@ class BusinessFlowRunner
 {
     public function __construct(
         private readonly BusinessFlowAI $ai,
+        private readonly BusinessDecisionAI $decisionAI,
         private readonly BusinessLeadService $leads,
         private readonly BusinessUsageRecorder $usage,
         private readonly BusinessKnowledgeRetriever $knowledge,
@@ -111,21 +115,6 @@ class BusinessFlowRunner
                 'event_type' => 'message_received',
                 'input_tokens' => $tokens,
             ]);
-
-            $retrieved = $this->knowledge->retrieve($conversation->business, $content);
-            if ($retrieved['content'] !== '') {
-                $context = $conversation->context ?? [];
-                $context['knowledge'] = $retrieved;
-                $conversation->context = $context;
-                $conversation->save();
-                $this->usage->record([
-                    'business_id' => $conversation->business_id,
-                    'business_conversation_id' => $conversation->id,
-                    'event_type' => 'source_retrieval',
-                    'input_tokens' => $retrieved['tokens'],
-                    'metadata' => ['chunk_ids' => $retrieved['chunk_ids']],
-                ]);
-            }
 
             $next = $this->nextNodeKey($conversation, $conversation->current_node_key, null);
             if (! $next) {
@@ -315,6 +304,8 @@ class BusinessFlowRunner
             $result = $this->ai->classifyTechnology($latest);
             $branch = (string) ($result->data['branch'] ?? 'other');
             $this->recordAI($conversation, 'flow_decision', $result);
+        } elseif ($mode === 'knowledge_yes_no') {
+            return $this->knowledgeDecision($conversation, $node);
         } elseif ($mode === 'required_fields_complete') {
             $required = $node->config['required_fields'] ?? [];
             $data = $conversation->context['lead_data'] ?? [];
@@ -329,6 +320,86 @@ class BusinessFlowRunner
         $conversation->update(['current_node_key' => $node->node_key]);
 
         return ['branch' => $branch, 'next' => $this->nextNodeKey($conversation, $node->node_key, $branch)];
+    }
+
+    /** @return array<string, mixed> */
+    private function knowledgeDecision(BusinessConversation $conversation, BusinessFlowNode $node): array
+    {
+        $locale = $this->localization->normalize($conversation->locale);
+        $question = $this->decisionQuestion($node, $locale);
+        $visitorMessages = $conversation->messages()
+            ->where('role', 'visitor')
+            ->latest('id')
+            ->limit(6)
+            ->get(['content'])
+            ->reverse()
+            ->pluck('content')
+            ->map(fn (string $content): string => trim($content))
+            ->filter()
+            ->implode("\n");
+        $problem = $this->decisionProblem($conversation);
+        $searchQuery = trim(implode("\n", array_filter([$problem, $visitorMessages])));
+        $useSources = ($node->config['use_sources'] ?? true) === true;
+        $retrieved = $useSources
+            ? $this->knowledge->retrieve($conversation->business, $searchQuery)
+            : $this->emptyKnowledgeResult();
+
+        if ($retrieved['query_tokens'] > 0 || $retrieved['items'] !== []) {
+            $this->usage->record([
+                'business_id' => $conversation->business_id,
+                'business_conversation_id' => $conversation->id,
+                'event_type' => 'source_retrieval',
+                'provider' => $retrieved['provider'],
+                'model' => $retrieved['model'],
+                'input_tokens' => $retrieved['query_tokens'],
+                'metadata' => [
+                    'chunk_ids' => $retrieved['chunk_ids'],
+                    'context_tokens' => $retrieved['context_tokens'],
+                    'latency_ms' => $retrieved['latency_ms'],
+                ],
+            ]);
+        }
+
+        $result = $this->decisionAI->evaluate(
+            business: $conversation->business,
+            question: $question,
+            visitorContext: $visitorMessages,
+            problem: $problem,
+            businessDescription: ($node->config['use_business_description'] ?? true) === true
+                ? $conversation->business->description
+                : null,
+            knowledge: $retrieved['items'],
+            locale: $locale,
+        );
+        $minimumConfidence = (float) ($node->config['minimum_confidence'] ?? config('business-ai.decision.minimum_confidence', 0.55));
+        $answer = $result->answer && $result->confidence >= $minimumConfidence;
+        $branch = $answer ? 'yes' : 'no';
+        $this->recordDecision($conversation, $node, $result, $retrieved, $branch, $minimumConfidence);
+
+        $context = is_array($conversation->context) ? $conversation->context : [];
+        $context['knowledge'] = [
+            'chunk_ids' => $retrieved['chunk_ids'],
+            'context_tokens' => $retrieved['context_tokens'],
+            'query_tokens' => $retrieved['query_tokens'],
+        ];
+        $context['last_decision'] = [
+            'node_key' => $node->node_key,
+            'answer' => $branch,
+            'confidence' => $result->confidence,
+            'source_chunk_ids' => $result->sourceChunkIds,
+        ];
+        $conversation->update(['context' => $context, 'current_node_key' => $node->node_key]);
+
+        return [
+            'branch' => $branch,
+            'next' => $this->nextNodeKey($conversation, $node->node_key, $branch),
+            'answer' => $branch,
+            'confidence' => $result->confidence,
+            'minimum_confidence' => $minimumConfidence,
+            'reason' => $result->reason,
+            'source_chunk_ids' => $result->sourceChunkIds,
+            'retrieved_chunk_ids' => $retrieved['chunk_ids'],
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -404,6 +475,82 @@ class BusinessFlowRunner
             'input_tokens' => $result->inputTokens,
             'output_tokens' => $result->outputTokens,
         ]);
+    }
+
+    /** @param array<string, mixed> $retrieved */
+    private function recordDecision(
+        BusinessConversation $conversation,
+        BusinessFlowNode $node,
+        BusinessDecisionResult $result,
+        array $retrieved,
+        string $branch,
+        float $minimumConfidence,
+    ): void {
+        $this->usage->record([
+            'business_id' => $conversation->business_id,
+            'business_conversation_id' => $conversation->id,
+            'event_type' => 'flow_decision',
+            'provider' => $result->provider,
+            'model' => $result->model,
+            'input_tokens' => $result->inputTokens,
+            'output_tokens' => $result->outputTokens,
+            'metadata' => [
+                'node_key' => $node->node_key,
+                'branch' => $branch,
+                'confidence' => $result->confidence,
+                'minimum_confidence' => $minimumConfidence,
+                'source_chunk_ids' => $result->sourceChunkIds,
+                'retrieved_chunk_ids' => $retrieved['chunk_ids'],
+            ],
+        ]);
+
+        Log::info('Business knowledge decision evaluated.', [
+            'business_id' => $conversation->business_id,
+            'conversation_id' => $conversation->id,
+            'node_key' => $node->node_key,
+            'branch' => $branch,
+            'confidence' => $result->confidence,
+            'minimum_confidence' => $minimumConfidence,
+            'source_chunk_ids' => $result->sourceChunkIds,
+            'retrieved_chunk_ids' => $retrieved['chunk_ids'],
+            'provider' => $result->provider,
+            'model' => $result->model,
+        ]);
+    }
+
+    private function decisionQuestion(BusinessFlowNode $node, string $locale): string
+    {
+        $questions = is_array($node->config['questions'] ?? null) ? $node->config['questions'] : [];
+
+        return trim((string) ($questions[$locale] ?? $node->config['question'] ?? $questions['es'] ?? $questions['en'] ?? $node->title));
+    }
+
+    private function decisionProblem(BusinessConversation $conversation): ?string
+    {
+        $context = is_array($conversation->context) ? $conversation->context : [];
+        $problem = trim((string) data_get($context, 'lead_data.project_summary', ''));
+        if ($problem !== '') {
+            return $problem;
+        }
+
+        $messages = $conversation->messages()->where('role', 'visitor')->latest('id')->limit(20)->get(['data']);
+        foreach ($messages as $message) {
+            $candidate = trim((string) data_get($message->data, 'fields.project_summary', ''));
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array{content:string,items:array,chunk_ids:array,query_tokens:int,context_tokens:int,latency_ms:int,provider:null,model:null} */
+    private function emptyKnowledgeResult(): array
+    {
+        return [
+            'content' => '', 'items' => [], 'chunk_ids' => [], 'query_tokens' => 0,
+            'context_tokens' => 0, 'latency_ms' => 0, 'provider' => null, 'model' => null,
+        ];
     }
 
     /** @param array<string, mixed> $context */
