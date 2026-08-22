@@ -22,6 +22,7 @@ class ListBusinessLeadsRequest extends FormRequest
             'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
             'statuses' => ['sometimes', 'array'],
             'statuses.*' => [Rule::enum(BusinessLeadStatus::class)],
+            'unread_only' => ['sometimes', 'boolean'],
             'timezone' => ['sometimes', 'timezone'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ];

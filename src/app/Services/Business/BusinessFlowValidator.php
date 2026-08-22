@@ -45,6 +45,12 @@ class BusinessFlowValidator
                 if (! $hasMessage) {
                     $errors[] = "La indicación {$key} no tiene mensaje.";
                 }
+                if (array_key_exists('finish_chat', $config) && ! is_bool($config['finish_chat'])) {
+                    $errors[] = "La propiedad finish_chat de la indicación {$key} debe ser booleana.";
+                }
+                if (($config['finish_chat'] ?? false) === true && ($config['wait_for_input'] ?? false) === true) {
+                    $errors[] = "La indicación final {$key} no puede esperar una respuesta del visitante.";
+                }
             }
             if ($type === BusinessFlowNodeType::Decision->value) {
                 $mode = trim((string) ($config['mode'] ?? ''));
@@ -121,7 +127,15 @@ class BusinessFlowValidator
                 }
             }
 
-            if ($connections === [] && ! ($type === BusinessFlowNodeType::Action->value && ($config['action'] ?? null) === 'finalize_lead')) {
+            $isTerminalInstruction = $type === BusinessFlowNodeType::Instruction->value
+                && ($config['finish_chat'] ?? false) === true;
+            $isFinalAction = $type === BusinessFlowNodeType::Action->value
+                && ($config['action'] ?? null) === 'finalize_lead';
+
+            if ($isTerminalInstruction && $connections !== []) {
+                $errors[] = "La indicación final {$key} no debe tener conexiones de salida.";
+            }
+            if ($connections === [] && ! $isTerminalInstruction && ! $isFinalAction) {
                 $errors[] = "El nodo {$key} no tiene una salida.";
             }
         }

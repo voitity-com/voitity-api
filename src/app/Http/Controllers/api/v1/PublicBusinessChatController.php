@@ -66,6 +66,7 @@ class PublicBusinessChatController extends Controller
             'conversation_id' => $result['conversation']->uuid,
             'status' => $result['conversation']->status->value,
             'locale' => $result['conversation']->locale,
+            'finished' => $result['conversation']->status !== BusinessConversationStatus::InProgress,
             'session' => $sessions->issue($result['conversation'], $client, $origin),
             'messages' => $this->messages($result['messages'], $result['conversation']->locale),
         ]], 201);

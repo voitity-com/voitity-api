@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BusinessSetting extends Model
 {
     protected $fillable = [
-        'business_id', 'lead_recipient_email', 'sender_email', 'sender_name', 'reply_to_email',
+        'business_id', 'lead_recipient_email',
         'locale', 'widget_enabled', 'widget_title', 'widget_button_label', 'widget_welcome_message',
         'widget_primary_color', 'widget_position',
     ];

@@ -17,7 +17,7 @@ class BusinessLead extends Model
 
     protected $casts = [
         'status' => BusinessLeadStatus::class, 'data' => 'array', 'contacted_at' => 'datetime',
-        'sold_at' => 'datetime', 'no_response_at' => 'datetime', 'closed_at' => 'datetime',
+        'sold_at' => 'datetime', 'no_response_at' => 'datetime', 'closed_at' => 'datetime', 'read_at' => 'datetime',
     ];
 
     public function conversation(): BelongsTo

@@ -214,6 +214,22 @@ class BusinessFlowRunner
         ]);
         $conversation->update(['current_node_key' => $node->node_key, 'last_activity_at' => now()]);
 
+        if (($node->config['finish_chat'] ?? false) === true) {
+            $conversation->update([
+                'status' => BusinessConversationStatus::Completed,
+                'completed_at' => now(),
+                'last_activity_at' => now(),
+                'end_reason' => 'terminal_instruction',
+            ]);
+            Log::info('Business conversation completed by terminal instruction.', [
+                'business_id' => $conversation->business_id,
+                'conversation_id' => $conversation->id,
+                'node_key' => $node->node_key,
+            ]);
+
+            return ['stop' => true, 'finish_chat' => true, 'conversation_status' => 'completed'];
+        }
+
         if (($node->config['wait_for_input'] ?? true) === true) {
             return ['stop' => true, 'wait_for_input' => true];
         }

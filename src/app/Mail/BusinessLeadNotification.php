@@ -18,12 +18,12 @@ class BusinessLeadNotification extends Mailable
 
     public function envelope(): Envelope
     {
-        $settings = $this->lead->business->settings;
-
         return new Envelope(
-            from: $settings?->sender_email ? new Address($settings->sender_email, $settings->sender_name ?: $this->lead->business->name) : null,
-            replyTo: $settings?->reply_to_email ? [new Address($settings->reply_to_email)] : [],
-            subject: 'Nuevo lead para '.$this->lead->business->name,
+            from: new Address(
+                (string) config('mail.business_from.address'),
+                (string) config('mail.business_from.name'),
+            ),
+            subject: $this->lead->business->name.' - New Lead',
         );
     }
 

@@ -16,9 +16,6 @@ class UpdateBusinessSettingsRequest extends FormRequest
     {
         return [
             'lead_recipient_email' => ['nullable', 'email', 'max:255'],
-            'sender_email' => ['nullable', 'email', 'max:255'],
-            'sender_name' => ['nullable', 'string', 'max:255'],
-            'reply_to_email' => ['nullable', 'email', 'max:255'],
             'locale' => ['nullable', Rule::in(['es', 'en'])],
             'widget_enabled' => ['nullable', 'boolean'],
             'widget_title' => ['nullable', 'string', 'max:255'],
