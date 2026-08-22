@@ -44,6 +44,41 @@ class BusinessFlowValidatorTest extends TestCase
         $this->assertTrue($result['valid']);
     }
 
+    public function test_ai_instruction_can_be_valid_without_manual_messages(): void
+    {
+        $nodes = [[
+            'key' => 'ai-goodbye',
+            'type' => 'instruction',
+            'title' => 'Despedida con IA',
+            'x' => 0,
+            'y' => 0,
+            'config' => [
+                'start' => true,
+                'ai_message_enabled' => true,
+                'ai_instruction' => 'Agradece al visitante y confirma que recibimos su solicitud.',
+                'wait_for_input' => false,
+                'finish_chat' => true,
+            ],
+        ]];
+
+        $result = (new BusinessFlowValidator)->validate($nodes, []);
+
+        $this->assertTrue($result['valid']);
+        $this->assertSame([], $result['errors']);
+    }
+
+    public function test_ai_instruction_requires_a_generation_instruction_when_enabled(): void
+    {
+        $graph = (new BusinessFlowTemplate)->graph();
+        $graph['nodes'][0]['config']['ai_message_enabled'] = true;
+        $graph['nodes'][0]['config']['ai_instruction'] = '';
+
+        $result = (new BusinessFlowValidator)->validate($graph['nodes'], $graph['edges']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('instrucción para generar el mensaje con IA', implode(' ', $result['errors']));
+    }
+
     public function test_terminal_instruction_is_valid_without_an_outgoing_connection(): void
     {
         $nodes = [[

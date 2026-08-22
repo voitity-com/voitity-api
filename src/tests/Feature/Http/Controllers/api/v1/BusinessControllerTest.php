@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\BusinessDecisionAI\BusinessDecisionAI;
+use App\Classes\BusinessDecisionAI\BusinessDecisionOutcome;
+use App\Classes\BusinessDecisionAI\BusinessDecisionResult;
+use App\Classes\BusinessInstructionAI\BusinessInstructionAI;
+use App\Classes\BusinessInstructionAI\BusinessInstructionResult;
 use App\Classes\EmbeddingService\EmbeddingClient;
 use App\Mail\BusinessLeadNotification;
 use App\Models\Business;
@@ -641,6 +646,201 @@ class BusinessControllerTest extends TestAPI
             'business_id' => $business->id,
             'business_conversation_id' => $conversationId,
             'event_type' => 'source_retrieval',
+        ]);
+    }
+
+    public function test_contextual_yes_no_decision_waits_for_clarification_and_retries_the_same_node(): void
+    {
+        $fakeDecision = new class implements BusinessDecisionAI
+        {
+            /** @var array<int, array{question: string, last_assistant: string, last_visitor: string}> */
+            public array $calls = [];
+
+            public function evaluate(
+                Business $business,
+                string $question,
+                string $lastAssistantMessage,
+                string $lastVisitorMessage,
+                array $conversationContext,
+                ?string $problem,
+                ?string $businessDescription,
+                array $knowledge,
+                string $locale,
+            ): BusinessDecisionResult {
+                $this->calls[] = [
+                    'question' => $question,
+                    'last_assistant' => $lastAssistantMessage,
+                    'last_visitor' => $lastVisitorMessage,
+                ];
+                $outcome = count($this->calls) === 1
+                    ? BusinessDecisionOutcome::Unclear
+                    : BusinessDecisionOutcome::Yes;
+
+                return new BusinessDecisionResult(
+                    outcome: $outcome,
+                    confidence: 0.96,
+                    reason: $outcome === BusinessDecisionOutcome::Yes ? 'The visitor accepted.' : 'The intent is ambiguous.',
+                    sourceChunkIds: [],
+                    provider: 'fake',
+                    model: 'contextual-test-v1',
+                );
+            }
+        };
+        app()->instance(BusinessDecisionAI::class, $fakeDecision);
+
+        $businessId = $this->withToken($this->token)->postJson('/api/businesses', [
+            'name' => 'Tarifas contextuales',
+            'description' => 'Servicios tecnológicos empresariales.',
+        ])->assertCreated()->json('data.id');
+        $graph = [
+            'nodes' => [
+                ['key' => 'ask', 'type' => 'instruction', 'title' => 'Preguntar tarifas', 'x' => 0, 'y' => 0, 'config' => [
+                    'start' => true,
+                    'message' => '¿Deseas conocer nuestras tarifas?',
+                    'messages' => ['es' => '¿Deseas conocer nuestras tarifas?', 'en' => 'Would you like to know our rates?'],
+                    'wait_for_input' => true,
+                ]],
+                ['key' => 'decide', 'type' => 'decision', 'title' => 'Interés en tarifas', 'x' => 300, 'y' => 0, 'config' => [
+                    'mode' => 'knowledge_yes_no',
+                    'question' => '¿El visitante desea conocer nuestras tarifas?',
+                    'questions' => ['es' => '¿El visitante desea conocer nuestras tarifas?', 'en' => 'Does the visitor want to know our rates?'],
+                    'use_business_description' => false,
+                    'use_sources' => false,
+                    'branches' => ['yes', 'no'],
+                ]],
+                ['key' => 'yes', 'type' => 'instruction', 'title' => 'Tarifas', 'x' => 600, 'y' => -100, 'config' => [
+                    'message' => 'Perfecto. Te compartiremos las tarifas.',
+                    'wait_for_input' => false,
+                    'finish_chat' => true,
+                ]],
+                ['key' => 'no', 'type' => 'instruction', 'title' => 'Despedida', 'x' => 600, 'y' => 100, 'config' => [
+                    'message' => 'No hay problema.',
+                    'wait_for_input' => false,
+                    'finish_chat' => true,
+                ]],
+            ],
+            'edges' => [
+                ['key' => 'ask-decide', 'source' => 'ask', 'target' => 'decide', 'source_handle' => null, 'label' => null, 'config' => []],
+                ['key' => 'decide-yes', 'source' => 'decide', 'target' => 'yes', 'source_handle' => 'yes', 'label' => 'Sí', 'config' => []],
+                ['key' => 'decide-no', 'source' => 'decide', 'target' => 'no', 'source_handle' => 'no', 'label' => 'No', 'config' => []],
+            ],
+        ];
+        $this->withToken($this->token)->putJson("/api/businesses/{$businessId}/flow", $graph)->assertOk();
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/flow/publish")->assertOk();
+        $business = Business::query()->findOrFail($businessId);
+        $this->configureRequiredEmail($business);
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/activate")->assertOk();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/api-clients", [
+            'name' => 'Contextual decision client',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+        $headers = ['Origin' => 'http://localhost:5173', 'X-Bigmelo-Business-Key' => $key];
+        $start = $this->withHeaders($headers)->postJson('/api/business/conversations', ['locale' => 'es'])->assertCreated();
+        $conversation = $start->json('data.conversation_id');
+        $conversationHeaders = [...$headers, 'X-Bigmelo-Business-Session' => $start->json('data.session')];
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson("/api/business/conversations/{$conversation}/messages", ['message' => 'Quizás'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.messages.0.content', 'No pude determinar si tu respuesta fue afirmativa o negativa. Por favor aclara tu respuesta a esta pregunta: ¿El visitante desea conocer nuestras tarifas?');
+        $this->assertDatabaseHas('business_conversations', [
+            'uuid' => $conversation,
+            'current_node_key' => 'decide',
+            'status' => 'in_progress',
+        ]);
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson("/api/business/conversations/{$conversation}/messages", ['message' => 'De una'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true)
+            ->assertJsonPath('data.messages.0.content', 'Perfecto. Te compartiremos las tarifas.');
+
+        $this->assertCount(2, $fakeDecision->calls);
+        $this->assertSame('¿Deseas conocer nuestras tarifas?', $fakeDecision->calls[0]['last_assistant']);
+        $this->assertSame('Quizás', $fakeDecision->calls[0]['last_visitor']);
+        $this->assertSame('De una', $fakeDecision->calls[1]['last_visitor']);
+    }
+
+    public function test_ai_instruction_generates_the_message_without_overwriting_manual_localizations(): void
+    {
+        $fakeInstruction = new class implements BusinessInstructionAI
+        {
+            public function generate(
+                Business $business,
+                string $instruction,
+                string $locale,
+                array $conversationContext,
+                ?string $businessDescription,
+                array $knowledge,
+                array $leadData,
+                array $requiredFields,
+                array $optionalFields,
+            ): BusinessInstructionResult {
+                return new BusinessInstructionResult(
+                    message: 'Cuéntanos en qué sistemas está la información y qué reporte necesitas obtener.',
+                    sourceChunkIds: [],
+                    provider: 'fake',
+                    model: 'instruction-test-v1',
+                    inputTokens: 25,
+                    outputTokens: 16,
+                );
+            }
+        };
+        app()->instance(BusinessInstructionAI::class, $fakeInstruction);
+
+        $businessId = $this->withToken($this->token)->postJson('/api/businesses', [
+            'name' => 'Mensajes contextuales',
+            'description' => 'Implementación de soluciones de datos.',
+        ])->assertCreated()->json('data.id');
+        $graph = [
+            'nodes' => [[
+                'key' => 'ai-welcome',
+                'type' => 'instruction',
+                'title' => 'Profundizar',
+                'x' => 0,
+                'y' => 0,
+                'config' => [
+                    'start' => true,
+                    'ai_message_enabled' => true,
+                    'ai_instruction' => 'Pregunta qué información concreta falta y ofrece un ejemplo relacionado.',
+                    'use_business_description' => true,
+                    'use_sources' => false,
+                    'message' => 'Mensaje manual conservado.',
+                    'messages' => ['es' => 'Mensaje manual conservado.', 'en' => 'Preserved manual message.'],
+                    'wait_for_input' => false,
+                    'finish_chat' => true,
+                ],
+            ]],
+            'edges' => [],
+        ];
+        $this->withToken($this->token)->putJson("/api/businesses/{$businessId}/flow", $graph)->assertOk();
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/flow/publish")->assertOk();
+        $business = Business::query()->findOrFail($businessId);
+        $publishedNode = $business->flow->publishedVersion->nodes()->where('node_key', 'ai-welcome')->firstOrFail();
+        $this->assertSame('Mensaje manual conservado.', $publishedNode->config['messages']['es']);
+        $this->assertSame('Preserved manual message.', $publishedNode->config['messages']['en']);
+        $this->configureRequiredEmail($business);
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/activate")->assertOk();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/api-clients", [
+            'name' => 'AI instruction client',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $this->withHeaders([
+            'Origin' => 'http://localhost:5173',
+            'X-Bigmelo-Business-Key' => $key,
+        ])->postJson('/api/business/conversations', ['locale' => 'es'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.messages.0.content', 'Cuéntanos en qué sistemas está la información y qué reporte necesitas obtener.');
+
+        $this->assertDatabaseHas('business_usage_events', [
+            'business_id' => $businessId,
+            'event_type' => 'instruction_generation',
+            'provider' => 'fake',
+            'model' => 'instruction-test-v1',
         ]);
     }
 

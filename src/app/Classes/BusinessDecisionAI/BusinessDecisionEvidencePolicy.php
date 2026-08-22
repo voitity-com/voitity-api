@@ -33,7 +33,7 @@ final class BusinessDecisionEvidencePolicy
     public function insufficientResult(): BusinessDecisionResult
     {
         return new BusinessDecisionResult(
-            answer: false,
+            outcome: BusinessDecisionOutcome::No,
             confidence: 1,
             reason: 'The visitor supplied only a short or missing problem statement; Business knowledge cannot replace visitor-provided details.',
             sourceChunkIds: [],

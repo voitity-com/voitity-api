@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Classes\BusinessDecisionAI;
 
 use App\Classes\BusinessDecisionAI\BusinessDecisionEvidencePolicy;
+use App\Classes\BusinessDecisionAI\BusinessDecisionOutcome;
 use App\Classes\BusinessDecisionAI\LocalBusinessDecisionAI;
 use App\Classes\BusinessFlowAI\BusinessFlowAI;
 use App\Models\Business;
@@ -25,7 +26,9 @@ class LocalBusinessDecisionAITest extends TestCase
         $result = $decision->evaluate(
             business: $business,
             question: '¿El problema está suficientemente descrito y tiene lo mínimo para plantear una solución?',
-            visitorContext: 'Proyecto o problema: Necesito tomar mejores decisiones.',
+            lastAssistantMessage: 'Describe tu problema.',
+            lastVisitorMessage: 'Necesito tomar mejores decisiones.',
+            conversationContext: [['role' => 'visitor', 'content' => 'Proyecto o problema: Necesito tomar mejores decisiones.']],
             problem: 'Necesito tomar mejores decisiones.',
             businessDescription: $business->description,
             knowledge: [[
@@ -37,7 +40,7 @@ class LocalBusinessDecisionAITest extends TestCase
             locale: 'es',
         );
 
-        $this->assertFalse($result->answer);
+        $this->assertSame(BusinessDecisionOutcome::No, $result->outcome);
         $this->assertSame('policy', $result->provider);
         $this->assertSame([], $result->sourceChunkIds);
     }

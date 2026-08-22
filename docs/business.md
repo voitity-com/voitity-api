@@ -110,7 +110,24 @@ Cada bloque tiene:
 - posición X/Y;
 - configuración JSON tipada por el runtime.
 
-Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, finalización del chat, modo de decisión, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, generación contextual con IA, espera de input, finalización del chat, modo de decisión, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+
+Una indicación puede activar `config.ai_message_enabled: true` y definir `config.ai_instruction`. En ese caso la IA genera el mensaje visible usando el idioma, la conversación reciente y, si se habilitan, la descripción y los chunks relevantes de las fuentes. Los textos manuales no se eliminan ni se sobrescriben: permanecen en `message` y `messages.es|en`, vuelven a utilizarse al apagar el flag y funcionan como respaldo si el proveedor no genera una respuesta válida. El consumo se registra como `instruction_generation` junto con proveedor, modelo, tokens y chunks utilizados.
+
+```json
+{
+  "ai_message_enabled": true,
+  "ai_instruction": "Pregunta qué información concreta falta para comprender el problema y ofrece un ejemplo relacionado con lo que el visitante describió.",
+  "use_business_description": true,
+  "use_sources": true,
+  "message": "Cuéntanos un poco más sobre el problema.",
+  "messages": {
+    "es": "Cuéntanos un poco más sobre el problema.",
+    "en": "Tell us a little more about the problem."
+  },
+  "wait_for_input": true
+}
+```
 
 Una indicación puede activar `config.finish_chat: true`. Ese bloque envía su mensaje como la última respuesta, marca inmediatamente la conversación como `completed` y hace que el endpoint devuelva `finished: true`. Es un bloque terminal: debe usar `wait_for_input: false` y no necesita ni admite una conexión de salida. El editor elimina sus salidas al activar la opción y el validador impide publicar configuraciones ambiguas.
 
@@ -176,13 +193,15 @@ La publicación valida todo el grafo y crea automáticamente un nuevo borrador b
 
 ### Cómo se resuelve una pregunta Sí/No
 
-1. El runner arma una consulta con el problema guardado y los mensajes recientes del visitante.
-2. Se genera un embedding de esa consulta y se buscan candidatos entre chunks activos del mismo Business.
-3. Se combinan la similitud semántica y la lexical; se descartan resultados por debajo del umbral y se limita el contexto enviado.
-4. La IA recibe la pregunta exacta del nodo, la descripción habilitada, el problema, los mensajes recientes y los fragmentos relevantes. Las fuentes completas nunca se envían indiscriminadamente.
-   La evidencia conserva roles separados: el problema y los mensajes representan lo que dijo el visitante; la descripción y las fuentes solo explican lo que sabe u ofrece el Business y nunca completan datos ausentes del visitante. Si la pregunta evalúa si el problema está suficientemente descrito, una necesidad vacía o genérica de menos de ocho palabras toma directamente la rama segura `no`. Para descripciones más amplias, la IA debe encontrar en el texto del visitante una situación o proceso concreto y el resultado esperado; no puede inferirlos desde las fuentes.
-5. La salida estructurada obliga a devolver `answer`, `confidence`, `reason` y `source_chunk_ids`. Una respuesta inválida, un error o confianza insuficiente toma la rama segura `no`.
-6. La ejecución del nodo registra la rama tomada, confianza y chunks usados; luego avanza por la flecha `yes` o `no`.
+1. El runner conserva por separado la pregunta configurada, el último mensaje del asistente, la última respuesta del visitante y el historial reciente con sus roles.
+2. También arma una consulta de recuperación con el problema guardado y los mensajes recientes del visitante.
+3. Se genera un embedding de esa consulta y se buscan candidatos entre chunks activos del mismo Business.
+4. Se combinan la similitud semántica y la lexical; se descartan resultados por debajo del umbral y se limita el contexto enviado.
+5. La IA recibe los campos conversacionales separados, la descripción habilitada, el problema y los fragmentos relevantes. Las fuentes completas nunca se envían indiscriminadamente. No existe una lista ni una comparación directa por código para expresiones afirmativas o negativas: la IA interpreta semánticamente respuestas como “sí”, “dale”, “de una”, “está bien”, “no gracias” o frases más amplias respecto de la pregunta anterior.
+6. La evidencia conserva roles separados: el problema y los mensajes representan lo que dijo el visitante; la descripción y las fuentes solo explican lo que sabe u ofrece el Business y nunca completan datos ausentes del visitante.
+7. La salida estructurada obliga a devolver `decision` (`yes`, `no` o `unclear`), `confidence`, `reason` y `source_chunk_ids`. Un error, una respuesta inválida o confianza insuficiente se convierte en `unclear`, nunca en `no`.
+8. `yes` y `no` avanzan por su flecha correspondiente. `unclear` devuelve un mensaje de aclaración, mantiene la conversación en curso y vuelve a evaluar el mismo nodo con la siguiente respuesta del visitante.
+9. La ejecución registra resultado, confianza, proveedor, modelo y chunks usados sin guardar prompts ni contenido sensible en los logs de aplicación.
 
 Las decisiones heredadas `technology_interest` siguen siendo legibles para conversaciones fijadas a versiones antiguas, pero el editor no permite crear nuevas y el comando de actualización las migra a `knowledge_yes_no`.
 

@@ -7,6 +7,9 @@ use App\Classes\BusinessDecisionAI\LocalBusinessDecisionAI;
 use App\Classes\BusinessDecisionAI\OpenAIBusinessDecisionAI;
 use App\Classes\BusinessFlowAI\BusinessFlowAI;
 use App\Classes\BusinessFlowAI\LocalBusinessFlowAI;
+use App\Classes\BusinessInstructionAI\BusinessInstructionAI;
+use App\Classes\BusinessInstructionAI\LocalBusinessInstructionAI;
+use App\Classes\BusinessInstructionAI\OpenAIBusinessInstructionAI;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileIntegrationMedia;
@@ -31,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
             return config('business-ai.decision.driver') === 'local'
                 ? $app->make(LocalBusinessDecisionAI::class)
                 : $app->make(OpenAIBusinessDecisionAI::class);
+        });
+        $this->app->bind(BusinessInstructionAI::class, function ($app): BusinessInstructionAI {
+            return config('business-ai.instruction.driver') === 'local'
+                ? $app->make(LocalBusinessInstructionAI::class)
+                : $app->make(OpenAIBusinessInstructionAI::class);
         });
     }
 

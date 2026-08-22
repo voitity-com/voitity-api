@@ -60,6 +60,26 @@ class BusinessLocalization
         return trim((string) ($messages[$locale] ?? $config['message'] ?? $messages['es'] ?? $messages['en'] ?? ''));
     }
 
+    public function decisionClarification(string $question, string $locale): string
+    {
+        return $locale === 'en'
+            ? "I could not determine whether your answer was affirmative or negative. Please clarify your response to this question: {$question}"
+            : "No pude determinar si tu respuesta fue afirmativa o negativa. Por favor aclara tu respuesta a esta pregunta: {$question}";
+    }
+
+    public function instructionFallback(string $locale, bool $waitForInput): string
+    {
+        if ($locale === 'en') {
+            return $waitForInput
+                ? 'Please tell us a little more so we can continue.'
+                : 'We can continue with the next step.';
+        }
+
+        return $waitForInput
+            ? 'Cuéntanos un poco más para poder continuar.'
+            : 'Podemos continuar con el siguiente paso.';
+    }
+
     /**
      * @param  array<int, string>  $required
      * @param  array<int, string>  $optional
