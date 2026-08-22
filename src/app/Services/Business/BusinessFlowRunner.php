@@ -8,6 +8,8 @@ use App\Classes\BusinessDecisionAI\BusinessDecisionResult;
 use App\Classes\BusinessFlowAI\BusinessFlowAI;
 use App\Classes\BusinessFlowAI\BusinessFlowAIResult;
 use App\Classes\BusinessInstructionAI\BusinessInstructionAI;
+use App\Classes\BusinessProblemAI\BusinessProblemAI;
+use App\Classes\BusinessProblemAI\BusinessProblemResult;
 use App\Enums\BusinessConversationStatus;
 use App\Enums\BusinessFlowNodeType;
 use App\Models\Business;
@@ -28,6 +30,7 @@ class BusinessFlowRunner
         private readonly BusinessFlowAI $ai,
         private readonly BusinessDecisionAI $decisionAI,
         private readonly BusinessInstructionAI $instructionAI,
+        private readonly BusinessProblemAI $problemAI,
         private readonly BusinessLeadService $leads,
         private readonly BusinessUsageRecorder $usage,
         private readonly BusinessKnowledgeRetriever $knowledge,
@@ -530,12 +533,42 @@ class BusinessFlowRunner
         if ($action === 'capture_problem' || $action === 'extract_fields') {
             $latestMessage = $conversation->messages()->where('role', 'visitor')->latest('id')->first();
             $latest = (string) $latestMessage?->content;
-            $known = $conversation->context['lead_data'] ?? [];
+            $context = is_array($conversation->context) ? $conversation->context : [];
+            $known = is_array($context['lead_data'] ?? null) ? $context['lead_data'] : [];
+            $previousProblem = trim((string) ($known['project_summary'] ?? ''));
             $structuredFields = $this->normalizeStructuredFields($latestMessage?->data['fields'] ?? []);
             $known = array_merge($known, $structuredFields);
-            $result = $this->ai->extractLeadData($latest, $known, $action === 'capture_problem');
-            $context = $conversation->context ?? [];
-            $context['lead_data'] = array_merge($result->data['lead_data'] ?? $known, $structuredFields);
+            $result = $this->ai->extractLeadData($latest, $known);
+            $leadData = array_merge($result->data['lead_data'] ?? $known, $structuredFields);
+
+            if ($action === 'capture_problem') {
+                $problemResult = $this->problemAI->summarize(
+                    business: $conversation->business,
+                    conversation: $this->problemConversation($conversation),
+                    locale: $this->localization->normalize($conversation->locale),
+                );
+                if ($problemResult->successful()) {
+                    $leadData['project_summary'] = $problemResult->summary;
+                    $context['problem_synthesis'] = [
+                        'evidence_message_ids' => $problemResult->evidenceMessageIds,
+                        'confidence' => $problemResult->confidence,
+                        'provider' => $problemResult->provider,
+                        'model' => $problemResult->model,
+                    ];
+                } elseif ($previousProblem !== '') {
+                    $leadData['project_summary'] = $previousProblem;
+                } else {
+                    $directProblem = trim((string) ($structuredFields['project_summary'] ?? $latest));
+                    if ($this->isCompleteField('project_summary', $directProblem)) {
+                        $leadData['project_summary'] = $directProblem;
+                    } else {
+                        unset($leadData['project_summary']);
+                    }
+                }
+                $this->recordProblemSynthesis($conversation, $node, $problemResult);
+            }
+
+            $context['lead_data'] = $leadData;
             $conversation->update(['context' => $context, 'current_node_key' => $node->node_key]);
             $this->recordAI($conversation, $action === 'capture_problem' ? 'problem_extraction' : 'field_extraction', $result);
 
@@ -595,6 +628,39 @@ class BusinessFlowRunner
             'model' => $result->model,
             'input_tokens' => $result->inputTokens,
             'output_tokens' => $result->outputTokens,
+        ]);
+    }
+
+    private function recordProblemSynthesis(
+        BusinessConversation $conversation,
+        BusinessFlowNode $node,
+        BusinessProblemResult $result,
+    ): void {
+        $this->usage->record([
+            'business_id' => $conversation->business_id,
+            'business_conversation_id' => $conversation->id,
+            'event_type' => 'problem_synthesis',
+            'provider' => $result->provider,
+            'model' => $result->model,
+            'input_tokens' => $result->inputTokens,
+            'output_tokens' => $result->outputTokens,
+            'metadata' => [
+                'node_key' => $node->node_key,
+                'successful' => $result->successful(),
+                'confidence' => $result->confidence,
+                'evidence_message_ids' => $result->evidenceMessageIds,
+            ],
+        ]);
+
+        Log::info('Business customer problem synthesized.', [
+            'business_id' => $conversation->business_id,
+            'conversation_id' => $conversation->id,
+            'node_key' => $node->node_key,
+            'successful' => $result->successful(),
+            'confidence' => $result->confidence,
+            'evidence_message_ids' => $result->evidenceMessageIds,
+            'provider' => $result->provider,
+            'model' => $result->model,
         ]);
     }
 
@@ -674,6 +740,23 @@ class BusinessFlowRunner
             ->get(['role', 'content'])
             ->reverse()
             ->map(fn (BusinessMessage $message): array => [
+                'role' => (string) $message->role,
+                'content' => trim((string) $message->content),
+            ])
+            ->filter(fn (array $message): bool => $message['content'] !== '')
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array{id: int, node_key: string|null, role: string, content: string}> */
+    private function problemConversation(BusinessConversation $conversation): array
+    {
+        return $conversation->messages()
+            ->oldest('id')
+            ->get(['id', 'node_key', 'role', 'content'])
+            ->map(fn (BusinessMessage $message): array => [
+                'id' => (int) $message->id,
+                'node_key' => $message->node_key,
                 'role' => (string) $message->role,
                 'content' => trim((string) $message->content),
             ])
