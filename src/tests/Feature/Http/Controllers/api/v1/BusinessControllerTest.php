@@ -9,10 +9,13 @@ use App\Classes\BusinessDecisionAI\BusinessDecisionOutcome;
 use App\Classes\BusinessDecisionAI\BusinessDecisionResult;
 use App\Classes\BusinessInstructionAI\BusinessInstructionAI;
 use App\Classes\BusinessInstructionAI\BusinessInstructionResult;
+use App\Classes\BusinessProblemAI\BusinessProblemAI;
+use App\Classes\BusinessProblemAI\BusinessProblemResult;
 use App\Classes\EmbeddingService\EmbeddingClient;
 use App\Mail\BusinessLeadNotification;
 use App\Models\Business;
 use App\Models\BusinessApiClient;
+use App\Models\BusinessConversation;
 use App\Models\BusinessNodeExecution;
 use App\Models\FeatureFlag;
 use App\Models\User;
@@ -34,6 +37,7 @@ class BusinessControllerTest extends TestAPI
     {
         parent::setUp();
         Config::set('business-ai.decision.driver', 'local');
+        Config::set('business-ai.problem.driver', 'local');
         $dimensions = (int) config('ai-knowledge.embedding.dimensions', 1536);
         app()->instance(EmbeddingClient::class, new FakeEmbeddingClient(function (string $input) use ($dimensions): array {
             $normalized = mb_strtolower($input);
@@ -841,6 +845,128 @@ class BusinessControllerTest extends TestAPI
             'event_type' => 'instruction_generation',
             'provider' => 'fake',
             'model' => 'instruction-test-v1',
+        ]);
+    }
+
+    public function test_capture_problem_synthesizes_the_complete_conversation_including_assistant_context(): void
+    {
+        $fakeProblem = new class implements BusinessProblemAI
+        {
+            /** @var array<int, array<int, array{id: int, node_key: string|null, role: string, content: string}>> */
+            public array $calls = [];
+
+            public function summarize(Business $business, array $conversation, string $locale): BusinessProblemResult
+            {
+                $this->calls[] = $conversation;
+
+                return new BusinessProblemResult(
+                    summary: 'El cliente necesita unificar información de varias fuentes, automatizar reportes y construir indicadores para mejorar sus decisiones.',
+                    evidenceMessageIds: array_column($conversation, 'id'),
+                    confidence: 0.97,
+                    provider: 'fake',
+                    model: 'complete-conversation-test-v1',
+                    inputTokens: 81,
+                    outputTokens: 24,
+                );
+            }
+        };
+        app()->instance(BusinessProblemAI::class, $fakeProblem);
+
+        $businessId = $this->withToken($this->token)->postJson('/api/businesses', [
+            'name' => 'Síntesis contextual',
+            'description' => 'Automatización, software y analítica de datos.',
+        ])->assertCreated()->json('data.id');
+        $graph = [
+            'nodes' => [
+                [
+                    'key' => 'clarify',
+                    'type' => 'instruction',
+                    'title' => 'Plantear necesidad',
+                    'x' => 0,
+                    'y' => 0,
+                    'config' => [
+                        'start' => true,
+                        'message' => '¿Necesitas unificar información de varias fuentes, automatizar reportes y construir indicadores?',
+                        'messages' => [
+                            'es' => '¿Necesitas unificar información de varias fuentes, automatizar reportes y construir indicadores?',
+                            'en' => 'Do you need to unify data, automate reports, and build indicators?',
+                        ],
+                        'wait_for_input' => true,
+                    ],
+                ],
+                [
+                    'key' => 'capture',
+                    'type' => 'action',
+                    'title' => 'Guardar problema',
+                    'x' => 400,
+                    'y' => 0,
+                    'config' => ['action' => 'capture_problem'],
+                ],
+                [
+                    'key' => 'done',
+                    'type' => 'instruction',
+                    'title' => 'Finalizar',
+                    'x' => 800,
+                    'y' => 0,
+                    'config' => [
+                        'message' => 'Gracias. Registramos correctamente tu necesidad.',
+                        'messages' => [
+                            'es' => 'Gracias. Registramos correctamente tu necesidad.',
+                            'en' => 'Thank you. We recorded your need correctly.',
+                        ],
+                        'wait_for_input' => false,
+                        'finish_chat' => true,
+                    ],
+                ],
+            ],
+            'edges' => [
+                ['key' => 'clarify-capture', 'source' => 'clarify', 'target' => 'capture', 'source_handle' => null, 'label' => null, 'config' => []],
+                ['key' => 'capture-done', 'source' => 'capture', 'target' => 'done', 'source_handle' => null, 'label' => null, 'config' => []],
+            ],
+        ];
+        $this->withToken($this->token)->putJson("/api/businesses/{$businessId}/flow", $graph)->assertOk();
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/flow/publish")->assertOk();
+        $business = Business::query()->findOrFail($businessId);
+        $this->configureRequiredEmail($business);
+        $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/activate")->assertOk();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/api-clients", [
+            'name' => 'Síntesis completa',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+        $headers = ['Origin' => 'http://localhost:5173', 'X-Bigmelo-Business-Key' => $key];
+        $start = $this->withHeaders($headers)->postJson('/api/business/conversations', ['locale' => 'es'])
+            ->assertCreated()
+            ->assertJsonPath('data.messages.0.content', '¿Necesitas unificar información de varias fuentes, automatizar reportes y construir indicadores?');
+
+        $conversationUuid = $start->json('data.conversation_id');
+        $this->withHeaders([
+            ...$headers,
+            'X-Bigmelo-Business-Session' => $start->json('data.session'),
+        ])->postJson("/api/business/conversations/{$conversationUuid}/messages", [
+            'message' => 'Sí, necesito exactamente eso.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true);
+
+        $this->assertCount(1, $fakeProblem->calls);
+        $this->assertSame(['assistant', 'visitor'], array_column($fakeProblem->calls[0], 'role'));
+        $this->assertSame('¿Necesitas unificar información de varias fuentes, automatizar reportes y construir indicadores?', $fakeProblem->calls[0][0]['content']);
+        $this->assertSame('Sí, necesito exactamente eso.', $fakeProblem->calls[0][1]['content']);
+
+        $conversation = BusinessConversation::query()->where('uuid', $conversationUuid)->firstOrFail();
+        $this->assertSame(
+            'El cliente necesita unificar información de varias fuentes, automatizar reportes y construir indicadores para mejorar sus decisiones.',
+            data_get($conversation->context, 'lead_data.project_summary'),
+        );
+        $this->assertSame(0.97, data_get($conversation->context, 'problem_synthesis.confidence'));
+        $this->assertDatabaseHas('business_usage_events', [
+            'business_id' => $businessId,
+            'business_conversation_id' => $conversation->id,
+            'event_type' => 'problem_synthesis',
+            'provider' => 'fake',
+            'model' => 'complete-conversation-test-v1',
+            'input_tokens' => 81,
+            'output_tokens' => 24,
         ]);
     }
 

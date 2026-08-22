@@ -10,6 +10,9 @@ use App\Classes\BusinessFlowAI\LocalBusinessFlowAI;
 use App\Classes\BusinessInstructionAI\BusinessInstructionAI;
 use App\Classes\BusinessInstructionAI\LocalBusinessInstructionAI;
 use App\Classes\BusinessInstructionAI\OpenAIBusinessInstructionAI;
+use App\Classes\BusinessProblemAI\BusinessProblemAI;
+use App\Classes\BusinessProblemAI\LocalBusinessProblemAI;
+use App\Classes\BusinessProblemAI\OpenAIBusinessProblemAI;
 use App\Models\Profile;
 use App\Models\ProfileFact;
 use App\Models\ProfileIntegrationMedia;
@@ -39,6 +42,11 @@ class AppServiceProvider extends ServiceProvider
             return config('business-ai.instruction.driver') === 'local'
                 ? $app->make(LocalBusinessInstructionAI::class)
                 : $app->make(OpenAIBusinessInstructionAI::class);
+        });
+        $this->app->bind(BusinessProblemAI::class, function ($app): BusinessProblemAI {
+            return config('business-ai.problem.driver') === 'local'
+                ? $app->make(LocalBusinessProblemAI::class)
+                : $app->make(OpenAIBusinessProblemAI::class);
         });
     }
 

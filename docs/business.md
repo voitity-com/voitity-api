@@ -25,6 +25,7 @@ flowchart LR
     Widget -->|Key + Origin + Session| Runtime["Business Runtime API"]
     Runtime --> Runner["BusinessFlowRunner"]
     Runner --> AI["BusinessFlowAI"]
+    Runner --> ProblemAI["BusinessProblemAI"]
     Runner --> DecisionAI["BusinessDecisionAI"]
     Runner --> Retrieval["Recuperación híbrida semántica + lexical"]
     Retrieval --> Embeddings
@@ -44,6 +45,7 @@ flowchart LR
 - `BusinessFlowRunner`: ejecuta el grafo, limita pasos y fija cada conversación a una versión publicada.
 - `BusinessLocalization`: resuelve `es`/`en`, mensajes por nodo, etiquetas de campos y textos dinámicos sin obligar al frontend a traducir respuestas.
 - `BusinessFlowAI`: interfaz desacoplada para extracción de datos y análisis de la posible solución. El driver local permite pruebas deterministas sin servicios externos.
+- `BusinessProblemAI`: sintetiza el problema del cliente a partir de toda la conversación, con roles y orden preservados, cuando se ejecuta `capture_problem`. Su salida incluye resumen, confianza e IDs de mensajes de evidencia.
 - `BusinessKnowledgeIndexer`: divide cada fuente, calcula embeddings por lotes y guarda chunks versionados por hash. La indexación se ejecuta en cola y deja la fuente en `processing`, `indexed` o `failed`.
 - `BusinessKnowledgeRetriever`: hace búsqueda híbrida. Combina similitud vectorial, coincidencia lexical y límites de relevancia, cantidad de chunks y contexto antes de consultar la IA.
 - `BusinessDecisionAI`: responde exclusivamente `yes` o `no` a la pregunta escrita en el nodo; recibe descripción, problema, mensajes recientes y solo los chunks recuperados. También devuelve confianza, motivo e IDs de chunks utilizados.
@@ -190,6 +192,14 @@ flowchart LR
 ```
 
 La publicación valida todo el grafo y crea automáticamente un nuevo borrador basado en la versión publicada. Las conversaciones que ya comenzaron continúan sobre la versión anterior.
+
+### Cómo se guarda el problema del cliente
+
+La acción `capture_problem` no toma el último mensaje como descripción definitiva. Al ejecutarse carga todos los mensajes existentes de la conversación en orden cronológico, conserva para cada uno su ID, nodo y rol `assistant` o `visitor`, y solicita a `BusinessProblemAI` una síntesis estructurada en el idioma activo.
+
+La IA interpreta confirmaciones, correcciones y referencias usando el contexto completo. Puede incorporar un ejemplo o propuesta formulada por el chatbot únicamente cuando la conversación muestra que el visitante la confirmó. Da prioridad a hechos explícitos del visitante, no agrega datos del negocio ni una posible solución y devuelve `project_summary`, `evidence_message_ids` y `confidence`. El resumen consolidado reemplaza el candidato anterior y alimenta tanto las decisiones posteriores como `analyze_solution` y el lead final.
+
+Los mensajes originales permanecen intactos. La conversación guarda por separado la metadata de la síntesis para auditoría y Uso registra el evento `problem_synthesis` con proveedor, modelo y tokens. Si el proveedor no devuelve una síntesis válida, se conserva el resumen consolidado anterior; una respuesta aislada no lo reemplaza.
 
 ### Cómo se resuelve una pregunta Sí/No
 
