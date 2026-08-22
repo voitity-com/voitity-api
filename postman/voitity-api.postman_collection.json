@@ -102,7 +102,7 @@
             "method":"PUT",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
-            "description":"Guarda el borrador. Una decisión knowledge_yes_no debe incluir una pregunta no vacía y exactamente las ramas yes/no; required_fields_complete exige complete/incomplete.",
+            "description":"Guarda el borrador. Una decisión knowledge_yes_no debe incluir una pregunta no vacía y exactamente las ramas yes/no; required_fields_complete exige complete/incomplete. Una indicación terminal usa finish_chat=true, wait_for_input=false y no tiene salida.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}
           },
           "response": []
@@ -114,7 +114,7 @@
             "method":"POST",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
-            "description":"Valida nodo inicial, alcanzabilidad, configuración, ramas y una conexión de destino por cada rama antes de publicar.",
+            "description":"Valida nodo inicial, alcanzabilidad, configuración, ramas y una conexión de destino por cada rama antes de publicar. Las indicaciones con finish_chat=true son terminales y no requieren una salida.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow/validate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow","validate"]}
           },
           "response": []
@@ -129,7 +129,7 @@
           "request": {
             "method":"PATCH",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
-            "body":{"mode":"raw","raw":"{\n  \"lead_recipient_email\": \"leads@example.com\",\n  \"sender_email\": \"bot@example.com\",\n  \"sender_name\": \"Bigmelo Bot\",\n  \"widget_enabled\": true\n}"},
+            "body":{"mode":"raw","raw":"{\n  \"lead_recipient_email\": \"leads@example.com\",\n  \"widget_enabled\": true\n}"},
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/configuration","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","configuration"]}
           },
           "response": []
@@ -162,7 +162,16 @@
             {"listen":"prerequest","script":{"type":"text/javascript","exec":["const to = new Date();","const from = new Date(to);","from.setMonth(from.getMonth() - 1);","pm.collectionVariables.set('business_leads_from', from.toISOString().slice(0, 10));","pm.collectionVariables.set('business_leads_to', to.toISOString().slice(0, 10));"]}},
             {"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.[0]?.id) pm.collectionVariables.set('business_lead_id', json.data[0].id);"]}}
           ],
-          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads?date_field=created_at&from={{business_leads_from}}&to={{business_leads_to}}&timezone=America%2FBogota&statuses[]=created&statuses[]=contacted","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads"],"query":[{"key":"date_field","value":"created_at","description":"Use created_at or updated_at."},{"key":"from","value":"{{business_leads_from}}"},{"key":"to","value":"{{business_leads_to}}"},{"key":"timezone","value":"America/Bogota","description":"IANA timezone used to interpret from and to."},{"key":"statuses[]","value":"created"},{"key":"statuses[]","value":"contacted"}]}},
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads?date_field=created_at&from={{business_leads_from}}&to={{business_leads_to}}&timezone=America%2FBogota&statuses[]=created&statuses[]=contacted&unread_only=1","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads"],"query":[{"key":"date_field","value":"created_at","description":"Use created_at or updated_at."},{"key":"from","value":"{{business_leads_from}}"},{"key":"to","value":"{{business_leads_to}}"},{"key":"timezone","value":"America/Bogota","description":"IANA timezone used to interpret from and to."},{"key":"statuses[]","value":"created"},{"key":"statuses[]","value":"contacted"},{"key":"unread_only","value":"1","description":"Set to 1 to return only unread leads."}]}},
+          "response": []
+        },
+        {
+          "name": "Mark Lead As Read",
+          "request": {
+            "method":"POST",
+            "header":[{"key":"Accept","value":"application/json"}],
+            "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/leads/{{business_lead_id}}/read","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","leads","{{business_lead_id}}","read"]}
+          },
           "response": []
         },
         {
@@ -194,10 +203,10 @@
         {
           "name": "Start Public Conversation",
           "auth":{"type":"noauth"},
-          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.conversation_id) pm.collectionVariables.set('business_conversation_id', json.data.conversation_id);","if (json.data?.session) pm.collectionVariables.set('business_session', json.data.session);","pm.test('Initial assistant message is localized and declares form fields', () => {","  pm.expect(json.data?.locale).to.eql(pm.collectionVariables.get('business_locale'));","  pm.expect(json.data?.messages?.[0]?.required_fields).to.be.an('array');","  pm.expect(json.data?.messages?.[0]?.fields?.[0]).to.include.keys('key', 'label', 'type', 'required');","});"]}}],
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.conversation_id) pm.collectionVariables.set('business_conversation_id', json.data.conversation_id);","if (json.data?.session) pm.collectionVariables.set('business_session', json.data.session);","pm.test('Initial assistant message is localized and declares form fields', () => {","  pm.expect(json.data?.locale).to.eql(pm.collectionVariables.get('business_locale'));","  pm.expect(json.data?.finished).to.be.a('boolean');","  pm.expect(json.data?.messages?.[0]?.required_fields).to.be.an('array');","  pm.expect(json.data?.messages?.[0]?.fields?.[0]).to.include.keys('key', 'label', 'type', 'required');","});"]}}],
           "request": {
             "method":"POST",
-            "description":"Send locale when starting. The API persists it and returns localized assistant content plus form-ready fields[].",
+            "description":"Send locale when starting. The API persists it and returns localized assistant content, form-ready fields[] and finished. If the initial instruction has finish_chat=true, status is completed and finished is true in this same response.",
             "header":[{"key":"Origin","value":"{{business_origin}}"},{"key":"X-Bigmelo-Business-Key","value":"{{business_api_key}}"},{"key":"Content-Type","value":"application/json"}],
             "body":{"mode":"raw","raw":"{\n  \"visitor_id\": \"postman-visitor\",\n  \"locale\": \"{{business_locale}}\"\n}"},
             "url":{"raw":"{{base_url}}/api/business/conversations","host":["{{base_url}}"],"path":["api","business","conversations"]}

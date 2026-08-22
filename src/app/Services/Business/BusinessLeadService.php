@@ -4,7 +4,6 @@ namespace App\Services\Business;
 
 use App\Enums\BusinessLeadStatus;
 use App\Mail\BusinessLeadNotification;
-use App\Mail\BusinessVisitorConfirmation;
 use App\Models\BusinessActionRun;
 use App\Models\BusinessConversation;
 use App\Models\BusinessLead;
@@ -59,13 +58,6 @@ class BusinessLeadService
         if ($recipient) {
             $this->once($conversation, $nodeKey, 'notify_business', function () use ($recipient, $lead): bool {
                 Mail::to($recipient)->queue(new BusinessLeadNotification($lead));
-
-                return true;
-            });
-        }
-        if ($lead->email) {
-            $this->once($conversation, $nodeKey, 'notify_visitor', function () use ($lead): bool {
-                Mail::to($lead->email)->queue(new BusinessVisitorConfirmation($lead));
 
                 return true;
             });

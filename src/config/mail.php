@@ -115,6 +115,11 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    'business_from' => [
+        'address' => 'business@bigmelo.com',
+        'name' => 'Bigmelo Business',
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Mail Branding

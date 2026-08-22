@@ -44,6 +44,73 @@ class BusinessFlowValidatorTest extends TestCase
         $this->assertTrue($result['valid']);
     }
 
+    public function test_terminal_instruction_is_valid_without_an_outgoing_connection(): void
+    {
+        $nodes = [[
+            'key' => 'goodbye',
+            'type' => 'instruction',
+            'title' => 'Despedida',
+            'x' => 0,
+            'y' => 0,
+            'config' => [
+                'start' => true,
+                'message' => 'Gracias por contactarnos.',
+                'wait_for_input' => false,
+                'finish_chat' => true,
+            ],
+        ]];
+
+        $result = (new BusinessFlowValidator)->validate($nodes, []);
+
+        $this->assertTrue($result['valid']);
+        $this->assertSame([], $result['errors']);
+    }
+
+    public function test_terminal_instruction_rejects_input_waiting_and_outgoing_connections(): void
+    {
+        $nodes = [
+            [
+                'key' => 'goodbye',
+                'type' => 'instruction',
+                'title' => 'Despedida',
+                'x' => 0,
+                'y' => 0,
+                'config' => [
+                    'start' => true,
+                    'message' => 'Gracias por contactarnos.',
+                    'wait_for_input' => true,
+                    'finish_chat' => true,
+                ],
+            ],
+            [
+                'key' => 'unused',
+                'type' => 'instruction',
+                'title' => 'No debe ejecutarse',
+                'x' => 300,
+                'y' => 0,
+                'config' => [
+                    'message' => 'Mensaje posterior.',
+                    'wait_for_input' => false,
+                    'finish_chat' => true,
+                ],
+            ],
+        ];
+        $edges = [[
+            'key' => 'invalid-terminal-output',
+            'source' => 'goodbye',
+            'target' => 'unused',
+            'source_handle' => null,
+            'label' => null,
+            'config' => [],
+        ]];
+
+        $result = (new BusinessFlowValidator)->validate($nodes, $edges);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('no puede esperar una respuesta', implode(' ', $result['errors']));
+        $this->assertStringContainsString('no debe tener conexiones de salida', implode(' ', $result['errors']));
+    }
+
     public function test_it_rejects_unsupported_decision_modes_and_actions_before_publish(): void
     {
         $graph = (new BusinessFlowTemplate)->graph();

@@ -83,6 +83,7 @@ Route::prefix('/businesses')->group(function () {
     Route::post('/{business}/flow/validate', [BusinessFlowController::class, 'validateFlow'])->middleware(['auth:sanctum', 'abilities:business:write']);
     Route::post('/{business}/flow/publish', [BusinessFlowController::class, 'publish'])->middleware(['auth:sanctum', 'abilities:business:flow:publish']);
     Route::get('/{business}/leads', [BusinessLeadController::class, 'index'])->middleware(['auth:sanctum', 'abilities:business:leads:read']);
+    Route::post('/{business}/leads/{lead}/read', [BusinessLeadController::class, 'markRead'])->middleware(['auth:sanctum', 'abilities:business:leads:read']);
     Route::patch('/{business}/leads/{lead}', [BusinessLeadController::class, 'update'])->middleware(['auth:sanctum', 'abilities:business:leads:write']);
     Route::get('/{business}/usage', [BusinessUsageController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:usage:read']);
     Route::get('/{business}/configuration', [BusinessConfigurationController::class, 'show'])->middleware(['auth:sanctum', 'abilities:business:read']);

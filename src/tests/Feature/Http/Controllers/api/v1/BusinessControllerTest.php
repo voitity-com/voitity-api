@@ -6,7 +6,6 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Classes\EmbeddingService\EmbeddingClient;
 use App\Mail\BusinessLeadNotification;
-use App\Mail\BusinessVisitorConfirmation;
 use App\Models\Business;
 use App\Models\BusinessApiClient;
 use App\Models\BusinessNodeExecution;
@@ -320,12 +319,13 @@ class BusinessControllerTest extends TestAPI
     {
         Mail::fake();
         $business = $this->createPublishedBusiness();
-        $this->withToken($this->token)->patchJson("/api/businesses/{$business->id}/configuration", [
+        $configuration = $this->withToken($this->token)->patchJson("/api/businesses/{$business->id}/configuration", [
             'lead_recipient_email' => 'leads@example.com',
-            'sender_email' => 'bot@example.com',
-            'sender_name' => 'Bigmelo Bot',
             'widget_enabled' => true,
         ])->assertOk();
+        $this->assertArrayNotHasKey('sender_email', $configuration->json('data'));
+        $this->assertArrayNotHasKey('sender_name', $configuration->json('data'));
+        $this->assertArrayNotHasKey('reply_to_email', $configuration->json('data'));
         $keyResponse = $this->withToken($this->token)->postJson("/api/businesses/{$business->id}/api-clients", [
             'name' => 'Sitio local',
             'origins' => ['http://localhost:3000'],
@@ -393,19 +393,55 @@ class BusinessControllerTest extends TestAPI
         $this->assertStringContainsString('Posible solución interna', $lead->ai_solution_summary);
         Mail::assertQueued(BusinessLeadNotification::class, function (BusinessLeadNotification $mail): bool {
             $html = $mail->render();
+            $envelope = $mail->envelope();
 
             return str_contains($html, '+573017654321')
                 && str_contains($html, 'acme.com')
                 && str_contains($html, 'Problema descrito por el cliente')
-                && str_contains($html, 'Posible solución planteada por la IA');
+                && str_contains($html, 'Posible solución planteada por la IA')
+                && $envelope->from?->address === 'business@bigmelo.com'
+                && $envelope->from?->name === 'Bigmelo Business'
+                && $envelope->subject === 'Bigmelo Labs - New Lead'
+                && $envelope->replyTo === [];
         });
-        Mail::assertQueued(BusinessVisitorConfirmation::class);
+        Mail::assertQueuedCount(1);
 
         $this->assertDatabaseHas('business_lead_status_histories', [
             'business_lead_id' => $lead->id,
             'from_status' => null,
             'to_status' => 'created',
         ]);
+
+        $this->assertNull($lead->read_at);
+        $today = now()->toDateString();
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}")
+            ->assertOk()
+            ->assertJsonPath('data.unread_leads_count', 1);
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/leads?date_field=created_at&from={$today}&to={$today}&unread_only=1")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $lead->id)
+            ->assertJsonPath('data.0.read_at', null)
+            ->assertJsonPath('meta.unread_count', 1);
+
+        $updatedAtBeforeRead = $lead->updated_at;
+        $this->withToken($this->token)
+            ->postJson("/api/businesses/{$business->id}/leads/{$lead->id}/read")
+            ->assertOk()
+            ->assertJsonPath('data.id', $lead->id)
+            ->assertJsonPath('data.read_at', fn ($readAt) => is_string($readAt) && $readAt !== '');
+        $this->assertTrue($updatedAtBeforeRead->equalTo($lead->fresh()->updated_at));
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}")
+            ->assertOk()
+            ->assertJsonPath('data.unread_leads_count', 0);
+        $this->withToken($this->token)
+            ->getJson("/api/businesses/{$business->id}/leads?date_field=created_at&from={$today}&to={$today}&unread_only=1")
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.unread_count', 0);
 
         $lead->timestamps = false;
         $lead->forceFill(['created_at' => now()->subMonths(2)])->saveQuietly();
@@ -760,6 +796,101 @@ class BusinessControllerTest extends TestAPI
         $this->assertDatabaseHas('business_conversations', ['uuid' => $conversation, 'locale' => 'en']);
     }
 
+    public function test_terminal_instruction_returns_its_message_and_completes_the_conversation_without_an_output(): void
+    {
+        $businessId = $this->withToken($this->token)->postJson('/api/businesses', [
+            'name' => 'Chat terminal',
+            'description' => 'Prueba de una indicación final.',
+        ])->assertCreated()->json('data.id');
+        $graph = [
+            'nodes' => [
+                [
+                    'key' => 'welcome',
+                    'type' => 'instruction',
+                    'title' => 'Bienvenida',
+                    'x' => 0,
+                    'y' => 0,
+                    'config' => [
+                        'start' => true,
+                        'message' => 'Escribe cualquier mensaje para continuar.',
+                        'messages' => ['es' => 'Escribe cualquier mensaje para continuar.', 'en' => 'Write any message to continue.'],
+                        'wait_for_input' => true,
+                    ],
+                ],
+                [
+                    'key' => 'goodbye',
+                    'type' => 'instruction',
+                    'title' => 'Despedida',
+                    'x' => 400,
+                    'y' => 0,
+                    'config' => [
+                        'message' => 'Gracias. La conversación ha finalizado.',
+                        'messages' => ['es' => 'Gracias. La conversación ha finalizado.', 'en' => 'Thank you. The conversation is complete.'],
+                        'wait_for_input' => false,
+                        'finish_chat' => true,
+                    ],
+                ],
+            ],
+            'edges' => [[
+                'key' => 'welcome-goodbye',
+                'source' => 'welcome',
+                'target' => 'goodbye',
+                'source_handle' => null,
+                'label' => null,
+                'config' => [],
+            ]],
+        ];
+
+        $this->withToken($this->token)
+            ->putJson("/api/businesses/{$businessId}/flow", $graph)
+            ->assertOk();
+        $this->withToken($this->token)
+            ->postJson("/api/businesses/{$businessId}/flow/publish")
+            ->assertOk();
+        $business = Business::query()->findOrFail($businessId);
+        $this->configureRequiredEmail($business);
+        $this->withToken($this->token)
+            ->postJson("/api/businesses/{$businessId}/activate")
+            ->assertOk();
+        $key = $this->withToken($this->token)->postJson("/api/businesses/{$businessId}/api-clients", [
+            'name' => 'Terminal flow client',
+            'origins' => ['http://localhost:5173'],
+        ])->assertCreated()->json('data.key');
+
+        $headers = ['Origin' => 'http://localhost:5173', 'X-Bigmelo-Business-Key' => $key];
+        $start = $this->withHeaders($headers)
+            ->postJson('/api/business/conversations', ['locale' => 'es'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.finished', false)
+            ->assertJsonPath('data.messages.0.content', 'Escribe cualquier mensaje para continuar.');
+        $conversation = $start->json('data.conversation_id');
+        $conversationHeaders = [...$headers, 'X-Bigmelo-Business-Session' => $start->json('data.session')];
+
+        $this->withHeaders($conversationHeaders)
+            ->postJson("/api/business/conversations/{$conversation}/messages", ['locale' => 'es', 'message' => 'Continuar'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true)
+            ->assertJsonPath('data.messages.0.content', 'Gracias. La conversación ha finalizado.');
+
+        $this->withHeaders($conversationHeaders)
+            ->getJson("/api/business/conversations/{$conversation}/status")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.finished', true)
+            ->assertJsonPath('data.current_node', 'goodbye')
+            ->assertJsonPath('data.completed_at', fn (mixed $value): bool => is_string($value) && $value !== '');
+        $this->assertDatabaseHas('business_conversations', [
+            'uuid' => $conversation,
+            'status' => 'completed',
+            'end_reason' => 'terminal_instruction',
+        ]);
+        $execution = BusinessNodeExecution::query()->where('node_key', 'goodbye')->firstOrFail();
+        $this->assertTrue($execution->output['finish_chat']);
+        $this->assertSame('completed', $execution->output['conversation_status']);
+    }
+
     public function test_public_chat_rejects_unsupported_locales_and_empty_structured_fields(): void
     {
         $business = $this->createPublishedBusiness();
@@ -856,7 +987,6 @@ class BusinessControllerTest extends TestAPI
     {
         $this->withToken($this->token)->patchJson("/api/businesses/{$business->id}/configuration", [
             'lead_recipient_email' => 'leads@example.com',
-            'sender_email' => 'bot@example.com',
         ])->assertOk();
     }
 }

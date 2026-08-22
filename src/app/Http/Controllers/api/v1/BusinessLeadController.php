@@ -9,6 +9,7 @@ use App\Models\Business;
 use App\Models\BusinessLead;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,11 +39,35 @@ class BusinessLeadController extends BusinessAdminController
         if (($validated['statuses'] ?? []) !== []) {
             $query->whereIn('status', $validated['statuses']);
         }
+        if ($validated['unread_only'] ?? false) {
+            $query->whereNull('read_at');
+        }
         $leads = $query->paginate(25);
 
         return response()->json(['message' => 'Business leads retrieved successfully.', 'data' => $leads->items(), 'meta' => [
             'current_page' => $leads->currentPage(), 'last_page' => $leads->lastPage(), 'per_page' => $leads->perPage(), 'total' => $leads->total(),
+            'unread_count' => $business->leads()->whereNull('read_at')->count(),
         ]]);
+    }
+
+    public function markRead(Request $request, Business $business, BusinessLead $lead): JsonResponse
+    {
+        $this->ensureAvailable($request);
+        abort_unless($lead->business_id === $business->id, 404);
+
+        if ($lead->read_at === null) {
+            $lead->timestamps = false;
+            $lead->forceFill(['read_at' => now()])->saveQuietly();
+            $lead->timestamps = true;
+        }
+
+        return response()->json([
+            'message' => 'Business lead marked as read successfully.',
+            'data' => $lead->fresh([
+                'conversation:id,uuid,started_at,completed_at',
+                'histories' => fn ($historyQuery) => $historyQuery->with('changedBy:id,name,email')->oldest('created_at')->oldest('id'),
+            ]),
+        ]);
     }
 
     public function update(UpdateBusinessLeadStatusRequest $request, Business $business, BusinessLead $lead): JsonResponse

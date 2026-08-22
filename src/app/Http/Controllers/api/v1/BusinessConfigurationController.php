@@ -6,6 +6,7 @@ use App\Http\Requests\StoreBusinessApiClientRequest;
 use App\Http\Requests\UpdateBusinessSettingsRequest;
 use App\Models\Business;
 use App\Models\BusinessApiClient;
+use App\Models\BusinessSetting;
 use App\Services\Business\BusinessApiClientService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,9 +16,10 @@ class BusinessConfigurationController extends BusinessAdminController
     public function show(Request $request, Business $business): JsonResponse
     {
         $this->ensureAvailable($request);
+        $settings = $business->settings()->firstOrCreate();
 
         return response()->json(['message' => 'Business configuration retrieved successfully.', 'data' => [
-            'settings' => $business->settings()->firstOrCreate(),
+            'settings' => $this->settingsData($settings),
             'api_clients' => $business->apiClients()->with('origins')->latest()->get(),
         ]]);
     }
@@ -28,7 +30,10 @@ class BusinessConfigurationController extends BusinessAdminController
         $settings = $business->settings()->firstOrCreate();
         $settings->update($request->validated());
 
-        return response()->json(['message' => 'Business configuration updated successfully.', 'data' => $settings->fresh()]);
+        return response()->json([
+            'message' => 'Business configuration updated successfully.',
+            'data' => $this->settingsData($settings->fresh()),
+        ]);
     }
 
     public function storeClient(StoreBusinessApiClientRequest $request, Business $business, BusinessApiClientService $clients): JsonResponse
@@ -53,5 +58,23 @@ class BusinessConfigurationController extends BusinessAdminController
         $client->update(['enabled' => false]);
 
         return response()->json(['message' => 'API key revoked successfully.', 'data' => $client->fresh('origins')]);
+    }
+
+    private function settingsData(BusinessSetting $settings): array
+    {
+        return $settings->only([
+            'id',
+            'business_id',
+            'lead_recipient_email',
+            'locale',
+            'widget_enabled',
+            'widget_title',
+            'widget_button_label',
+            'widget_welcome_message',
+            'widget_primary_color',
+            'widget_position',
+            'created_at',
+            'updated_at',
+        ]);
     }
 }

@@ -110,7 +110,21 @@ Cada bloque tiene:
 - posición X/Y;
 - configuración JSON tipada por el runtime.
 
-Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, modo de decisión, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+Las flechas guardan bloque origen, destino, etiqueta y `source_handle`. En decisiones, `source_handle` identifica la rama. El inspector permite editar el mensaje en español y en inglés, espera de input, finalización del chat, modo de decisión, acción, nodo inicial, conexiones y eliminación. Para compatibilidad, `config.message` conserva el español y `config.messages.es|en` es el contrato localizado.
+
+Una indicación puede activar `config.finish_chat: true`. Ese bloque envía su mensaje como la última respuesta, marca inmediatamente la conversación como `completed` y hace que el endpoint devuelva `finished: true`. Es un bloque terminal: debe usar `wait_for_input: false` y no necesita ni admite una conexión de salida. El editor elimina sus salidas al activar la opción y el validador impide publicar configuraciones ambiguas.
+
+```json
+{
+  "message": "Muchas gracias. Hemos recibido tu información.",
+  "messages": {
+    "es": "Muchas gracias. Hemos recibido tu información.",
+    "en": "Thank you. We have received your information."
+  },
+  "wait_for_input": false,
+  "finish_chat": true
+}
+```
 
 Un nodo de decisión ofrece dos modos definidos y comprensibles, sin identificadores internos creados manualmente:
 
@@ -231,6 +245,7 @@ Respuesta relevante:
     "conversation_id": "uuid",
     "status": "in_progress",
     "locale": "en",
+    "finished": false,
     "session": "encrypted-token",
     "messages": [
       {
@@ -315,7 +330,7 @@ Una secuencia típica contiene varias llamadas al mismo endpoint:
 2. `{"locale":"es","fields":{"project_summary":"Procesamos facturas manualmente y queremos extraer y validar sus datos con IA."}}` devuelve la solicitud de contacto.
 3. Una respuesta estructurada con datos incompletos devuelve exactamente los campos faltantes, con labels en español.
 4. Si el siguiente request usa `"locale":"en"`, la indicación de faltantes y sus labels llegan en inglés.
-5. Al completar los datos devuelve `status: "completed"`, `finished: true` y el mensaje final del asistente en el idioma activo.
+5. Al completar los datos devuelve `status: "completed"`, `finished: true` y el mensaje final del asistente en el idioma activo. Lo mismo ocurre al alcanzar una indicación con `finish_chat: true`, aunque ese bloque no tenga una flecha de salida.
 
 La posible solución generada por IA es interna: se guarda en el lead y se envía al negocio, pero nunca aparece en `data.messages` para el visitante.
 
@@ -356,15 +371,18 @@ El widget:
 
 ## Correos y leads
 
-`analyze_solution` genera primero el análisis interno y `finalize_lead` crea el lead únicamente si el problema, el análisis y todos los datos obligatorios son válidos. Si están configurados:
+`analyze_solution` genera primero el análisis interno y `finalize_lead` crea el lead únicamente si el problema, el análisis y todos los datos obligatorios son válidos. Al finalizar:
 
-- `lead_recipient_email` recibe nombre, email, teléfono, WhatsApp, empresa, sitio web, problema y posible solución planteada por la IA;
-- el email extraído del visitante recibe confirmación;
-- `sender_email`, `sender_name` y `reply_to_email` se aplican a ambos correos.
+- `lead_recipient_email` es la única configuración de correo por negocio y recibe nombre, email, teléfono, WhatsApp, empresa, sitio web, problema y posible solución planteada por la IA;
+- no se envía ningún correo al visitante;
+- el correo del lead sale desde `Bigmelo Business <business@bigmelo.com>`;
+- la notificación interna usa el asunto `{Nombre del negocio} - New Lead`.
 
-La posible solución nunca se incluye en la conversación ni en el correo de confirmación enviado al visitante.
+La posible solución nunca se incluye en la conversación.
 
 Las notificaciones usan la cola de Laravel. En desarrollo local debe existir un worker para procesarlas.
+
+Los leads nuevos se crean con `read_at` en `null`. `GET /api/businesses/{business}/leads` acepta `unread_only=1`, y `POST /api/businesses/{business}/leads/{lead}/read` registra la lectura sin modificar `updated_at`. El detalle de Business incluye `unread_leads_count` para mostrar el contador del submenú.
 
 ## Observabilidad y logs
 

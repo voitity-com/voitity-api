@@ -19,6 +19,7 @@ class BusinessResource extends JsonResource
             'updated_at' => $this->updated_at?->toISOString(),
             'sources_count' => $this->whenCounted('sources'),
             'leads_count' => $this->whenCounted('leads'),
+            'unread_leads_count' => $this->whenCounted('unread_leads'),
         ];
     }
 }
