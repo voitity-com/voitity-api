@@ -39,11 +39,20 @@ class BusinessFlowValidator
                 $startNodes[] = $key;
             }
             if ($type === BusinessFlowNodeType::Instruction->value) {
+                $aiMessageEnabled = ($config['ai_message_enabled'] ?? false) === true;
                 $messages = is_array($config['messages'] ?? null) ? $config['messages'] : [];
                 $hasMessage = collect([$config['message'] ?? null, $messages['es'] ?? null, $messages['en'] ?? null])
                     ->contains(fn (mixed $message): bool => is_string($message) && trim($message) !== '');
-                if (! $hasMessage) {
+                $hasAIInstruction = is_string($config['ai_instruction'] ?? null)
+                    && trim((string) $config['ai_instruction']) !== '';
+                if (! $hasMessage && ! ($aiMessageEnabled && $hasAIInstruction)) {
                     $errors[] = "La indicación {$key} no tiene mensaje.";
+                }
+                if (array_key_exists('ai_message_enabled', $config) && ! is_bool($config['ai_message_enabled'])) {
+                    $errors[] = "La propiedad ai_message_enabled de la indicación {$key} debe ser booleana.";
+                }
+                if ($aiMessageEnabled && ! $hasAIInstruction) {
+                    $errors[] = "La indicación {$key} debe incluir una instrucción para generar el mensaje con IA.";
                 }
                 if (array_key_exists('finish_chat', $config) && ! is_bool($config['finish_chat'])) {
                     $errors[] = "La propiedad finish_chat de la indicación {$key} debe ser booleana.";

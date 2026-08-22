@@ -17,7 +17,9 @@ class LocalBusinessDecisionAI implements BusinessDecisionAI
     public function evaluate(
         Business $business,
         string $question,
-        string $visitorContext,
+        string $lastAssistantMessage,
+        string $lastVisitorMessage,
+        array $conversationContext,
         ?string $problem,
         ?string $businessDescription,
         array $knowledge,
@@ -28,6 +30,11 @@ class LocalBusinessDecisionAI implements BusinessDecisionAI
             return $this->evidencePolicy->insufficientResult();
         }
 
+        $visitorContext = collect($conversationContext)
+            ->filter(fn (mixed $message): bool => is_array($message) && ($message['role'] ?? null) === 'visitor')
+            ->pluck('content')
+            ->filter(fn (mixed $content): bool => is_string($content))
+            ->implode("\n");
         $classification = $this->flowAI->classifyTechnology(trim(($problem ?: '')."\n".$visitorContext));
         $knowledgeScore = (float) collect($knowledge)->max('score');
         $answer = ($classification->data['branch'] ?? 'other') === 'technology'
@@ -37,13 +44,13 @@ class LocalBusinessDecisionAI implements BusinessDecisionAI
             : ($answer ? 'The request contains a supported technology need.' : 'No relevant supported need was found.');
 
         return new BusinessDecisionResult(
-            answer: $answer,
+            outcome: $answer ? BusinessDecisionOutcome::Yes : BusinessDecisionOutcome::No,
             confidence: $answer ? 0.86 : 0.64,
             reason: $reason,
             sourceChunkIds: array_values(array_map('intval', array_column($knowledge, 'chunk_id'))),
             provider: 'local',
             model: 'heuristic-rag-v1',
-            inputTokens: $this->usage->estimateTokens($question.$visitorContext.($problem ?? '').($businessDescription ?? '')),
+            inputTokens: $this->usage->estimateTokens($question.$lastAssistantMessage.$lastVisitorMessage.$visitorContext.($problem ?? '').($businessDescription ?? '')),
             outputTokens: $this->usage->estimateTokens($reason),
         );
     }

@@ -1,18 +1,21 @@
 <?php
 
-namespace App\Classes\BusinessDecisionAI;
+namespace App\Classes\BusinessInstructionAI;
 
-class BusinessDecisionResult
+class BusinessInstructionResult
 {
     /** @param array<int, int> $sourceChunkIds */
     public function __construct(
-        public readonly BusinessDecisionOutcome $outcome,
-        public readonly float $confidence,
-        public readonly string $reason,
+        public readonly string $message,
         public readonly array $sourceChunkIds,
         public readonly string $provider,
         public readonly string $model,
         public readonly int $inputTokens = 0,
         public readonly int $outputTokens = 0,
     ) {}
+
+    public function successful(): bool
+    {
+        return trim($this->message) !== '';
+    }
 }

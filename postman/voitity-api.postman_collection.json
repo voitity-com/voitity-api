@@ -93,7 +93,7 @@
         {
           "name": "Get Flow",
           "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data?.draft_version) {","  const graph = { nodes: json.data.draft_version.nodes, edges: json.data.draft_version.edges };","  pm.collectionVariables.set('business_flow_graph', JSON.stringify(graph, null, 2));","  pm.test('Knowledge decisions use fixed yes/no branches', () => {","    const decisions = graph.nodes.filter((node) => node.type === 'decision' && node.config?.mode === 'knowledge_yes_no');","    decisions.forEach((node) => {","      pm.expect(node.config.questions?.es || node.config.question).to.be.a('string').and.not.empty;","      pm.expect(node.config.branches).to.eql(['yes', 'no']);","    });","  });","}"]}}],
-          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"description":"Obtiene versiones publicada y borrador. Los nodos knowledge_yes_no contienen questions.es|en, use_business_description, use_sources y las ramas fijas yes/no.","url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}},
+          "request": {"method":"GET","header":[{"key":"Accept","value":"application/json"}],"description":"Obtiene versiones publicada y borrador. Los nodos knowledge_yes_no contienen questions.es|en, use_business_description, use_sources y ramas yes/no; el runtime IA puede producir yes, no o unclear. Las indicaciones dinámicas usan ai_message_enabled, ai_instruction y conservan message/messages como respaldo manual.","url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}},
           "response": []
         },
         {
@@ -102,7 +102,7 @@
             "method":"PUT",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
-            "description":"Guarda el borrador. Una decisión knowledge_yes_no debe incluir una pregunta no vacía y exactamente las ramas yes/no; required_fields_complete exige complete/incomplete. Una indicación terminal usa finish_chat=true, wait_for_input=false y no tiene salida.",
+            "description":"Guarda el borrador. Una decisión knowledge_yes_no debe incluir una pregunta no vacía y exactamente las ramas yes/no; required_fields_complete exige complete/incomplete. Una indicación con ai_message_enabled=true requiere ai_instruction y conserva sus mensajes manuales. Una indicación terminal usa finish_chat=true, wait_for_input=false y no tiene salida.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow"]}
           },
           "response": []
@@ -114,7 +114,7 @@
             "method":"POST",
             "header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],
             "body":{"mode":"raw","raw":"{{business_flow_graph}}"},
-            "description":"Valida nodo inicial, alcanzabilidad, configuración, ramas y una conexión de destino por cada rama antes de publicar. Las indicaciones con finish_chat=true son terminales y no requieren una salida.",
+            "description":"Valida nodo inicial, alcanzabilidad, configuración, instrucciones IA, ramas y una conexión de destino por cada rama antes de publicar. Las indicaciones con finish_chat=true son terminales y no requieren una salida.",
             "url":{"raw":"{{base_url}}/api/businesses/{{business_id}}/flow/validate","host":["{{base_url}}"],"path":["api","businesses","{{business_id}}","flow","validate"]}
           },
           "response": []

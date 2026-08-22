@@ -8,6 +8,12 @@ return [
         'max_output_tokens' => max(100, (int) env('BUSINESS_DECISION_MAX_OUTPUT_TOKENS', 400)),
     ],
 
+    'instruction' => [
+        'driver' => env('BUSINESS_INSTRUCTION_AI_DRIVER', 'openai'),
+        'model' => env('BUSINESS_INSTRUCTION_AI_MODEL', env('OPENAI_DEFAULT_CHAT_MODEL', 'gpt-4o-mini')),
+        'max_output_tokens' => max(100, (int) env('BUSINESS_INSTRUCTION_MAX_OUTPUT_TOKENS', 500)),
+    ],
+
     'knowledge' => [
         'chunk_characters' => max(500, (int) env('BUSINESS_KNOWLEDGE_CHUNK_CHARACTERS', 1800)),
         'chunk_overlap_characters' => max(0, (int) env('BUSINESS_KNOWLEDGE_CHUNK_OVERLAP_CHARACTERS', 180)),
