@@ -21,7 +21,6 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::139194331469:role/bigmelo-prod-github-actions-deploy-role
   ECR_REPOSITORY: bigmelo/voitity-api
   AUTO_SCALING_GROUP: bigmelo-prod-api
-  LEGACY_EC2_INSTANCE_ID: i-0133c4ba00b95904d
 
 jobs:
   deploy:
@@ -81,7 +80,8 @@ jobs:
             --output text)"
 
           if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
-            INSTANCE_IDS="$LEGACY_EC2_INSTANCE_ID"
+            echo "::error::No InService instances found in $AUTO_SCALING_GROUP" >&2
+            exit 1
           fi
 
           run_on_instance() {
