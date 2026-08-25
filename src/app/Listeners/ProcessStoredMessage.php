@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Classes\ChatAIService\AnswerBuilder;
 use App\Events\MessageStored;
 use App\Exceptions\ChatAIService\ChatAIAnswerGenerationFailed;
+use App\Jobs\ProcessStoredMessageJob;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\Notifications\NotificationDispatcher;
@@ -15,6 +16,17 @@ class ProcessStoredMessage
     public function __construct(private readonly AnswerBuilder $answerBuilder) {}
 
     public function handle(MessageStored $event): void
+    {
+        if (config('queue.default') !== 'sync') {
+            ProcessStoredMessageJob::dispatch($event->message->id);
+
+            return;
+        }
+
+        $this->process($event);
+    }
+
+    public function process(MessageStored $event): void
     {
         $message = $event->message->loadMissing(['profile', 'chat']);
 

@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     libpq-dev \
+    nginx \
     supervisor \
     unzip \
     libzip-dev \
@@ -30,13 +31,16 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 # Add startup checks for bind-mounted development source
 COPY docker/entrypoint.sh /usr/local/bin/laravel-entrypoint
 COPY docker/supervisord-queue.conf /etc/supervisor/conf.d/laravel-queue.conf
+COPY docker/supervisord-api.conf /etc/supervisor/supervisord-api.conf
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
-RUN chmod +x /usr/local/bin/laravel-entrypoint
+RUN chmod +x /usr/local/bin/laravel-entrypoint \
+    && rm -f /etc/nginx/sites-enabled/default
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html
 
-# Expose port 8000 and start Laravel
+# Expose the internal HTTP port served by Nginx.
 EXPOSE 8000
 ENTRYPOINT ["laravel-entrypoint"]
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord-api.conf"]

@@ -11,6 +11,7 @@ use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Models\Chat;
+use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
@@ -209,6 +210,68 @@ class PublicProfileMessageControllerTest extends TestAPI
             ['message' => 'No authentication'],
         )->assertUnauthorized()
             ->assertJsonPath('message', 'Unauthenticated.');
+    }
+
+    public function test_visitor_can_poll_a_pending_message_until_the_answer_is_ready(): void
+    {
+        $profile = $this->publicProfileWithSubscription();
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $token = app(PublicChatSession::class)->issue($profile, $chat);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Queued question',
+            'type' => 'question',
+            'source' => 'api',
+            'data' => ['processing' => true],
+        ]);
+
+        $url = "/api/public/profiles/{$profile->id}/messages/{$question->id}/status";
+        $this->withHeader('X-Bigmelo-Chat-Token', $token)
+            ->getJson($url)
+            ->assertAccepted()
+            ->assertJsonPath('data.status', 'processing')
+            ->assertJsonPath('data.request_message_id', $question->id);
+
+        $answer = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Queued answer',
+            'type' => 'answer',
+            'source' => 'openai',
+            'data' => ['media' => [], 'products' => [], 'social_links' => []],
+        ]);
+        $question->update(['data' => [
+            'processing' => false,
+            'processed_at' => now()->toIso8601String(),
+            'answer_message_id' => $answer->id,
+        ]]);
+
+        $this->withHeader('X-Bigmelo-Chat-Token', $token)
+            ->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.message_id', $answer->id)
+            ->assertJsonPath('data.request_message_id', $question->id)
+            ->assertJsonPath('data.text', 'Queued answer');
+    }
+
+    public function test_message_status_rejects_a_tampered_chat_token(): void
+    {
+        $profile = $this->publicProfileWithSubscription();
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Private queued question',
+            'type' => 'question',
+            'source' => 'api',
+            'data' => [],
+        ]);
+
+        $this->withHeader('X-Bigmelo-Chat-Token', 'tampered')
+            ->getJson("/api/public/profiles/{$profile->id}/messages/{$question->id}/status")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'CHAT_SESSION_INVALID');
     }
 
     public function test_authenticated_message_endpoint_keeps_its_existing_chat_not_found_contract(): void

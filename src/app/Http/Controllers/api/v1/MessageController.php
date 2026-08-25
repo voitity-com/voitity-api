@@ -23,6 +23,7 @@ use App\Services\Insights\AnonymousVisitor;
 use App\Services\Insights\ChatLifecycleService;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -152,6 +153,93 @@ class MessageController extends Controller
         $request->attributes->set(self::PUBLIC_REQUEST_ATTRIBUTE, true);
 
         return $this->store($request, $profile, $usage, $capabilities);
+    }
+
+    public function publicStatus(
+        Request $request,
+        Profile $profile,
+        Message $message,
+        ProfileMessagingCapabilitiesService $capabilities,
+    ): JsonResponse {
+        if (
+            ! $this->publicProfiles->isVisible($profile)
+            || (int) $message->profile_id !== (int) $profile->id
+            || $message->type !== 'question'
+            || ! $this->publicChatSessions->isValid(
+                $request->header('X-Bigmelo-Chat-Token'),
+                $profile,
+                (int) $message->chat_id,
+            )
+        ) {
+            return response()->json([
+                'message' => 'Chat not found.',
+                'code' => 'CHAT_SESSION_INVALID',
+            ], 404);
+        }
+
+        $message->refresh();
+        $failure = $this->messageProcessingFailurePayload($message);
+
+        if ($failure !== null) {
+            $failure = $this->appendRequestMetadata($failure, $message);
+            $failure['messaging_capabilities'] = $capabilities->forProfile($profile);
+            $failure = $this->withChatSessionToken(
+                $failure,
+                $request->header('X-Bigmelo-Chat-Token'),
+            );
+
+            return response()->json([
+                'message' => 'Message answer generation failed.',
+                'data' => $failure,
+            ], 502);
+        }
+
+        $answerId = (int) (($message->data ?? [])['answer_message_id'] ?? 0);
+        $answer = $answerId > 0
+            ? Message::query()
+                ->whereKey($answerId)
+                ->where('profile_id', $profile->id)
+                ->where('chat_id', $message->chat_id)
+                ->where('type', 'answer')
+                ->first()
+            : null;
+
+        if (! $answer instanceof Message) {
+            return response()->json([
+                'message' => 'Message stored, processing pending.',
+                'data' => $this->withChatSessionToken($this->appendRequestMetadata([
+                    'chat_id' => $message->chat_id,
+                    'message_id' => $message->id,
+                    'text' => null,
+                    'audio_url' => null,
+                    'status' => 'processing',
+                    'messaging_capabilities' => $capabilities->forProfile($profile),
+                ], $message), $request->header('X-Bigmelo-Chat-Token')),
+            ], 202);
+        }
+
+        $answerData = $answer->data ?? [];
+        $data = $this->appendRequestMetadata([
+            'chat_id' => $answer->chat_id,
+            'message_id' => $answer->id,
+            'text' => $answer->text,
+            'audio_url' => $answer->audio,
+            'source' => $answer->source,
+            'media' => $answerData['media'] ?? [],
+            'products' => $answerData['products'] ?? [],
+            'social_links' => $answerData['social_links'] ?? [],
+            'data' => $answerData,
+            'messaging_capabilities' => $capabilities->forProfile($profile),
+        ], $message);
+        $data = $this->withChatSessionToken(
+            $data,
+            $request->header('X-Bigmelo-Chat-Token'),
+        );
+
+        return response()->json([
+            'message' => 'Message processed successfully.',
+            'data' => $data,
+        ]);
     }
 
     /**
@@ -621,11 +709,10 @@ class MessageController extends Controller
                 'message_id' => $message->id,
                 'text' => null,
                 'audio_url' => null,
+                'status' => 'processing',
             ];
 
-            if ($includeRequestMetadata) {
-                $data = $this->appendRequestMetadata($data, $message);
-            }
+            $data = $this->appendRequestMetadata($data, $message);
             $data['messaging_capabilities'] = $capabilities->forProfile($profile);
             $data = $this->withChatSessionToken($data, $nextChatSessionToken);
 
@@ -637,9 +724,7 @@ class MessageController extends Controller
 
         $data = $answer->toArray();
 
-        if ($includeRequestMetadata) {
-            $data = $this->appendRequestMetadata($data, $message);
-        }
+        $data = $this->appendRequestMetadata($data, $message);
         $data['messaging_capabilities'] = $capabilities->forProfile($profile);
         $data = $this->withChatSessionToken($data, $nextChatSessionToken);
 

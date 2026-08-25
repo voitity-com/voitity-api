@@ -60,7 +60,9 @@ return [
             'queue' => env('SQS_QUEUE', 'default'),
             'suffix' => env('SQS_SUFFIX'),
             'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-            'after_commit' => false,
+            'retry_after' => (int) env('SQS_RETRY_AFTER', 360),
+            'block_for' => (int) env('SQS_BLOCK_FOR', 20),
+            'after_commit' => (bool) env('SQS_AFTER_COMMIT', true),
         ],
 
         'redis' => [
@@ -72,6 +74,11 @@ return [
             'after_commit' => false,
         ],
 
+    ],
+
+    'workloads' => [
+        'chat' => env('SQS_CHAT_QUEUE', 'chat'),
+        'media' => env('SQS_MEDIA_QUEUE', 'media'),
     ],
 
     /*

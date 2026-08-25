@@ -1,0 +1,796 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Bigmelo production baseline infrastructure
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  DomainName:
+    Type: String
+    Default: bigmelo.com
+  DBName:
+    Type: String
+    Default: voitity
+  DBUsername:
+    Type: String
+    Default: voitity
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+  LaravelAppKey:
+    Type: String
+    NoEcho: true
+  ApiUserPassword:
+    Type: String
+    NoEcho: true
+  ApiUserToken:
+    Type: String
+    NoEcho: true
+  SubnetIds:
+    Type: CommaDelimitedList
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  InstanceSubnetId:
+    Type: AWS::EC2::Subnet::Id
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+  AcmCertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:139194331469:certificate/1326735e-4314-4fde-81e8-e11badd1c145
+  UseHighlyAvailableApi:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  RetainLegacyApiInstance:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  ApiLoadBalancerDnsName:
+    Type: String
+    Default: ''
+  ApiLoadBalancerCanonicalHostedZoneId:
+    Type: String
+    Default: ''
+  ExistingApiEnvSecretArn:
+    Type: String
+    Default: arn:aws:secretsmanager:us-east-1:139194331469:secret:bigmelo/prod/api/env-LqllkH
+  ExistingWebEnvSecretArn:
+    Type: String
+    Default: arn:aws:secretsmanager:us-east-1:139194331469:secret:bigmelo/prod/web/env-Fo6KzJ
+  ExistingAdminEnvSecretArn:
+    Type: String
+    Default: arn:aws:secretsmanager:us-east-1:139194331469:secret:bigmelo/prod/admin/env-cGqDjm
+
+Conditions:
+  UseHighlyAvailableApi: !Equals [!Ref UseHighlyAvailableApi, 'true']
+  KeepLegacyApiInstance: !Equals [!Ref RetainLegacyApiInstance, 'true']
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: Bigmelo production hosted zone
+
+  WebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bigmelo-${Environment}-web-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  AdminBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bigmelo-${Environment}-admin-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bigmelo-${Environment}-assets-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bigmelo-${Environment}-private-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub bigmelo-${Environment}-web-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  AdminOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub bigmelo-${Environment}-admin-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  AssetsOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub bigmelo-${Environment}-assets-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  WebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: Bigmelo web app
+        Enabled: true
+        Aliases:
+          - !Ref DomainName
+          - !Sub www.${DomainName}
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Origins:
+          - Id: web-s3-origin
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            OriginAccessControlId: !Ref WebOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: web-s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  AdminDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: Bigmelo admin app
+        Enabled: true
+        Aliases:
+          - !Sub admin.${DomainName}
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Origins:
+          - Id: admin-s3-origin
+            DomainName: !GetAtt AdminBucket.RegionalDomainName
+            OriginAccessControlId: !Ref AdminOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: admin-s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  AssetsDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: Bigmelo generated assets
+        Enabled: true
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        Origins:
+          - Id: assets-s3-origin
+            DomainName: !GetAtt AssetsBucket.RegionalDomainName
+            OriginAccessControlId: !Ref AssetsOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: assets-s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${WebBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}
+
+  AdminBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AdminBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${AdminBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${AdminDistribution}
+
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${AssetsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetsDistribution}
+
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: bigmelo/voitity-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 20 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 20
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bigmelo API and SSM bastion security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-api-sg
+        - Key: Project
+          Value: bigmelo
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bigmelo PostgreSQL security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-db-sg
+        - Key: Project
+          Value: bigmelo
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Bigmelo production DB subnet group
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-db-subnet-group
+        - Key: Project
+          Value: bigmelo
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: bigmelo-prod-postgres
+      Engine: postgres
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      AutoMinorVersionUpgrade: true
+      MultiAZ: true
+      DeletionProtection: true
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bigmelo-prod-api-instance-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: bigmelo-prod-api-runtime
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: !GetAtt ApiRepository.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref ExistingApiEnvSecretArn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                Resource:
+                  - !Sub ${AssetsBucket.Arn}/*
+                  - !Sub ${PrivateBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt AssetsBucket.Arn
+                  - !GetAtt PrivateBucket.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  ApiInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: bigmelo-prod-api-instance-profile
+      Roles:
+        - !Ref ApiInstanceRole
+
+  ApiElasticIp:
+    Type: AWS::EC2::EIP
+    Condition: KeepLegacyApiInstance
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-api-eip
+        - Key: Project
+          Value: bigmelo
+
+  ApiInstance:
+    Type: AWS::EC2::Instance
+    Condition: KeepLegacyApiInstance
+    Properties:
+      ImageId: ami-06d5c141ec5b90893
+      InstanceType: t4g.small
+      IamInstanceProfile: !Ref ApiInstanceProfile
+      SubnetId: !Ref InstanceSubnetId
+      SecurityGroupIds:
+        - !Ref ApiSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            Encrypted: true
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-api-bastion
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          dnf update -y
+          dnf install -y docker git jq amazon-cloudwatch-agent
+          systemctl enable --now docker
+          usermod -aG docker ec2-user
+          mkdir -p /opt/bigmelo/api/caddy /opt/bigmelo/api/caddy_data /opt/bigmelo/api/caddy_config
+          cat > /opt/bigmelo/api/docker-compose.yml <<'EOF'
+          services:
+            api:
+              image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+              restart: unless-stopped
+              env_file: .env
+              expose:
+                - "8000"
+              command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
+            worker:
+              image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+              restart: unless-stopped
+              env_file: .env
+              command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--timeout=300"]
+            scheduler:
+              image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+              restart: unless-stopped
+              env_file: .env
+              command: ["sh", "-lc", "while true; do php artisan schedule:run --no-interaction; sleep 60; done"]
+            caddy:
+              image: caddy:2-alpine
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+                - ./caddy_data:/data
+                - ./caddy_config:/config
+              depends_on:
+                - api
+          EOF
+          cat > /opt/bigmelo/api/caddy/Caddyfile <<'EOF'
+          api.bigmelo.com {
+            encode gzip zstd
+            reverse_proxy api:8000
+          }
+          EOF
+          chown -R ec2-user:ec2-user /opt/bigmelo
+          curl -L "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-aarch64" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+
+  ApiEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Condition: KeepLegacyApiInstance
+    Properties:
+      AllocationId: !GetAtt ApiElasticIp.AllocationId
+      InstanceId: !Ref ApiInstance
+
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub api.${DomainName}.
+      Type: A
+      TTL: !If [UseHighlyAvailableApi, !Ref AWS::NoValue, 60]
+      ResourceRecords: !If
+        - UseHighlyAvailableApi
+        - !Ref AWS::NoValue
+        - [!Ref ApiElasticIp]
+      AliasTarget: !If
+        - UseHighlyAvailableApi
+        - DNSName: !Ref ApiLoadBalancerDnsName
+          HostedZoneId: !Ref ApiLoadBalancerCanonicalHostedZoneId
+          EvaluateTargetHealth: true
+        - !Ref AWS::NoValue
+
+  WebRootDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub ${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt WebDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  WebWwwDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub www.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt WebDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  AdminDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub admin.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt AdminDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bigmelo-prod-github-actions-deploy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - repo:voitity-com/voitity-api:ref:refs/heads/prod
+                  - repo:voitity-com/voitity-admin:ref:refs/heads/prod
+                  - repo:voitity-com/voitity-web:ref:refs/heads/prod
+      Policies:
+        - PolicyName: bigmelo-prod-github-actions-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                  - ecr:DescribeRepositories
+                  - ecr:BatchGetImage
+                Resource: !GetAtt ApiRepository.Arn
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt WebBucket.Arn
+                  - !GetAtt AdminBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:PutObjectContentType
+                Resource:
+                  - !Sub ${WebBucket.Arn}/*
+                  - !Sub ${AdminBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource:
+                  - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}
+                  - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${AdminDistribution}
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref ExistingApiEnvSecretArn
+                  - !Ref ExistingWebEnvSecretArn
+                  - !Ref ExistingAdminEnvSecretArn
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript
+                  - !If
+                    - KeepLegacyApiInstance
+                    - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ApiInstance}
+                    - !Ref AWS::NoValue
+              - Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource: '*'
+
+Outputs:
+  HostedZoneId:
+    Value: !Ref HostedZone
+  NameServers:
+    Value: !Join [', ', !GetAtt HostedZone.NameServers]
+  ApiPublicIp:
+    Condition: KeepLegacyApiInstance
+    Value: !Ref ApiElasticIp
+  ApiInstanceId:
+    Condition: KeepLegacyApiInstance
+    Value: !Ref ApiInstance
+  DBEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DBPort:
+    Value: !GetAtt Database.Endpoint.Port
+  WebBucketName:
+    Value: !Ref WebBucket
+  AdminBucketName:
+    Value: !Ref AdminBucket
+  AssetsBucketName:
+    Value: !Ref AssetsBucket
+  PrivateBucketName:
+    Value: !Ref PrivateBucket
+  WebDistributionId:
+    Value: !Ref WebDistribution
+  WebDistributionDomainName:
+    Value: !GetAtt WebDistribution.DomainName
+  AdminDistributionId:
+    Value: !Ref AdminDistribution
+  AdminDistributionDomainName:
+    Value: !GetAtt AdminDistribution.DomainName
+  AssetsDistributionId:
+    Value: !Ref AssetsDistribution
+  AssetsDistributionDomainName:
+    Value: !GetAtt AssetsDistribution.DomainName
+  ApiRepositoryUri:
+    Value: !GetAtt ApiRepository.RepositoryUri
+  GitHubDeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
+  ApiEnvSecretArn:
+    Value: !Ref ExistingApiEnvSecretArn
+  WebEnvSecretArn:
+    Value: !Ref ExistingWebEnvSecretArn
+  AdminEnvSecretArn:
+    Value: !Ref ExistingAdminEnvSecretArn

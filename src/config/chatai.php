@@ -51,6 +51,8 @@ return [
             'whisper_model' => env('OPENAI_DEFAULT_WHISPER_MODEL', 'whisper-1'),
             'retry_attempts' => (int) env('OPENAI_CHAT_RETRY_ATTEMPTS', 3),
             'retry_delay_ms' => (int) env('OPENAI_CHAT_RETRY_DELAY_MS', 200),
+            'connect_timeout_seconds' => (int) env('OPENAI_CONNECT_TIMEOUT_SECONDS', 5),
+            'timeout_seconds' => (int) env('OPENAI_TIMEOUT_SECONDS', 60),
         ],
 
         // Additional drivers may be configured here.

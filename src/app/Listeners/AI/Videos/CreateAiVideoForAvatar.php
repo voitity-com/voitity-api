@@ -8,6 +8,7 @@ use App\Classes\VideoAIService\VideoAIService;
 use App\Enums\AvatarGenerationStatus;
 use App\Events\AI\Images\AiImageForAvatarGenerated;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
+use App\Listeners\Concerns\RoutesToMediaQueue;
 use App\Models\AiVideo as AiVideoModel;
 use App\Models\ProfileAvatar;
 use App\Models\User;
@@ -22,7 +23,7 @@ use Throwable;
 
 class CreateAiVideoForAvatar implements ShouldQueue
 {
-    use InteractsWithQueue;
+    use InteractsWithQueue, RoutesToMediaQueue;
 
     public int $tries = 3;
 

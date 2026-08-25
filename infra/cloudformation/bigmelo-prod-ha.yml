@@ -1,0 +1,803 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Bigmelo production highly available API, queues, protection, and monitoring
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0d7fbb8110287cfe3
+  ApiSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-0ef27446ff7285c8a,subnet-03dc226a5d0e1b242
+  DatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-0cffb2f6e7d910c10
+  ApiInstanceProfileName:
+    Type: String
+    Default: bigmelo-prod-api-instance-profile
+  ApiInstanceRoleName:
+    Type: String
+    Default: bigmelo-prod-api-instance-role
+  GitHubDeployRoleName:
+    Type: String
+    Default: bigmelo-prod-github-actions-deploy-role
+  ApiCertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:139194331469:certificate/1326735e-4314-4fde-81e8-e11badd1c145
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+  ApiInstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues: [t4g.small, t4g.medium]
+  DatabaseIdentifier:
+    Type: String
+    Default: bigmelo-prod-postgres
+  TargetHealthCheckPath:
+    Type: String
+    Default: /health/ready
+
+Resources:
+  ApiLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bigmelo production API load balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-api-alb-sg
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiAutoScalingSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bigmelo production API auto scaling instances
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ApiLoadBalancerSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: bigmelo-prod-api-asg-sg
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseIngressFromApiFleet:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ApiAutoScalingSecurityGroup
+      Description: PostgreSQL from Bigmelo API auto scaling instances
+
+  DefaultDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-default-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: bigmelo
+  ChatDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-chat-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: bigmelo
+  MediaDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-media-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: bigmelo
+
+  DefaultQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-default
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: 360
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DefaultDeadLetterQueue.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: bigmelo
+  ChatQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-chat
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: 180
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ChatDeadLetterQueue.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: bigmelo
+  MediaQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bigmelo-prod-media
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: 600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt MediaDeadLetterQueue.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: bigmelo
+
+  ApiFleetRuntimePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: bigmelo-prod-api-ha-runtime
+      Roles: [!Ref ApiInstanceRoleName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:ChangeMessageVisibility
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+              - sqs:ReceiveMessage
+              - sqs:SendMessage
+            Resource:
+              - !GetAtt DefaultQueue.Arn
+              - !GetAtt ChatQueue.Arn
+              - !GetAtt MediaQueue.Arn
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/bigmelo/prod/api:*
+
+  GitHubFleetDeploymentPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: bigmelo-prod-api-ha-deployment
+      Roles: [!Ref GitHubDeployRoleName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - autoscaling:DescribeAutoScalingGroups
+              - ec2:DescribeInstances
+            Resource: '*'
+          - Effect: Allow
+            Action: ssm:SendCommand
+            Resource:
+              - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*
+              - !Sub arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript
+          - Effect: Allow
+            Action: ssm:GetCommandInvocation
+            Resource: '*'
+
+  ApiLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: bigmelo-prod-api
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      SecurityGroups: [!Ref ApiLoadBalancerSecurityGroup]
+      Subnets: !Ref ApiSubnetIds
+      LoadBalancerAttributes:
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+        - Key: idle_timeout.timeout_seconds
+          Value: '65'
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: bigmelo-prod-api
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: !Ref TargetHealthCheckPath
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '60'
+      Tags:
+        - Key: Project
+          Value: bigmelo
+
+  ApiHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApiLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+  ApiHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApiLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref ApiCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+
+  ApiLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - ApiFleetRuntimePolicy
+      - DatabaseIngressFromApiFleet
+    Properties:
+      LaunchTemplateName: bigmelo-prod-api
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref ApiInstanceType
+        IamInstanceProfile:
+          Name: !Ref ApiInstanceProfileName
+        Monitoring:
+          Enabled: true
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2
+          InstanceMetadataTags: enabled
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true
+            DeleteOnTermination: true
+            DeviceIndex: 0
+            Groups: [!Ref ApiAutoScalingSecurityGroup]
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              Encrypted: true
+              VolumeSize: 30
+              VolumeType: gp3
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: bigmelo-prod-api
+              - Key: Project
+                Value: bigmelo
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Role
+                Value: api
+          - ResourceType: volume
+            Tags:
+              - Key: Project
+                Value: bigmelo
+              - Key: Environment
+                Value: !Ref Environment
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+            exec > >(tee /var/log/bigmelo-bootstrap.log | logger -t bigmelo-bootstrap -s 2>/dev/console) 2>&1
+            dnf install -y docker jq
+            systemctl enable --now docker
+            mkdir -p /opt/bigmelo/api
+            curl --fail --silent --show-error --location https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-aarch64 --output /usr/local/bin/docker-compose
+            chmod 755 /usr/local/bin/docker-compose
+            curl --fail --silent --show-error --location https://raw.githubusercontent.com/voitity-com/voitity-api/prod/scripts/deploy/sync-production-env.sh --output /opt/bigmelo/api/sync-production-env.sh
+            chmod 700 /opt/bigmelo/api/sync-production-env.sh
+            /opt/bigmelo/api/sync-production-env.sh /opt/bigmelo/api E1JCE02W8YORM9 cg_3HssyFmBRJaNvWTE6U6462XBKA6 d1qu74lthifh92.cloudfront.net
+            cat > /opt/bigmelo/api/docker-compose.yml <<'EOF'
+            services:
+              api:
+                image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+                restart: unless-stopped
+                env_file: .env
+                environment: &queue-environment
+                  AWS_DEFAULT_REGION: ${AWS::Region}
+                  QUEUE_CONNECTION: sqs
+                  SQS_PREFIX: https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}
+                  SQS_QUEUE: bigmelo-prod-default
+                  SQS_CHAT_QUEUE: bigmelo-prod-chat
+                  SQS_MEDIA_QUEUE: bigmelo-prod-media
+                  SQS_AFTER_COMMIT: "true"
+                  SQS_BLOCK_FOR: "20"
+                ports:
+                  - "80:8000"
+                healthcheck:
+                  test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health/ready"]
+                  interval: 15s
+                  timeout: 5s
+                  retries: 4
+                  start_period: 60s
+                logging: &aws-logging
+                  driver: awslogs
+                  options:
+                    awslogs-region: ${AWS::Region}
+                    awslogs-group: /bigmelo/prod/api
+              worker-chat:
+                image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+                restart: unless-stopped
+                env_file: .env
+                environment: *queue-environment
+                command: ["php", "artisan", "queue:work", "sqs", "--queue=bigmelo-prod-chat,bigmelo-prod-default", "--sleep=1", "--tries=3", "--timeout=300", "--max-time=3600"]
+                logging:
+                  <<: *aws-logging
+                  options:
+                    awslogs-region: ${AWS::Region}
+                    awslogs-group: /bigmelo/prod/api
+              worker-media:
+                image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+                restart: unless-stopped
+                env_file: .env
+                environment: *queue-environment
+                command: ["php", "artisan", "queue:work", "sqs", "--queue=bigmelo-prod-media", "--sleep=1", "--tries=3", "--timeout=600", "--max-time=3600"]
+                logging:
+                  <<: *aws-logging
+                  options:
+                    awslogs-region: ${AWS::Region}
+                    awslogs-group: /bigmelo/prod/api
+              scheduler:
+                image: ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+                restart: unless-stopped
+                env_file: .env
+                environment: *queue-environment
+                command: ["php", "artisan", "schedule:work", "--no-interaction"]
+                logging:
+                  <<: *aws-logging
+                  options:
+                    awslogs-region: ${AWS::Region}
+                    awslogs-group: /bigmelo/prod/api
+            EOF
+            cd /opt/bigmelo/api
+            aws ecr get-login-password --region ${AWS::Region} | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
+            docker pull ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bigmelo/voitity-api:prod
+            /usr/local/bin/docker-compose up -d --remove-orphans
+
+  ApiAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: ApiHttpsListener
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: 1
+        MinInstancesInService: 1
+        PauseTime: PT5M
+    Properties:
+      AutoScalingGroupName: bigmelo-prod-api
+      MinSize: '2'
+      DesiredCapacity: '2'
+      MaxSize: '6'
+      VPCZoneIdentifier: !Ref ApiSubnetIds
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      DefaultInstanceWarmup: 180
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ApiLaunchTemplate
+        Version: !GetAtt ApiLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs: [!Ref ApiTargetGroup]
+      MetricsCollection:
+        - Granularity: 1Minute
+          Metrics:
+            - GroupDesiredCapacity
+            - GroupInServiceInstances
+            - GroupMaxSize
+            - GroupMinSize
+            - GroupPendingInstances
+            - GroupTotalInstances
+      Tags:
+        - Key: Project
+          Value: bigmelo
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: Role
+          Value: api
+          PropagateAtLaunch: true
+
+  ApiCpuScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref ApiAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      EstimatedInstanceWarmup: 180
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 55
+  ApiRequestScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref ApiAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      EstimatedInstanceWarmup: 180
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Join
+            - /
+            - - !GetAtt ApiLoadBalancer.LoadBalancerFullName
+              - !GetAtt ApiTargetGroup.TargetGroupFullName
+        TargetValue: 600
+  ApiChatQueueScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref ApiAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      EstimatedInstanceWarmup: 180
+      TargetTrackingConfiguration:
+        CustomizedMetricSpecification:
+          Namespace: AWS/SQS
+          MetricName: ApproximateNumberOfMessagesVisible
+          Statistic: Average
+          Dimensions:
+            - Name: QueueName
+              Value: !GetAtt ChatQueue.QueueName
+        TargetValue: 5
+  ApiMediaQueueScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref ApiAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      EstimatedInstanceWarmup: 180
+      TargetTrackingConfiguration:
+        CustomizedMetricSpecification:
+          Namespace: AWS/SQS
+          MetricName: ApproximateNumberOfMessagesVisible
+          Statistic: Average
+          Dimensions:
+            - Name: QueueName
+              Value: !GetAtt MediaQueue.QueueName
+        TargetValue: 2
+
+  ApiWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: bigmelo-prod-api
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: bigmelo-prod-api-waf
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: AWSManagedCommon
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              RuleActionOverrides:
+                - Name: SizeRestrictions_BODY
+                  ActionToUse:
+                    Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: managed-common
+            SampledRequestsEnabled: true
+        - Name: AWSManagedKnownBadInputs
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: managed-known-bad-inputs
+            SampledRequestsEnabled: true
+        - Name: PerIpRateLimit
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              AggregateKeyType: IP
+              Limit: 1200
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: per-ip-rate-limit
+            SampledRequestsEnabled: true
+
+  ApiWebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApiLoadBalancer
+      WebACLArn: !GetAtt ApiWebAcl.Arn
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: bigmelo-prod-operations
+      Tags:
+        - Key: Project
+          Value: bigmelo
+
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: bigmelo-prod-monthly
+        BudgetLimit:
+          Amount: 150
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: MONTHLY
+
+  ApiUnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo API has an unhealthy target
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApiLoadBalancer.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt ApiTargetGroup.TargetGroupFullName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  ApiFiveXxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo API target 5xx errors are elevated
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApiLoadBalancer.LoadBalancerFullName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  ApiLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo API p99 latency is above two seconds
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApiLoadBalancer.LoadBalancerFullName
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  ApiFleetCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo API has fewer than two in-service instances
+      Namespace: AWS/AutoScaling
+      MetricName: GroupInServiceInstances
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ApiAutoScalingGroup
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 2
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+  DatabaseCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo PostgreSQL CPU is elevated
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseIdentifier
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+  DatabaseStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo PostgreSQL free storage is below five GiB
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseIdentifier
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5368709120
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+  ChatQueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo chat queue oldest message is over two minutes
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ChatQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 120
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  MediaQueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo media queue oldest message is over ten minutes
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt MediaQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 600
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  DeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo chat dead letter queue contains a failed job
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ChatDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  ApiExternalHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTPS
+        FullyQualifiedDomainName: api.bigmelo.com
+        Port: 443
+        ResourcePath: /health/ready
+        RequestInterval: 30
+        FailureThreshold: 3
+        MeasureLatency: true
+      HealthCheckTags:
+        - Key: Name
+          Value: bigmelo-prod-api
+  ApiExternalHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo API is failing external HTTPS health checks
+      Namespace: AWS/Route53
+      MetricName: HealthCheckStatus
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref ApiExternalHealthCheck
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  OperationsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: bigmelo-prod-operations
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {"type":"metric","x":0,"y":0,"width":12,"height":6,"properties":{"title":"API traffic and errors","region":"${AWS::Region}","period":300,"metrics":[["AWS/ApplicationELB","RequestCount","LoadBalancer","${ApiLoadBalancer.LoadBalancerFullName}",{"stat":"Sum"}],[".","HTTPCode_Target_5XX_Count",".",".",{"stat":"Sum","yAxis":"right"}]]}},
+            {"type":"metric","x":12,"y":0,"width":12,"height":6,"properties":{"title":"API capacity","region":"${AWS::Region}","period":60,"metrics":[["AWS/AutoScaling","GroupInServiceInstances","AutoScalingGroupName","bigmelo-prod-api"],["AWS/EC2","CPUUtilization","AutoScalingGroupName","bigmelo-prod-api",{"stat":"Average","yAxis":"right"}]]}},
+            {"type":"metric","x":0,"y":6,"width":12,"height":6,"properties":{"title":"Queue backlog","region":"${AWS::Region}","period":60,"metrics":[["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","bigmelo-prod-chat"],[".",".",".","bigmelo-prod-default"],[".",".",".","bigmelo-prod-media"]]}},
+            {"type":"metric","x":12,"y":6,"width":12,"height":6,"properties":{"title":"PostgreSQL","region":"${AWS::Region}","period":300,"metrics":[["AWS/RDS","CPUUtilization","DBInstanceIdentifier","${DatabaseIdentifier}"],[".","DatabaseConnections",".",".",{"yAxis":"right"}],[".","FreeStorageSpace",".",".",{"yAxis":"right"}]]}}
+          ]
+        }
+
+Outputs:
+  ApiLoadBalancerArn:
+    Value: !Ref ApiLoadBalancer
+  ApiLoadBalancerDnsName:
+    Value: !GetAtt ApiLoadBalancer.DNSName
+  ApiLoadBalancerCanonicalHostedZoneId:
+    Value: !GetAtt ApiLoadBalancer.CanonicalHostedZoneID
+  ApiAutoScalingGroupName:
+    Value: !Ref ApiAutoScalingGroup
+  ApiTargetGroupArn:
+    Value: !Ref ApiTargetGroup
+  DefaultQueueUrl:
+    Value: !Ref DefaultQueue
+  ChatQueueUrl:
+    Value: !Ref ChatQueue
+  MediaQueueUrl:
+    Value: !Ref MediaQueue
+  AlarmTopicArn:
+    Value: !Ref AlarmTopic
+  OperationsDashboardName:
+    Value: !Ref OperationsDashboard

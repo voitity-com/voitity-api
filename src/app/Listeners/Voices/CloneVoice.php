@@ -7,6 +7,7 @@ use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Jobs\Voices\DeleteReplacedProviderVoice;
+use App\Listeners\Concerns\RoutesToMediaQueue;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 
 class CloneVoice implements ShouldQueue
 {
-    use InteractsWithQueue;
+    use InteractsWithQueue, RoutesToMediaQueue;
 
     /**
      * The number of times the job may be attempted.

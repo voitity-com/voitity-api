@@ -6,11 +6,13 @@ use App\Classes\ChatAIService\AnswerBuilder;
 use App\Classes\ChatAIService\AnswerResponse;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Events\MessageStored;
+use App\Jobs\ProcessStoredMessageJob;
 use App\Listeners\ProcessStoredMessage;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Mockery;
 use Tests\TestCase;
 
@@ -20,6 +22,18 @@ class ProcessStoredMessageTest extends TestCase
     {
         Mockery::close();
         parent::tearDown();
+    }
+
+    public function test_listener_is_queued_after_commit_on_the_chat_queue(): void
+    {
+        config(['queue.workloads.chat' => 'chat']);
+        $job = new ProcessStoredMessageJob(123);
+
+        $this->assertInstanceOf(ShouldQueueAfterCommit::class, $job);
+        $this->assertSame('chat', $job->queue);
+        $this->assertSame([5, 30, 120], $job->backoff());
+        $this->assertSame(3, $job->tries);
+        $this->assertSame(90, $job->timeout);
     }
 
     public function test_handle_processes_question_and_sets_flags(): void

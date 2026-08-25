@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: Deploy the built image to the production EC2 host
+        description: Deploy the built image to the production API fleet
         required: true
         type: boolean
         default: true
@@ -20,7 +20,8 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::139194331469:role/bigmelo-prod-github-actions-deploy-role
   ECR_REPOSITORY: bigmelo/voitity-api
-  EC2_INSTANCE_ID: i-0133c4ba00b95904d
+  AUTO_SCALING_GROUP: bigmelo-prod-api
+  LEGACY_EC2_INSTANCE_ID: i-0133c4ba00b95904d
 
 jobs:
   deploy:
@@ -57,7 +58,7 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:prod
 
-      - name: Deploy on EC2 and run migrations
+      - name: Deploy sequentially and run migrations once
         if: github.event_name == 'push' || inputs.deploy
         env:
           PROFILE_DOMAIN_CONNECTION_GROUP_ID: ${{ vars.PROFILE_DOMAIN_CONNECTION_GROUP_ID }}
@@ -72,59 +73,90 @@ jobs:
 
           BIGMELO_SYNC_SCRIPT_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/scripts/deploy/sync-production-env.sh"
           BIGMELO_SYNC_COMMAND="\"\$BIGMELO_SYNC_SCRIPT\" /opt/bigmelo/api '$PROFILE_DOMAIN_DISTRIBUTION_ID' '$PROFILE_DOMAIN_CONNECTION_GROUP_ID' '$PROFILE_DOMAIN_ROUTING_ENDPOINT'"
-          BIGMELO_COMMANDS="$(jq -cn \
-            --arg sync_script_url "$BIGMELO_SYNC_SCRIPT_URL" \
-            --arg sync_command "$BIGMELO_SYNC_COMMAND" \
-            '[
-              "set -euo pipefail",
-              "cd /opt/bigmelo/api",
-              "BIGMELO_SYNC_SCRIPT=$(mktemp)",
-              "trap '\''rm -f \"$BIGMELO_SYNC_SCRIPT\"'\'' EXIT",
-              ("curl --fail --silent --show-error --location " + ($sync_script_url | @sh) + " --output \"$BIGMELO_SYNC_SCRIPT\""),
-              "chmod 700 \"$BIGMELO_SYNC_SCRIPT\"",
-              $sync_command,
-              "test -s .env",
-              "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 139194331469.dkr.ecr.us-east-1.amazonaws.com",
-              "/usr/local/bin/docker-compose pull",
-              "/usr/local/bin/docker-compose run --rm api php artisan optimize:clear",
-              "/usr/local/bin/docker-compose run --rm api php artisan migrate --force",
-              "/usr/local/bin/docker-compose run --rm api php artisan products:refresh-social-images",
-              "/usr/local/bin/docker-compose up -d --force-recreate --remove-orphans",
-              "/usr/local/bin/docker-compose exec -T api php artisan queue:restart || /usr/local/bin/docker-compose run --rm api php artisan queue:restart",
-              "docker image prune -f"
-            ]')"
 
-          COMMAND_ID="$(aws ssm send-command \
+          INSTANCE_IDS="$(aws autoscaling describe-auto-scaling-groups \
             --region "$AWS_REGION" \
-            --instance-ids "$EC2_INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy $GITHUB_REPOSITORY@$GITHUB_SHA" \
-            --parameters "$(jq -cn --argjson commands "$BIGMELO_COMMANDS" '{commands: $commands}')" \
-            --query "Command.CommandId" \
+            --auto-scaling-group-names "$AUTO_SCALING_GROUP" \
+            --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
             --output text)"
 
-          for attempt in {1..90}; do
-            STATUS="$(aws ssm get-command-invocation \
+          if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
+            INSTANCE_IDS="$LEGACY_EC2_INSTANCE_ID"
+          fi
+
+          run_on_instance() {
+            local instance_id="$1"
+            local run_migrations="$2"
+            local migration_command="true"
+
+            if [ "$run_migrations" = "true" ]; then
+              migration_command="/usr/local/bin/docker-compose run --rm api php artisan migrate --force && /usr/local/bin/docker-compose run --rm api php artisan products:refresh-social-images"
+            fi
+
+            local commands
+            commands="$(jq -cn \
+              --arg sync_script_url "$BIGMELO_SYNC_SCRIPT_URL" \
+              --arg sync_command "$BIGMELO_SYNC_COMMAND" \
+              --arg migration_command "$migration_command" \
+              '[
+                "set -euo pipefail",
+                "cd /opt/bigmelo/api",
+                "BIGMELO_SYNC_SCRIPT=$(mktemp)",
+                "trap '\''rm -f \"$BIGMELO_SYNC_SCRIPT\"'\'' EXIT",
+                ("curl --fail --silent --show-error --location " + ($sync_script_url | @sh) + " --output \"$BIGMELO_SYNC_SCRIPT\""),
+                "chmod 700 \"$BIGMELO_SYNC_SCRIPT\"",
+                $sync_command,
+                "test -s .env",
+                "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 139194331469.dkr.ecr.us-east-1.amazonaws.com",
+                "docker pull 139194331469.dkr.ecr.us-east-1.amazonaws.com/bigmelo/voitity-api:prod",
+                "/usr/local/bin/docker-compose run --rm api php artisan optimize:clear",
+                $migration_command,
+                "/usr/local/bin/docker-compose up -d --force-recreate --remove-orphans",
+                "/usr/local/bin/docker-compose exec -T api php artisan optimize",
+                "/usr/local/bin/docker-compose exec -T api php artisan queue:restart || true",
+                "for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1/health/ready && exit 0; sleep 5; done; exit 1"
+              ]')"
+
+            local command_id
+            command_id="$(aws ssm send-command \
               --region "$AWS_REGION" \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$EC2_INSTANCE_ID" \
-              --query "Status" \
-              --output text 2>/dev/null || true)"
+              --instance-ids "$instance_id" \
+              --document-name AWS-RunShellScript \
+              --comment "Deploy $GITHUB_REPOSITORY@$GITHUB_SHA" \
+              --parameters "$(jq -cn --argjson commands "$commands" '{commands: $commands}')" \
+              --query Command.CommandId \
+              --output text)"
 
-            case "$STATUS" in
-              Success)
-                aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID" --query "StandardOutputContent" --output text
-                exit 0
-                ;;
-              Failed|Cancelled|TimedOut)
-                aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID" --query "StandardOutputContent" --output text || true
-                aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID" --query "StandardErrorContent" --output text || true
-                exit 1
-                ;;
-            esac
+            for attempt in {1..120}; do
+              local status
+              status="$(aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$command_id" \
+                --instance-id "$instance_id" \
+                --query Status \
+                --output text 2>/dev/null || true)"
 
-            sleep 10
+              case "$status" in
+                Success)
+                  aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$command_id" --instance-id "$instance_id" --query StandardOutputContent --output text
+                  return 0
+                  ;;
+                Failed|Cancelled|TimedOut)
+                  aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$command_id" --instance-id "$instance_id" --query StandardOutputContent --output text || true
+                  aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$command_id" --instance-id "$instance_id" --query StandardErrorContent --output text || true
+                  return 1
+                  ;;
+              esac
+
+              sleep 5
+            done
+
+            echo "Timed out waiting for SSM command $command_id on $instance_id"
+            return 1
+          }
+
+          migration_pending=true
+          for instance_id in $INSTANCE_IDS; do
+            run_on_instance "$instance_id" "$migration_pending"
+            migration_pending=false
           done
-
-          echo "Timed out waiting for SSM command $COMMAND_ID"
-          exit 1

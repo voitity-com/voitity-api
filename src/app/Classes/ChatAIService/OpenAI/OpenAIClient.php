@@ -48,6 +48,10 @@ class OpenAIClient implements ChatAIClient
 
     private int $retryDelayMs;
 
+    private int $connectTimeoutSeconds;
+
+    private int $timeoutSeconds;
+
     /**
      * Create a new OpenAIClient instance.
      */
@@ -57,7 +61,9 @@ class OpenAIClient implements ChatAIClient
         ?string $defaultModel = null,
         ?string $whisperModel = null,
         ?int $retryAttempts = null,
-        ?int $retryDelayMs = null
+        ?int $retryDelayMs = null,
+        ?int $connectTimeoutSeconds = null,
+        ?int $timeoutSeconds = null
     ) {
         $this->apiKey = $apiKey ?: config('services.openai.api_key');
         $this->baseUrl = $baseUrl ?: 'https://api.openai.com/v1';
@@ -65,6 +71,8 @@ class OpenAIClient implements ChatAIClient
         $this->whisperModel = $whisperModel ?: 'whisper-1';
         $this->retryAttempts = max(1, $retryAttempts ?? 1);
         $this->retryDelayMs = max(0, $retryDelayMs ?? 0);
+        $this->connectTimeoutSeconds = max(1, $connectTimeoutSeconds ?? 5);
+        $this->timeoutSeconds = max($this->connectTimeoutSeconds, $timeoutSeconds ?? 60);
     }
 
     /**
@@ -166,7 +174,9 @@ class OpenAIClient implements ChatAIClient
                 $response = Http::withHeaders([
                     'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
-                ])->post($requestUrl, $payload);
+                ])->connectTimeout($this->connectTimeoutSeconds)
+                    ->timeout($this->timeoutSeconds)
+                    ->post($requestUrl, $payload);
 
                 if (! $this->shouldRetryResponse($response) || $attempt === $this->retryAttempts) {
                     return $response;
@@ -236,14 +246,16 @@ class OpenAIClient implements ChatAIClient
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$this->apiKey,
-            ])->attach(
-                'file',
-                file_get_contents($audioPath),
-                basename($audioPath)
-            )->post($requestUrl, [
-                'model' => $this->whisperModel,
-                'response_format' => 'verbose_json',
-            ]);
+            ])->connectTimeout($this->connectTimeoutSeconds)
+                ->timeout($this->timeoutSeconds)
+                ->attach(
+                    'file',
+                    file_get_contents($audioPath),
+                    basename($audioPath)
+                )->post($requestUrl, [
+                    'model' => $this->whisperModel,
+                    'response_format' => 'verbose_json',
+                ]);
 
             $responseData = $response->json();
 

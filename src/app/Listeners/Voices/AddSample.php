@@ -4,13 +4,14 @@ namespace App\Listeners\Voices;
 
 use App\Classes\VoiceService\VoiceService;
 use App\Events\Voices\VoiceSampleAdded;
+use App\Listeners\Concerns\RoutesToMediaQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
 
 class AddSample implements ShouldQueue
 {
-    use InteractsWithQueue;
+    use InteractsWithQueue, RoutesToMediaQueue;
 
     /**
      * The number of times the job may be attempted.

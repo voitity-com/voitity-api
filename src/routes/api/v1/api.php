@@ -113,6 +113,9 @@ Route::prefix('/public')->group(function () {
     Route::post('/profiles/{profile}/messages/audio', [MessageController::class, 'publicStoreAudio'])
         ->whereNumber('profile')
         ->middleware('throttle:profile-messages');
+    Route::get('/profiles/{profile}/messages/{message}/status', [MessageController::class, 'publicStatus'])
+        ->whereNumber(['profile', 'message'])
+        ->middleware('throttle:public-profile-reads');
     Route::post('/profiles/{profile}/messages', [MessageController::class, 'publicStore'])
         ->whereNumber('profile')
         ->middleware('throttle:profile-messages');

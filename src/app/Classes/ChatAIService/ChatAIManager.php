@@ -30,6 +30,8 @@ class ChatAIManager extends Manager
             whisperModel: $config['whisper_model'] ?? null,
             retryAttempts: $config['retry_attempts'] ?? null,
             retryDelayMs: $config['retry_delay_ms'] ?? null,
+            connectTimeoutSeconds: $config['connect_timeout_seconds'] ?? null,
+            timeoutSeconds: $config['timeout_seconds'] ?? null,
         );
     }
 
