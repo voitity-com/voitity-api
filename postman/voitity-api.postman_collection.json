@@ -6686,7 +6686,7 @@
                     "cv"
                   ]
                 },
-                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. Text-only input is stored as a downloadable TXT file. Readable, non-duplicate sources are automatically queued for approval, synchronization, and embedding indexing. Poll List Profile Sources until status is indexed or failed."
+                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. Text-only input is stored as a downloadable TXT file. Readable, non-duplicate sources are automatically queued for approval, synchronization, and embedding indexing. Poll List Profile Sources until status is indexed or failed. Unexpected import failures return HTTP 500 with the stable message: Profile source could not be imported. Please review the content and try again. Internal database details are only written to server logs."
               },
               "response": [],
               "event": [

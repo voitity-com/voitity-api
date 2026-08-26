@@ -63,6 +63,43 @@ class LocalProfileKnowledgeClientTest extends TestCase
         $this->assertNotContains('Habilidades', collect($result->items('projects'))->pluck('name')->all());
     }
 
+    #[Test]
+    public function it_does_not_turn_unstructured_prose_into_work_experience(): void
+    {
+        $client = new LocalProfileKnowledgeClient;
+        $profile = new Profile(['profession_key' => 'custom']);
+        $text = str_repeat(
+            'Wonder Woman is a fictional superhero whose story includes history, values, allies, and adventures. ',
+            8
+        );
+
+        $result = $client->structureCv($profile, $text);
+
+        $this->assertTrue($result->isSuccessful());
+        $this->assertSame([], $result->items('work'));
+        $this->assertSame([], $result->items('projects'));
+        $this->assertStringStartsWith('Wonder Woman', $result->data['summary']);
+    }
+
+    #[Test]
+    public function it_still_detects_headingless_cv_work_entries(): void
+    {
+        $client = new LocalProfileKnowledgeClient;
+        $profile = new Profile(['profession_key' => 'developer']);
+
+        $result = $client->structureCv($profile, implode("\n", [
+            'Acme Labs',
+            'SENIOR SOFTWARE ENGINEER',
+            'Jan 2022 - Present',
+            'Remote',
+            'Built Laravel APIs and React applications.',
+        ]));
+
+        $this->assertCount(1, $result->items('work'));
+        $this->assertSame('Acme Labs', $result->items('work')[0]['company']);
+        $this->assertSame('Senior Software Engineer', $result->items('work')[0]['role']);
+    }
+
     private function abelCvText(): string
     {
         return implode("\n", [
