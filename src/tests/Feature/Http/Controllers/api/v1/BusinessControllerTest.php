@@ -383,22 +383,12 @@ class BusinessControllerTest extends TestAPI
             ->assertOk()
             ->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.messages.0.role', 'assistant')
-            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
-            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
-
-        $this->withHeaders($headers)
-            ->postJson("/api/business/conversations/{$conversation}/messages", [
-                'message' => 'Me llamo Ana Pérez, email ana@example.com, teléfono +57 300 123 4567, empresa: Acme, sitio web acme.com.',
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'in_progress')
-            ->assertJsonPath('data.finished', false)
-            ->assertJsonPath('data.messages.0.required_fields', ['whatsapp'])
-            ->assertJsonFragment(['content' => 'Para continuar necesitamos: WhatsApp con indicativo de país. Recuerda incluir el indicativo de país en teléfono y WhatsApp.']);
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['whatsapp', 'company', 'website']);
 
         $completed = $this->withHeaders($headers)
             ->postJson("/api/business/conversations/{$conversation}/messages", [
-                'message' => 'Mi WhatsApp es +57 301 765 4321.',
+                'message' => 'Me llamo Ana Pérez, email ana@example.com, teléfono +57 300 123 4567, empresa: Acme, sitio web acme.com.',
             ])
             ->assertOk()
             ->assertJsonPath('data.status', 'completed')
@@ -414,7 +404,7 @@ class BusinessControllerTest extends TestAPI
             'email' => 'ana@example.com',
             'company' => 'Acme',
             'phone' => '+573001234567',
-            'whatsapp' => '+573017654321',
+            'whatsapp' => null,
             'website' => 'https://acme.com',
         ]);
         $lead = $business->leads()->firstOrFail();
@@ -424,7 +414,7 @@ class BusinessControllerTest extends TestAPI
             $html = $mail->render();
             $envelope = $mail->envelope();
 
-            return str_contains($html, '+573017654321')
+            return str_contains($html, 'No informado')
                 && str_contains($html, 'acme.com')
                 && str_contains($html, 'Problema descrito por el cliente')
                 && str_contains($html, 'Posible solución planteada por la IA')
@@ -565,9 +555,9 @@ class BusinessControllerTest extends TestAPI
                 'message' => 'Queremos atender preguntas frecuentes de clientes, derivar casos complejos y recopilar sus datos de contacto.',
             ])
             ->assertOk()
-            ->assertJsonPath('data.messages.0.content', '¡Perfecto! Para continuar indícanos: nombre y apellido, email válido, teléfono con indicativo de país y WhatsApp con indicativo de país. También puedes indicarnos empresa y sitio web; son opcionales.')
-            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
-            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+            ->assertJsonPath('data.messages.0.content', '¡Perfecto! Para continuar indícanos: nombre y apellido, email válido y teléfono con indicativo de país. También puedes indicarnos WhatsApp con indicativo de país, empresa y sitio web; son opcionales.')
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['whatsapp', 'company', 'website']);
 
         $this->withHeaders($headers)
             ->postJson("/api/business/conversations/{$conversation}/messages", [
@@ -626,8 +616,8 @@ class BusinessControllerTest extends TestAPI
                 'message' => 'Necesito un chatbot para recibir pedidos, consultar inventario y derivar conversaciones a una persona.',
             ])
             ->assertOk()
-            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp'])
-            ->assertJsonPath('data.messages.0.optional_fields', ['company', 'website']);
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone'])
+            ->assertJsonPath('data.messages.0.optional_fields', ['whatsapp', 'company', 'website']);
     }
 
     public function test_public_chat_answers_a_configured_decision_from_vectorized_business_sources(): void
@@ -657,7 +647,7 @@ class BusinessControllerTest extends TestAPI
             'fields' => ['project_summary' => 'Necesito tomar mejores deciciones en mi negocio y entender qué acciones ejecutar.'],
         ])->assertOk()
             ->assertJsonPath('data.status', 'in_progress')
-            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone', 'whatsapp']);
+            ->assertJsonPath('data.messages.0.required_fields', ['full_name', 'email', 'phone']);
 
         $conversationId = Business::query()->findOrFail($business->id)
             ->conversations()->where('uuid', $conversation)->value('id');
@@ -1080,7 +1070,7 @@ class BusinessControllerTest extends TestAPI
             ->assertJsonPath('data.messages.0.fields.4.label', 'Company')
             ->assertJsonPath('data.messages.0.fields.4.required', false)
             ->assertJsonPath('data.messages.0.fields.5.label', 'Website')
-            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email, phone with country code and WhatsApp with country code. You may also provide company and website; these fields are optional.']);
+            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email and phone with country code. You may also provide WhatsApp with country code, company and website; these fields are optional.']);
 
         $this->withHeaders($headers)
             ->postJson("/api/business/conversations/{$conversation}/messages", [
@@ -1139,7 +1129,7 @@ class BusinessControllerTest extends TestAPI
             ->assertJsonPath('data.locale', 'en')
             ->assertJsonPath('data.messages.0.locale', 'en')
             ->assertJsonPath('data.messages.0.fields.0.label', 'Full name')
-            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email, phone with country code and WhatsApp with country code. You may also provide company and website; these fields are optional.']);
+            ->assertJsonFragment(['content' => 'Great! To continue, please provide: full name, valid email and phone with country code. You may also provide WhatsApp with country code, company and website; these fields are optional.']);
 
         $this->assertDatabaseHas('business_conversations', ['uuid' => $conversation, 'locale' => 'en']);
     }

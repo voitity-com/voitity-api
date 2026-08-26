@@ -59,17 +59,17 @@ class BusinessFlowTemplate
                     'message' => '{{contact_request}}',
                     'messages' => ['es' => '{{contact_request}}', 'en' => '{{contact_request}}'],
                     'wait_for_input' => true,
-                    'required_fields' => ['full_name', 'email', 'phone', 'whatsapp'],
-                    'optional_fields' => ['company', 'website'],
+                    'required_fields' => ['full_name', 'email', 'phone'],
+                    'optional_fields' => ['whatsapp', 'company', 'website'],
                 ]),
                 $this->node('extract_details', 'action', 'Obtener datos de la respuesta', 2200, 620, [
                     'action' => 'extract_fields',
-                    'required_fields' => ['full_name', 'email', 'phone', 'whatsapp', 'project_summary'],
-                    'optional_fields' => ['company', 'website'],
+                    'required_fields' => ['full_name', 'email', 'phone', 'project_summary'],
+                    'optional_fields' => ['whatsapp', 'company', 'website'],
                 ]),
                 $this->node('details_complete', 'decision', '¿Los datos están completos?', 2560, 620, [
                     'mode' => 'required_fields_complete',
-                    'required_fields' => ['full_name', 'email', 'phone', 'whatsapp', 'project_summary'],
+                    'required_fields' => ['full_name', 'email', 'phone', 'project_summary'],
                     'branches' => ['complete', 'incomplete'],
                 ]),
                 $this->node('missing_details', 'instruction', 'Solicitar datos faltantes', 2920, 260, [

@@ -16,7 +16,7 @@ class BusinessLeadService
     {
         $context = $conversation->context ?? [];
         $leadData = is_array($context['lead_data'] ?? null) ? $context['lead_data'] : [];
-        $required = ['full_name', 'email', 'phone', 'whatsapp', 'project_summary'];
+        $required = ['full_name', 'email', 'phone', 'project_summary'];
         $missing = collect($required)->filter(fn (string $field): bool => blank($leadData[$field] ?? null))->values()->all();
         $solution = trim((string) ($context['ai_solution_summary'] ?? ''));
         if ($missing !== [] || $solution === '') {
