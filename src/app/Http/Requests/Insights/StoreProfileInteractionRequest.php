@@ -33,6 +33,7 @@ class StoreProfileInteractionRequest extends FormRequest
             'media_type' => ['nullable', Rule::in(['image', 'video'])],
             'metadata' => ['nullable', 'array'],
             'metadata.destination_type' => ['nullable', Rule::in(['external_url', 'whatsapp', 'telegram'])],
+            'metadata.share_method' => ['nullable', Rule::in(['native', 'clipboard'])],
         ];
     }
 }

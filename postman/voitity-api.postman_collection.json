@@ -3620,6 +3620,44 @@
           "response": []
         },
         {
+          "name": "Record Public Profile Share",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000005\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"profile_shared\",\n  \"surface\": \"profile_social_nav\",\n  \"metadata\": {\n    \"share_method\": \"native\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent profile share and whether the native share sheet or clipboard fallback was used."
+          },
+          "response": []
+        },
+        {
           "name": "Get Public Widget Configuration",
           "event": [
             {

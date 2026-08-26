@@ -2945,6 +2945,9 @@
                                             "es",
                                             "en"
                                         ]
+                                    },
+                                    "attribution": {
+                                        "type": "object"
                                     }
                                 },
                                 "type": "object"
@@ -3128,6 +3131,7 @@
                                         "type": "string",
                                         "enum": [
                                             "profile_viewed",
+                                            "profile_shared",
                                             "product_clicked",
                                             "media_opened",
                                             "media_external_clicked",
@@ -3156,6 +3160,18 @@
                                     },
                                     "surface": {
                                         "type": "string"
+                                    },
+                                    "metadata": {
+                                        "properties": {
+                                            "share_method": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "native",
+                                                    "clipboard"
+                                                ]
+                                            }
+                                        },
+                                        "type": "object"
                                     }
                                 },
                                 "type": "object"

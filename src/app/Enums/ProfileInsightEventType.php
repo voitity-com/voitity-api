@@ -10,5 +10,6 @@ enum ProfileInsightEventType: string
     case MediaShown = 'media_shown';
     case MediaOpened = 'media_opened';
     case MediaExternalClicked = 'media_external_clicked';
+    case ProfileShared = 'profile_shared';
     case SocialLinkClicked = 'social_link_clicked';
 }
