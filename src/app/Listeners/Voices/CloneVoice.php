@@ -13,6 +13,7 @@ use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileVoiceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -73,6 +74,7 @@ class CloneVoice implements ShouldQueue
         }
 
         $usageKey = "voice-clone:provider-request:{$providerRequest->id}";
+        $hadConfiguredVoice = app(ProfileVoiceSettings::class)->voiceIsConfigured($voice);
         $replacedProviderVoiceId = $voice->source_voice_id;
         $replacedProvider = $voice->source;
 
@@ -100,6 +102,8 @@ class CloneVoice implements ShouldQueue
             ]);
 
             if ($clonedVoice->isSuccessful()) {
+                app(ProfileVoiceSettings::class)->initializeAfterSuccessfulClone($voice, $hadConfiguredVoice);
+
                 app(SubscriptionUsageRecorder::class)->finalize(
                     $usageKey,
                     [

@@ -8,12 +8,44 @@ use App\Enums\ProfileStatus;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
+use App\Models\ProfileInteractionEvent;
 use App\Models\ProfileProduct;
 use App\Models\User;
 use Illuminate\Support\Str;
 
 class PublicProfileInteractionControllerTest extends TestAPI
 {
+    public function test_public_profile_share_records_its_method(): void
+    {
+        $profile = Profile::factory()->for(User::factory())->create([
+            'active' => true,
+            'status' => ProfileStatus::Published,
+        ]);
+
+        $this->postJson("/api/public/profiles/{$profile->id}/interactions", [
+            'event_id' => (string) Str::uuid(),
+            'visitor_id' => (string) Str::uuid(),
+            'event_type' => 'profile_shared',
+            'surface' => 'profile_social_nav',
+            'metadata' => ['share_method' => 'clipboard'],
+        ])->assertCreated();
+
+        $event = ProfileInteractionEvent::query()
+            ->where('profile_id', $profile->id)
+            ->where('event_type', 'profile_shared')
+            ->sole();
+
+        $this->assertSame(['share_method' => 'clipboard'], $event->metadata);
+
+        $this->postJson("/api/public/profiles/{$profile->id}/interactions", [
+            'event_id' => (string) Str::uuid(),
+            'visitor_id' => (string) Str::uuid(),
+            'event_type' => 'profile_shared',
+            'surface' => 'profile_social_nav',
+            'metadata' => ['share_method' => 'email'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('metadata.share_method');
+    }
+
     public function test_embedded_profile_view_accepts_widget_chat_surface(): void
     {
         $profile = Profile::factory()->for(User::factory())->create([

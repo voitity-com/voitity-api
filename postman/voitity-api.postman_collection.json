@@ -1096,7 +1096,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/notifications?page=1&per_page=20&locale={{locale}}&kind=all&read=all",
+              "raw": "{{base_url}}/api/notifications?page=1&per_page=20&locale={{locale}}&kind=all&read=all&group_chats=1&timezone=America%2FBogota",
               "host": [
                 "{{base_url}}"
               ],
@@ -1129,10 +1129,20 @@
                   "key": "read",
                   "value": "all",
                   "description": "Optional: all, unread, or read."
+                },
+                {
+                  "key": "group_chats",
+                  "value": "1",
+                  "description": "Optional boolean. Groups new_chat_received items by profile and calendar day before pagination. Group items include count, unread_count, notification_ids, and the original notifications."
+                },
+                {
+                  "key": "timezone",
+                  "value": "America/Bogota",
+                  "description": "Optional IANA timezone used for chat-group calendar days. Invalid values fall back to UTC."
                 }
               ]
             },
-            "description": "Lists authenticated user notifications and logs, excluding dismissed items. Supports kind/read filters and returns most recent first. Requires token ability: user:read."
+            "description": "Lists authenticated user notifications and logs, excluding dismissed items. Supports kind/read filters and returns most recent first. Set group_chats=1 for notification-center grouping before pagination; omit it for the original flat response used by the bell. unread_count remains the global count of unread bell-visible notifications. Requires token ability: user:read."
           },
           "response": []
         },
@@ -1240,6 +1250,39 @@
               ]
             },
             "description": "Marks all owned, non-dismissed notifications as read. Add ?scope=bell to mark only items visible in the top bell. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Selected Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_ids\": [\n    \"{{notification_id}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read"
+              ]
+            },
+            "description": "Marks up to 50 selected, owned, non-dismissed notifications as read. Unknown or non-owned IDs are ignored. Requires token ability: user:write."
           },
           "response": []
         },
@@ -3577,6 +3620,44 @@
           "response": []
         },
         {
+          "name": "Record Public Profile Share",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"30000000-0000-4000-8000-000000000005\",\n  \"visitor_id\": \"{{anonymous_visitor_id}}\",\n  \"event_type\": \"profile_shared\",\n  \"surface\": \"profile_social_nav\",\n  \"metadata\": {\n    \"share_method\": \"native\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/public/profiles/{{public_profile_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "profiles",
+                "{{public_profile_id}}",
+                "interactions"
+              ]
+            },
+            "description": "Records an idempotent profile share and whether the native share sheet or clipboard fallback was used."
+          },
+          "response": []
+        },
+        {
           "name": "Get Public Widget Configuration",
           "event": [
             {
@@ -3646,7 +3727,7 @@
                 "profile"
               ]
             },
-            "description": "Lists profiles that belong to the authenticated user. Requires token ability: profile:read."
+            "description": "Lists profiles that belong to the authenticated user. Voice fields include effective voice_enabled, voice_autoplay_enabled, and voice_clone_status (pending, processing, completed, failed, or null). Requires token ability: profile:read."
           },
           "response": []
         },
@@ -3718,7 +3799,7 @@
                 "{{profile_id}}"
               ]
             },
-            "description": "Retrieves the profile identified by profile_id."
+            "description": "Retrieves the profile identified by profile_id. voice_enabled and voice_autoplay_enabled are always false when no completed clone exists; voice_clone_status exposes pending, processing, completed, failed, or null."
           },
           "response": []
         },
@@ -3834,7 +3915,7 @@
                 "{{profile_alias}}"
               ]
             },
-            "description": "Retrieves a profile by alias. Requires profile:read and does not validate profile ownership."
+            "description": "Retrieves a published profile by alias, including effective voice settings and voice_clone_status. Requires profile:read and does not validate profile ownership."
           },
           "response": []
         },
@@ -4099,6 +4180,40 @@
           "response": []
         },
         {
+          "name": "Update Profile Voice Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"voice_enabled\": true,\n  \"voice_autoplay_enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/voice-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "voice-settings"
+              ]
+            },
+            "description": "Updates profile voice and autoplay preferences. Enabling profile voice requires a completed clone and returns 422 when no cloned voice exists; false/false remains valid without a clone. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
           "name": "Activate Profile",
           "request": {
             "method": "POST",
@@ -4120,7 +4235,7 @@
                 "activate"
               ]
             },
-            "description": "Activates and publishes a profile when publication requirements are met and the owner has a current subscription with an available active-profile slot. Returns 402 when there is no active subscription and 409 when the plan active-profile limit is reached. Requires token ability: profile:write."
+            "description": "Activates and publishes a profile when name, alias, description, an active avatar, and an approved indexed source are present. A cloned voice is optional. The owner must have a current subscription with an available active-profile slot. Returns 402 when there is no active subscription and 409 when the plan active-profile limit is reached. Requires token ability: profile:write."
           },
           "response": []
         },
@@ -6571,7 +6686,7 @@
                     "cv"
                   ]
                 },
-                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. Text-only input is stored as a downloadable TXT file. Readable, non-duplicate sources are automatically queued for approval, synchronization, and embedding indexing. Poll List Profile Sources until status is indexed or failed."
+                "description": "Adds a supported file and/or pasted text as a profile knowledge source. Requires token ability: profile:write. Text-only input is stored as a downloadable TXT file. Readable, non-duplicate sources are automatically queued for approval, synchronization, and embedding indexing. Poll List Profile Sources until status is indexed or failed. Unexpected import failures return HTTP 500 with the stable message: Profile source could not be imported. Please review the content and try again. Internal database details are only written to server logs."
               },
               "response": [],
               "event": [

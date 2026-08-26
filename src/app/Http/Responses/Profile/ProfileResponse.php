@@ -6,6 +6,7 @@ use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
 use App\Models\Profile;
 use App\Models\Voice;
+use App\Models\VoiceProviderRequest;
 use App\Services\Features\FeatureService;
 use App\Services\ProfileConversationMessageService;
 use App\Services\ProfileVoiceSettings;
@@ -32,12 +33,13 @@ class ProfileResponse
             'profession_template_version' => $this->profile->profession_template_version,
             'active' => (bool) $this->profile->active,
             'status' => $this->profile->status?->value,
-            'voice' => $this->hasConfiguredVoice($activeVoice),
+            'voice' => $activeVoice ? $voiceSettings->voiceIsConfigured($activeVoice) : false,
             'voice_id' => $activeVoice?->id,
             'voice_name' => $activeVoice?->name,
             'voice_description' => $activeVoice?->description,
             'voice_enabled' => $voiceSettings->voiceEnabled($this->profile),
             'voice_autoplay_enabled' => $voiceSettings->voiceAutoplayEnabled($this->profile),
+            'voice_clone_status' => $this->voiceCloneStatus($activeVoice, $voiceSettings),
             'voice_language_code' => $activeVoice?->language_code,
             'publication' => app(ProfilePublicationReadinessService::class)->evaluate($this->profile),
             'conversation_messages' => app(ProfileConversationMessageService::class)->resolvedMessages($this->profile),
@@ -69,13 +71,22 @@ class ProfileResponse
             ->first();
     }
 
-    private function hasConfiguredVoice(?Voice $voice): bool
+    private function voiceCloneStatus(?Voice $voice, ProfileVoiceSettings $voiceSettings): ?string
     {
         if (! $voice) {
-            return false;
+            return null;
         }
 
-        return filled($voice->source_voice_id)
-            && filled($voice->source);
+        if ($voice->relationLoaded('latestProviderRequest')) {
+            return $voice->latestProviderRequest?->status
+                ?? ($voiceSettings->voiceIsConfigured($voice) ? VoiceProviderRequest::STATUS_COMPLETED : null);
+        }
+
+        if ($voice->exists) {
+            return $voice->latestProviderRequest()->value('status')
+                ?? ($voiceSettings->voiceIsConfigured($voice) ? VoiceProviderRequest::STATUS_COMPLETED : null);
+        }
+
+        return $voiceSettings->voiceIsConfigured($voice) ? VoiceProviderRequest::STATUS_COMPLETED : null;
     }
 }

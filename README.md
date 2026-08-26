@@ -4,6 +4,9 @@ Voitity API built with Laravel 12, Docker, PostgreSQL, and pgVector.
 
 This README covers the local Docker workflow for running the API, database, migrations, Swagger docs, and tests.
 
+The complete local setup for the API, public web, admin, and chat worker is in
+[`LOCAL_SETUP.md`](LOCAL_SETUP.md).
+
 Application behavior, plan limits, quota reservations, public messaging
 capabilities, and production process requirements are documented in
 [`docs/subscriptions-and-usage.md`](docs/subscriptions-and-usage.md).

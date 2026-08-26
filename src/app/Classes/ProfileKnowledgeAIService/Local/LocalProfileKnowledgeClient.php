@@ -36,12 +36,23 @@ class LocalProfileKnowledgeClient implements ProfileKnowledgeAIClient
     {
         $normalizedText = $this->normalizeText($text);
         $sections = $this->sections($normalizedText);
-        $experienceText = $sections['experience'] ?? $normalizedText;
+        $explicitExperienceText = $sections['experience'] ?? '';
+        $experienceText = $explicitExperienceText !== '' ? $explicitExperienceText : $normalizedText;
+        $workItems = $this->workItems($experienceText);
+
+        if ($workItems === [] && $explicitExperienceText !== '') {
+            $workItems = [[
+                'company' => '',
+                'role' => 'Experience',
+                'description' => $explicitExperienceText,
+                'source' => 'cv',
+            ]];
+        }
 
         $data = [
             'summary' => $this->summary($sections, $normalizedText),
-            'work' => $this->workItems($experienceText),
-            'projects' => $this->projectItems($sections['projects'] ?? '', $experienceText),
+            'work' => $workItems,
+            'projects' => $this->projectItems($sections['projects'] ?? '', $workItems !== [] ? $experienceText : ''),
             'skills' => $this->skillItems($sections['skills'] ?? ''),
             'education' => $this->educationItems($sections['education'] ?? ''),
             'achievements' => $this->achievementItems($sections['achievements'] ?? ''),
@@ -145,12 +156,7 @@ class LocalProfileKnowledgeClient implements ProfileKnowledgeAIClient
             return $items;
         }
 
-        return [[
-            'company' => $this->lines($text)[0] ?? 'CV',
-            'role' => 'Experience',
-            'description' => $text,
-            'source' => 'cv',
-        ]];
+        return [];
     }
 
     /**

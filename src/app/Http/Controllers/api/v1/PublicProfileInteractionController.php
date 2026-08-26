@@ -29,12 +29,15 @@ class PublicProfileInteractionController extends Controller
      *
      *         @OA\Property(property="event_id", type="string", format="uuid"),
      *         @OA\Property(property="visitor_id", type="string", format="uuid"),
-     *         @OA\Property(property="event_type", type="string", enum={"profile_viewed","product_clicked","media_opened","media_external_clicked","social_link_clicked"}),
+     *         @OA\Property(property="event_type", type="string", enum={"profile_viewed","profile_shared","product_clicked","media_opened","media_external_clicked","social_link_clicked"}),
      *         @OA\Property(property="chat_id", type="integer", nullable=true),
      *         @OA\Property(property="subject_id", type="string", nullable=true),
      *         @OA\Property(property="provider", type="string", nullable=true),
      *         @OA\Property(property="destination_type", type="string", nullable=true, enum={"provider_video","provider_channel"}),
-     *         @OA\Property(property="surface", type="string")
+     *         @OA\Property(property="surface", type="string"),
+     *         @OA\Property(property="metadata", type="object",
+     *             @OA\Property(property="share_method", type="string", enum={"native","clipboard"})
+     *         )
      *     )),
      *
      *     @OA\Response(response=201, description="Interaction recorded"),
@@ -90,7 +93,7 @@ class PublicProfileInteractionController extends Controller
             'occurred_at' => now(),
             'metadata' => $product instanceof ProfileProduct
                 ? ['destination_type' => $product->destination_type->value]
-                : Arr::only((array) ($data['metadata'] ?? []), ['destination_type']),
+                : Arr::only((array) ($data['metadata'] ?? []), ['destination_type', 'share_method']),
             'idempotency_key' => "profile:{$profile->id}:client:{$data['event_id']}",
             ...($product instanceof ProfileProduct ? $recorder->productSnapshot($product) : []),
         ]);

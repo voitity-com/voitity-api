@@ -16,6 +16,7 @@ use App\Services\ProfileKnowledge\ProfileKnowledgeSourceDeduplicator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -25,6 +26,8 @@ use Throwable;
 class ProfileCvImporter
 {
     private const PARSER_VERSION = 'cv-text-v3';
+
+    private const SOURCE_ITEM_TITLE_MAX_LENGTH = 150;
 
     public function __construct(
         private readonly ProfileKnowledgeAIService $profileKnowledgeAIService,
@@ -40,70 +43,77 @@ class ProfileCvImporter
         $storedFile = $file
             ? $this->storeSourceFile($profile, $file)
             : ($providedText !== '' ? $this->storeTextSourceFile($profile, $providedText, $name) : null);
-        $fileText = $file ? $this->extractTextFromFile($file) : '';
-        $extractedText = $providedText !== '' ? $providedText : $this->normalizeText($fileText);
-        $contentHash = $this->sourceDeduplicator->normalizedContentHash($extractedText);
-        $this->sourceDeduplicator->synchronize($profile);
-        $duplicate = $contentHash !== null
-            ? $profile->sources()->where('content_hash', $contentHash)->oldest('id')->first()
-            : null;
-        $status = $duplicate
-            ? ProfileSourceStatus::Duplicate
-            : ($extractedText !== '' ? ProfileSourceStatus::PendingSync : ProfileSourceStatus::Failed);
-        $structure = $extractedText !== '' && ! $duplicate
-            ? $this->profileKnowledgeAIService->structureCv($profile, $extractedText)
-            : null;
 
-        return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $contentHash, $duplicate, $status, $name, $metadata, $structure): ProfileSource {
-            $source = ProfileSource::withoutEvents(fn (): ProfileSource => ProfileSource::create([
-                'profile_id' => $profile->id,
-                'user_id' => $user->id,
-                'type' => ProfileSourceType::Cv,
-                'name' => $name ?: ($file?->getClientOriginalName() ?: 'Source'),
-                'original_filename' => $file?->getClientOriginalName() ?: ($storedFile['original_filename'] ?? null),
-                'mime_type' => $file?->getClientMimeType() ?: ($storedFile['mime_type'] ?? null),
-                'storage_path' => $storedFile['path'] ?? null,
-                'status' => $status,
-                'processing_stage' => match ($status) {
-                    ProfileSourceStatus::PendingSync => 'pending_sync',
-                    ProfileSourceStatus::Duplicate => 'duplicate',
-                    default => 'parsing',
-                },
-                'last_error' => match ($status) {
-                    ProfileSourceStatus::Duplicate => 'This source contains the same information as an existing source.',
-                    ProfileSourceStatus::Failed => 'No readable text could be extracted from the source.',
-                    default => null,
-                },
-                'retry_count' => 0,
-                'extracted_text' => $extractedText !== '' ? $extractedText : null,
-                'parser_version' => self::PARSER_VERSION,
-                'content_hash' => $contentHash,
-                'duplicate_of_source_id' => $duplicate?->id,
-                'metadata' => array_filter([
-                    ...$metadata,
-                    'text_provided' => filled($extractedText),
-                    'file' => $storedFile,
-                    'file_size' => $storedFile['size'] ?? null,
-                    'structuring' => $structure ? [
-                        'source' => $structure->source,
-                        'status' => $structure->status,
-                        'confidence' => $structure->confidence,
-                        'request_url' => $structure->requestUrl,
-                    ] : null,
-                    'knowledge_index' => array_filter([
-                        'content_available' => $contentHash !== null,
-                        'duplicate_of_source_id' => $duplicate?->id,
+        try {
+            $fileText = $file ? $this->extractTextFromFile($file) : '';
+            $extractedText = $providedText !== '' ? $providedText : $this->normalizeText($fileText);
+            $contentHash = $this->sourceDeduplicator->normalizedContentHash($extractedText);
+            $this->sourceDeduplicator->synchronize($profile);
+            $duplicate = $contentHash !== null
+                ? $profile->sources()->where('content_hash', $contentHash)->oldest('id')->first()
+                : null;
+            $status = $duplicate
+                ? ProfileSourceStatus::Duplicate
+                : ($extractedText !== '' ? ProfileSourceStatus::PendingSync : ProfileSourceStatus::Failed);
+            $structure = $extractedText !== '' && ! $duplicate
+                ? $this->profileKnowledgeAIService->structureCv($profile, $extractedText)
+                : null;
+
+            return DB::transaction(function () use ($profile, $user, $file, $storedFile, $extractedText, $contentHash, $duplicate, $status, $name, $metadata, $structure): ProfileSource {
+                $source = ProfileSource::withoutEvents(fn (): ProfileSource => ProfileSource::create([
+                    'profile_id' => $profile->id,
+                    'user_id' => $user->id,
+                    'type' => ProfileSourceType::Cv,
+                    'name' => $name ?: ($file?->getClientOriginalName() ?: 'Source'),
+                    'original_filename' => $file?->getClientOriginalName() ?: ($storedFile['original_filename'] ?? null),
+                    'mime_type' => $file?->getClientMimeType() ?: ($storedFile['mime_type'] ?? null),
+                    'storage_path' => $storedFile['path'] ?? null,
+                    'status' => $status,
+                    'processing_stage' => match ($status) {
+                        ProfileSourceStatus::PendingSync => 'pending_sync',
+                        ProfileSourceStatus::Duplicate => 'duplicate',
+                        default => 'parsing',
+                    },
+                    'last_error' => match ($status) {
+                        ProfileSourceStatus::Duplicate => 'This source contains the same information as an existing source.',
+                        ProfileSourceStatus::Failed => 'No readable text could be extracted from the source.',
+                        default => null,
+                    },
+                    'retry_count' => 0,
+                    'extracted_text' => $extractedText !== '' ? $extractedText : null,
+                    'parser_version' => self::PARSER_VERSION,
+                    'content_hash' => $contentHash,
+                    'duplicate_of_source_id' => $duplicate?->id,
+                    'metadata' => array_filter([
+                        ...$metadata,
+                        'text_provided' => filled($extractedText),
+                        'file' => $storedFile,
+                        'file_size' => $storedFile['size'] ?? null,
+                        'structuring' => $structure ? [
+                            'source' => $structure->source,
+                            'status' => $structure->status,
+                            'confidence' => $structure->confidence,
+                            'request_url' => $structure->requestUrl,
+                        ] : null,
+                        'knowledge_index' => array_filter([
+                            'content_available' => $contentHash !== null,
+                            'duplicate_of_source_id' => $duplicate?->id,
+                        ], fn ($value) => $value !== null),
                     ], fn ($value) => $value !== null),
-                ], fn ($value) => $value !== null),
-                'last_synced_at' => null,
-            ]));
+                    'last_synced_at' => null,
+                ]));
 
-            if ($extractedText !== '' && ! $duplicate) {
-                $this->createItemsAndFacts($source, $extractedText, $structure);
-            }
+                if ($extractedText !== '' && ! $duplicate) {
+                    $this->createItemsAndFacts($source, $extractedText, $structure);
+                }
 
-            return $source->load(['items.facts']);
-        });
+                return $source->load(['items.facts']);
+            });
+        } catch (Throwable $exception) {
+            $this->deleteStoredSourceFile($storedFile);
+
+            throw $exception;
+        }
     }
 
     /**
@@ -192,6 +202,30 @@ class ProfileCvImporter
         return (string) config('profile-knowledge-ai.sources.visibility', 'private');
     }
 
+    /**
+     * @param  array{disk?: string, path?: string}|null  $storedFile
+     */
+    private function deleteStoredSourceFile(?array $storedFile): void
+    {
+        $path = trim((string) ($storedFile['path'] ?? ''));
+
+        if ($path === '') {
+            return;
+        }
+
+        $disk = (string) ($storedFile['disk'] ?? $this->sourceFilesDisk());
+
+        try {
+            Storage::disk($disk)->delete($path);
+        } catch (Throwable $cleanupException) {
+            Log::warning('Unable to delete profile source file after a failed import.', [
+                'disk' => $disk,
+                'path' => $path,
+                'message' => $cleanupException->getMessage(),
+            ]);
+        }
+    }
+
     private function extractTextFromFile(UploadedFile $file): string
     {
         $path = $file->getRealPath();
@@ -250,11 +284,16 @@ class ProfileCvImporter
         }
 
         $sections->each(function (array $section) use ($source, $structure): void {
+            $title = $this->sourceItemTitle(
+                $section['title'] ?? null,
+                Str::headline((string) ($section['category'] ?? 'Source'))
+            );
+
             /** @var ProfileSourceItem $item */
             $item = ProfileSourceItem::withoutEvents(fn (): ProfileSourceItem => $source->items()->create([
                 'profile_id' => $source->profile_id,
                 'type' => $section['category'],
-                'title' => $section['title'],
+                'title' => $title,
                 'content' => Str::limit($section['content'], 5000, ''),
                 'structured_data' => array_filter([
                     'source' => 'cv',
@@ -280,12 +319,23 @@ class ProfileCvImporter
                 'approved' => false,
                 'indexed' => false,
                 'metadata' => [
-                    'title' => $section['title'],
+                    'title' => $title,
                     'source_type' => ProfileSourceType::Cv->value,
                     'structuring_source' => $structure?->source,
                 ],
             ]));
         });
+    }
+
+    private function sourceItemTitle(mixed $value, string $fallback): string
+    {
+        $title = Str::squish(strip_tags((string) $value));
+
+        if ($title === '') {
+            $title = $fallback !== '' ? $fallback : 'Source';
+        }
+
+        return Str::limit($title, self::SOURCE_ITEM_TITLE_MAX_LENGTH, '');
     }
 
     /**

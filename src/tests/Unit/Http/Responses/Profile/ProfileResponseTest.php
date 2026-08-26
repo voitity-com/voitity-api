@@ -6,6 +6,7 @@ use App\Http\Responses\Profile\ProfileListResponse;
 use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
 use App\Models\Voice;
+use App\Models\VoiceProviderRequest;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
@@ -42,6 +43,9 @@ class ProfileResponseTest extends TestCase
         $this->assertSame('draft', $payload['status']);
         $this->assertFalse($payload['voice']);
         $this->assertNull($payload['voice_id']);
+        $this->assertFalse($payload['voice_enabled']);
+        $this->assertFalse($payload['voice_autoplay_enabled']);
+        $this->assertNull($payload['voice_clone_status']);
         $this->assertSame(['me' => ['bio' => 'test']], $payload['data']);
         $this->assertSame('2026-05-26T10:00:00.000000Z', $payload['created_at']);
         $this->assertSame('2026-05-26T11:00:00.000000Z', $payload['updated_at']);
@@ -77,6 +81,9 @@ class ProfileResponseTest extends TestCase
 
         $this->assertTrue($payload['voice']);
         $this->assertSame(30, $payload['voice_id']);
+        $this->assertTrue($payload['voice_enabled']);
+        $this->assertTrue($payload['voice_autoplay_enabled']);
+        $this->assertSame('completed', $payload['voice_clone_status']);
     }
 
     public function test_profile_response_returns_false_when_voice_source_fields_are_empty(): void
@@ -102,6 +109,9 @@ class ProfileResponseTest extends TestCase
             'source' => '',
             'active' => true,
         ], true);
+        $providerRequest = new VoiceProviderRequest;
+        $providerRequest->setRawAttributes(['status' => VoiceProviderRequest::STATUS_PENDING], true);
+        $voice->setRelation('latestProviderRequest', $providerRequest);
 
         $profile->setRelation('voices', collect([$voice]));
 
@@ -109,6 +119,9 @@ class ProfileResponseTest extends TestCase
 
         $this->assertFalse($payload['voice']);
         $this->assertSame(31, $payload['voice_id']);
+        $this->assertFalse($payload['voice_enabled']);
+        $this->assertFalse($payload['voice_autoplay_enabled']);
+        $this->assertSame(VoiceProviderRequest::STATUS_PENDING, $payload['voice_clone_status']);
     }
 
     public function test_profile_list_response_returns_profiles_and_total(): void

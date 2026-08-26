@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\ProfileKnowledge\ProfileCvImporter;
+use App\Classes\ProfileKnowledgeAIService\ProfileKnowledgeAIService;
+use App\Classes\ProfileKnowledgeAIService\ProfileKnowledgeStructure;
 use App\Enums\ProfileFactVisibility;
 use App\Enums\ProfileSourceStatus;
 use App\Jobs\ProfileKnowledge\SynchronizeProfileSource;
@@ -14,8 +17,11 @@ use App\Models\ProfileSourceItem;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
+use RuntimeException;
 
 class ProfileKnowledgeControllerTest extends TestAPI
 {
@@ -109,6 +115,125 @@ class ProfileKnowledgeControllerTest extends TestAPI
         $factsResponse->assertJsonPath('data.pagination.total', 1);
         $factsResponse->assertJsonPath('data.facts.0.category', 'projects');
         $factsResponse->assertJsonPath('data.facts.0.approved', false);
+    }
+
+    public function test_unstructured_long_text_is_saved_without_becoming_work_experience(): void
+    {
+        $this->fakeProfileSourcesDisk();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create(['profession_key' => 'custom']);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+        $sourceText = str_repeat(
+            'Wonder Woman is a fictional superhero whose story includes history, values, allies, and adventures. ',
+            10
+        );
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'Wonder Woman notes',
+                'text' => $sourceText,
+            ]);
+
+        $response->assertStatus(201);
+
+        $items = collect($response->json('data.items'));
+
+        $this->assertSame([], $items->where('type', 'experience')->values()->all());
+        $this->assertSame('Summary', $items->firstWhere('type', 'summary')['title']);
+        $this->assertSame(trim($sourceText), $response->json('data.extracted_text'));
+    }
+
+    public function test_import_limits_ai_generated_item_titles_without_truncating_their_content(): void
+    {
+        $this->fakeProfileSourcesDisk();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create(['profession_key' => 'developer']);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+        $company = str_repeat('Very Long Company Name ', 12);
+        $role = str_repeat('Senior Software Engineer ', 8);
+        $profileKnowledgeAIService = Mockery::mock(ProfileKnowledgeAIService::class);
+        $profileKnowledgeAIService->shouldReceive('structureCv')
+            ->once()
+            ->andReturn(new ProfileKnowledgeStructure(
+                source: 'test-ai',
+                status: 'success',
+                data: [
+                    'work' => [[
+                        'company' => $company,
+                        'role' => $role,
+                        'description' => 'Complete description that must remain available.',
+                    ]],
+                ],
+                confidence: 0.91
+            ));
+        $this->app->instance(ProfileKnowledgeAIService::class, $profileKnowledgeAIService);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'AI structured source',
+                'text' => 'A short source body for the AI structuring test.',
+            ]);
+
+        $response->assertStatus(201);
+
+        $item = collect($response->json('data.items'))->firstWhere('type', 'experience');
+
+        $this->assertSame(150, mb_strlen($item['title']));
+        $this->assertStringContainsString(trim($company), $item['content']);
+        $this->assertStringContainsString('Complete description that must remain available.', $item['content']);
+        $this->assertSame($item['title'], $item['facts'][0]['metadata']['title']);
+    }
+
+    public function test_import_removes_newly_stored_file_when_database_persistence_fails(): void
+    {
+        $this->fakeProfileSourcesDisk();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create(['profession_key' => 'custom']);
+        $profile->forceDelete();
+
+        try {
+            app(ProfileCvImporter::class)->import(
+                profile: $profile,
+                user: $user,
+                file: null,
+                text: 'This source is stored before the transaction is attempted.',
+                name: 'Persistence failure test'
+            );
+
+            $this->fail('The import should fail because its profile no longer exists.');
+        } catch (\Throwable) {
+            $this->assertSame([], Storage::disk('profiles')->allFiles());
+        }
+    }
+
+    public function test_import_failure_returns_a_safe_message_without_database_details(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+        $importer = Mockery::mock(ProfileCvImporter::class);
+        $importer->shouldReceive('import')
+            ->once()
+            ->andThrow(new RuntimeException('SQLSTATE[22001]: value too long for type character varying(150)'));
+        $this->app->instance(ProfileCvImporter::class, $importer);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'Source with an internal failure',
+                'text' => 'Valid source input.',
+            ]);
+
+        $response->assertStatus(500);
+        $response->assertJsonPath(
+            'message',
+            'Profile source could not be imported. Please review the content and try again.'
+        );
+        $this->assertStringNotContainsString('SQLSTATE', $response->getContent());
     }
 
     public function test_user_can_import_pdf_cv_without_pasting_text(): void

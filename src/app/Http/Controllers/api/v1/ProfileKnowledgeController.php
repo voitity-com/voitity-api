@@ -132,12 +132,14 @@ class ProfileKnowledgeController extends Controller
                 'data' => (new ProfileSourceResponse($source))->toArray(),
             ], 201);
         } catch (\Throwable $e) {
+            $failureMessage = 'Profile source could not be imported. Please review the content and try again.';
+
             if ($request->user() instanceof User) {
                 app(NotificationDispatcher::class)->send($request->user(), 'source_rejected_or_failed', [
                     'profile' => $profile->name ?: "Profile {$profile->id}",
                     'profile_id' => $profile->id,
                     'source' => (string) ($request->validated('name') ?: $request->file('file')?->getClientOriginalName() ?: 'Source'),
-                    'reason' => $e->getMessage(),
+                    'reason' => $failureMessage,
                     'action_url' => "/dashboard/profiles/{$profile->id}/sources",
                 ]);
             }
@@ -148,7 +150,7 @@ class ProfileKnowledgeController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => $failureMessage], 500);
         }
     }
 

@@ -34,6 +34,8 @@ class ProfileController extends Controller
 
     private const VOICE_RESPONSE_COLUMNS = 'voices:id,profile_id,user_id,name,description,language_code,source_voice_id,source,active';
 
+    private const VOICE_PROVIDER_REQUEST_RESPONSE_COLUMNS = 'voices.latestProviderRequest';
+
     private const AVATAR_RESPONSE_COLUMNS = 'avatars:id,profile_id,file,status';
 
     private const SOURCE_RESPONSE_COLUMNS = 'sources:id,profile_id,status,approved_at,indexed_at';
@@ -98,6 +100,7 @@ class ProfileController extends Controller
             $profiles = $user->profiles()
                 ->with([
                     self::VOICE_RESPONSE_COLUMNS,
+                    self::VOICE_PROVIDER_REQUEST_RESPONSE_COLUMNS,
                     self::AVATAR_RESPONSE_COLUMNS,
                     self::SOURCE_RESPONSE_COLUMNS,
                     'conversationMessages',
@@ -375,6 +378,7 @@ class ProfileController extends Controller
                 ->where('status', ProfileStatus::Published->value)
                 ->with([
                     self::VOICE_RESPONSE_COLUMNS,
+                    self::VOICE_PROVIDER_REQUEST_RESPONSE_COLUMNS,
                     self::AVATAR_RESPONSE_COLUMNS,
                     self::SOURCE_RESPONSE_COLUMNS,
                     'conversationMessages',
@@ -658,6 +662,15 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
+            if ($request->boolean('voice_enabled') && ! $voiceSettings->hasConfiguredVoice($profile)) {
+                return response()->json([
+                    'message' => 'A cloned voice is required to enable profile voice.',
+                    'errors' => [
+                        'voice_enabled' => ['Clone a voice before enabling profile voice.'],
+                    ],
+                ], 422);
+            }
+
             $profile->forceFill([
                 'data' => $voiceSettings->mergedData(
                     $profile,
@@ -815,6 +828,7 @@ class ProfileController extends Controller
     {
         $profile->loadMissing([
             self::VOICE_RESPONSE_COLUMNS,
+            self::VOICE_PROVIDER_REQUEST_RESPONSE_COLUMNS,
             self::AVATAR_RESPONSE_COLUMNS,
             self::SOURCE_RESPONSE_COLUMNS,
             'conversationMessages',
