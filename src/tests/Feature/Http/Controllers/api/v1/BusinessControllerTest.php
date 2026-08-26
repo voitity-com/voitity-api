@@ -344,13 +344,31 @@ class BusinessControllerTest extends TestAPI
         $start = $this->withHeaders([
             'Origin' => 'http://localhost:3000',
             'X-Bigmelo-Business-Key' => $key,
-        ])->postJson('/api/business/conversations', ['visitor_id' => 'visitor-1'])
+        ])->postJson('/api/business/conversations', [
+            'visitor_id' => 'visitor-1',
+            'attribution' => [
+                'utm_source' => 'google',
+                'utm_medium' => 'cpc',
+                'utm_campaign' => 'software-ia-colombia',
+                'gclid' => 'test-click-id',
+                'landing_page' => 'https://bigmelolabs.com/desarrollo-software-ia?gclid=test-click-id',
+                'referrer' => 'https://www.google.com/',
+                'ga_client_id' => '123456789.987654321',
+                'chat_location' => 'landing',
+            ],
+        ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.lead_created', false)
+            ->assertJsonPath('data.lead_id', null)
             ->assertJsonCount(1, 'data.messages')
             ->assertJsonPath('data.messages.0.required_fields', ['project_summary']);
 
         $conversation = $start->json('data.conversation_id');
+        $storedConversation = BusinessConversation::query()->where('uuid', $conversation)->firstOrFail();
+        $this->assertSame('google', data_get($storedConversation->context, 'attribution.utm_source'));
+        $this->assertSame('software-ia-colombia', data_get($storedConversation->context, 'attribution.utm_campaign'));
+        $this->assertSame('landing', data_get($storedConversation->context, 'attribution.chat_location'));
         $session = $start->json('data.session');
         $headers = [
             'Origin' => 'http://localhost:3000',
@@ -384,7 +402,9 @@ class BusinessControllerTest extends TestAPI
             ])
             ->assertOk()
             ->assertJsonPath('data.status', 'completed')
-            ->assertJsonPath('data.finished', true);
+            ->assertJsonPath('data.finished', true)
+            ->assertJsonPath('data.lead_created', true)
+            ->assertJsonPath('data.lead_id', fn ($leadId) => is_int($leadId) && $leadId > 0);
 
         $this->assertStringNotContainsString('Posible solución interna', json_encode($completed->json('data.messages')) ?: '');
 
@@ -499,7 +519,9 @@ class BusinessControllerTest extends TestAPI
         $this->withHeaders($headers)
             ->getJson("/api/business/conversations/{$conversation}/status")
             ->assertOk()
-            ->assertJsonPath('data.status', 'completed');
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.lead_created', true)
+            ->assertJsonPath('data.lead_id', $lead->id);
 
         $this->withToken($this->token)
             ->getJson("/api/businesses/{$business->id}/usage")

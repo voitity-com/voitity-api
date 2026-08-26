@@ -38,8 +38,14 @@ class BusinessFlowRunner
     ) {}
 
     /** @return array{conversation: BusinessConversation, messages: array<int, BusinessMessage>} */
-    public function start(Business $business, BusinessApiClient $client, string $origin, ?string $visitorId = null, string $locale = 'es'): array
-    {
+    public function start(
+        Business $business,
+        BusinessApiClient $client,
+        string $origin,
+        ?string $visitorId = null,
+        string $locale = 'es',
+        array $attribution = [],
+    ): array {
         $version = $business->flow?->publishedVersion?->load(['nodes', 'edges']);
         if (! $version) {
             throw ValidationException::withMessages(['flow' => 'El negocio no tiene un flow publicado.']);
@@ -49,7 +55,7 @@ class BusinessFlowRunner
             throw ValidationException::withMessages(['flow' => 'El flow publicado no tiene nodo inicial.']);
         }
 
-        return DB::transaction(function () use ($business, $client, $origin, $visitorId, $locale, $version, $start): array {
+        return DB::transaction(function () use ($business, $client, $origin, $visitorId, $locale, $attribution, $version, $start): array {
             $conversation = $business->conversations()->create([
                 'uuid' => (string) Str::uuid(),
                 'business_flow_version_id' => $version->id,
@@ -57,7 +63,10 @@ class BusinessFlowRunner
                 'status' => BusinessConversationStatus::InProgress,
                 'locale' => $this->localization->normalize($locale),
                 'current_node_key' => $start->node_key,
-                'context' => ['lead_data' => []],
+                'context' => array_filter([
+                    'lead_data' => [],
+                    'attribution' => $attribution !== [] ? $attribution : null,
+                ], fn (mixed $value): bool => $value !== null),
                 'origin' => $origin,
                 'visitor_id_hash' => filled($visitorId) ? hash('sha256', (string) $visitorId) : null,
                 'started_at' => now(),

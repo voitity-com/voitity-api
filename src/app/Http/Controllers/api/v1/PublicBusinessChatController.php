@@ -49,7 +49,7 @@ class PublicBusinessChatController extends Controller
      *
      *   @OA\Parameter(name="Origin", in="header", required=true, @OA\Schema(type="string", example="http://localhost:3001")),
      *
-     *   @OA\RequestBody(@OA\JsonContent(@OA\Property(property="visitor_id", type="string"), @OA\Property(property="locale", type="string", enum={"es","en"}))),
+     *   @OA\RequestBody(@OA\JsonContent(@OA\Property(property="visitor_id", type="string"), @OA\Property(property="locale", type="string", enum={"es","en"}), @OA\Property(property="attribution", type="object"))),
      *
      *   @OA\Response(response=201, description="Conversation and encrypted session created"), @OA\Response(response=403, description="Origin not allowed"))
      */
@@ -60,13 +60,21 @@ class PublicBusinessChatController extends Controller
         $origin = (string) $request->attributes->get('business_origin');
         $business = $this->business($request);
         $locale = $this->localization->normalize($validated['locale'] ?? $business->settings?->locale ?? 'es');
-        $result = $runner->start($business, $client, $origin, $validated['visitor_id'] ?? null, $locale);
+        $result = $runner->start(
+            $business,
+            $client,
+            $origin,
+            $validated['visitor_id'] ?? null,
+            $locale,
+            is_array($validated['attribution'] ?? null) ? $validated['attribution'] : [],
+        );
 
         return response()->json(['message' => 'Business conversation started successfully.', 'data' => [
             'conversation_id' => $result['conversation']->uuid,
             'status' => $result['conversation']->status->value,
             'locale' => $result['conversation']->locale,
             'finished' => $result['conversation']->status !== BusinessConversationStatus::InProgress,
+            ...$this->leadOutcome($result['conversation']),
             'session' => $sessions->issue($result['conversation'], $client, $origin),
             'messages' => $this->messages($result['messages'], $result['conversation']->locale),
         ]], 201);
@@ -104,6 +112,7 @@ class PublicBusinessChatController extends Controller
             'status' => $result['conversation']->status->value,
             'locale' => $result['conversation']->locale,
             'finished' => $result['conversation']->status !== BusinessConversationStatus::InProgress,
+            ...$this->leadOutcome($result['conversation']),
             'messages' => $this->messages($result['messages'], $result['conversation']->locale),
         ]]);
     }
@@ -129,7 +138,19 @@ class PublicBusinessChatController extends Controller
             'current_node' => $model->current_node_key,
             'started_at' => $model->started_at?->toISOString(),
             'completed_at' => $model->completed_at?->toISOString(),
+            ...$this->leadOutcome($model),
         ]]);
+    }
+
+    /** @return array{lead_created: bool, lead_id: int|null} */
+    private function leadOutcome(BusinessConversation $conversation): array
+    {
+        $lead = $conversation->lead()->select('id')->first();
+
+        return [
+            'lead_created' => $lead !== null,
+            'lead_id' => $lead?->id,
+        ];
     }
 
     private function conversation(Request $request, string $uuid, BusinessConversationSession $sessions): BusinessConversation
