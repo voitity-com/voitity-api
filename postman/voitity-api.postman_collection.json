@@ -1096,7 +1096,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/notifications?page=1&per_page=20&locale={{locale}}&kind=all&read=all",
+              "raw": "{{base_url}}/api/notifications?page=1&per_page=20&locale={{locale}}&kind=all&read=all&group_chats=1&timezone=America%2FBogota",
               "host": [
                 "{{base_url}}"
               ],
@@ -1129,10 +1129,20 @@
                   "key": "read",
                   "value": "all",
                   "description": "Optional: all, unread, or read."
+                },
+                {
+                  "key": "group_chats",
+                  "value": "1",
+                  "description": "Optional boolean. Groups new_chat_received items by profile and calendar day before pagination. Group items include count, unread_count, notification_ids, and the original notifications."
+                },
+                {
+                  "key": "timezone",
+                  "value": "America/Bogota",
+                  "description": "Optional IANA timezone used for chat-group calendar days. Invalid values fall back to UTC."
                 }
               ]
             },
-            "description": "Lists authenticated user notifications and logs, excluding dismissed items. Supports kind/read filters and returns most recent first. Requires token ability: user:read."
+            "description": "Lists authenticated user notifications and logs, excluding dismissed items. Supports kind/read filters and returns most recent first. Set group_chats=1 for notification-center grouping before pagination; omit it for the original flat response used by the bell. unread_count remains the global count of unread bell-visible notifications. Requires token ability: user:read."
           },
           "response": []
         },
@@ -1240,6 +1250,39 @@
               ]
             },
             "description": "Marks all owned, non-dismissed notifications as read. Add ?scope=bell to mark only items visible in the top bell. Requires token ability: user:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Selected Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_ids\": [\n    \"{{notification_id}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read"
+              ]
+            },
+            "description": "Marks up to 50 selected, owned, non-dismissed notifications as read. Unknown or non-owned IDs are ignored. Requires token ability: user:write."
           },
           "response": []
         },

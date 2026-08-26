@@ -132,6 +132,7 @@ Route::get('/notification-preferences', [NotificationPreferenceController::class
 Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::get('/notifications', [AppNotificationController::class, 'index'])->middleware(['auth:sanctum', 'abilities:user:read']);
 Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
+Route::patch('/notifications/read', [AppNotificationController::class, 'markSelectedAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markAsRead'])->middleware(['auth:sanctum', 'abilities:user:write']);
 Route::delete('/notifications/{notification}', [AppNotificationController::class, 'destroy'])->middleware(['auth:sanctum', 'abilities:user:write']);
 
