@@ -5,7 +5,7 @@ services:
       - artisan
       - queue:work
       - database
-      - --queue=chat,default
+      - --queue=chat,media,default
       - --sleep=1
       - --tries=3
       - --timeout=300

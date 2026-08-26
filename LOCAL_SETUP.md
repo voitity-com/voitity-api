@@ -128,11 +128,12 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml ps
 El worker debe ejecutar este comando:
 
 ```text
-php artisan queue:work database --queue=chat,default --sleep=1 --tries=3 --timeout=300 --max-time=3600
+php artisan queue:work database --queue=chat,media,default --sleep=1 --tries=3 --timeout=300 --max-time=3600
 ```
 
-`chat` aparece primero para priorizar las respuestas del chat; `default`
-mantiene funcionando notificaciones y el resto de trabajos generales. No uses
+`chat` aparece primero para priorizar las respuestas del chat; `media` procesa
+la clonación de voz y otros trabajos multimedia; `default` mantiene funcionando
+notificaciones y el resto de trabajos generales. No uses
 `QUEUE_CONNECTION=sync` para resolver esto: ocultaría el comportamiento real
 de la cola y haría que las peticiones HTTP esperaran el procesamiento de IA.
 
@@ -290,7 +291,7 @@ la base PostgreSQL local y las dependencias guardadas en volúmenes.
 
 Comprueba primero el comando del worker y el conteo de colas con los comandos
 de verificación anteriores. Si hay trabajos en `chat` y el worker no muestra
-`--queue=chat,default`, recréalo con el override:
+`--queue=chat,media,default`, recréalo con el override. La cola `media` procesa, entre otras tareas, la clonación de voz:
 
 ```sh
 cd /Users/abel/Documents/tike/apps/voitity-api

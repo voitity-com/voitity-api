@@ -6,7 +6,6 @@ use App\Enums\ProfileSourceStatus;
 use App\Enums\ProfileStatus;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
-use App\Models\Voice;
 
 class ProfilePublicationReadinessService
 {
@@ -17,7 +16,6 @@ class ProfilePublicationReadinessService
             $this->requirement('alias', filled($profile->alias)),
             $this->requirement('description', filled($profile->description)),
             $this->requirement('avatar', $this->hasActiveAvatar($profile)),
-            $this->requirement('voice', $this->hasConfiguredVoice($profile)),
             $this->requirement('source', $this->hasApprovedSyncedSource($profile)),
         ];
 
@@ -55,23 +53,6 @@ class ProfilePublicationReadinessService
             ->where('status', ProfileAvatar::STATUS_ACTIVE)
             ->whereNotNull('file')
             ->where('file', '<>', '')
-            ->exists();
-    }
-
-    private function hasConfiguredVoice(Profile $profile): bool
-    {
-        if ($profile->relationLoaded('voices')) {
-            return $profile->voices->contains(
-                fn (Voice $voice): bool => (bool) $voice->active && filled($voice->source_voice_id) && filled($voice->source)
-            );
-        }
-
-        return $profile->voices()
-            ->where('active', true)
-            ->whereNotNull('source_voice_id')
-            ->where('source_voice_id', '<>', '')
-            ->whereNotNull('source')
-            ->where('source', '<>', '')
             ->exists();
     }
 

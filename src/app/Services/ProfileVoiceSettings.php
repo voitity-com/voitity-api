@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Message;
 use App\Models\Profile;
+use App\Models\Voice;
+use Illuminate\Support\Facades\DB;
 
 class ProfileVoiceSettings
 {
@@ -11,9 +13,12 @@ class ProfileVoiceSettings
 
     public const VOICE_AUTOPLAY_ENABLED_KEY = 'voice_autoplay_enabled';
 
+    public const VOICE_SETTINGS_INITIALIZED_KEY = 'voice_settings_initialized';
+
     public function voiceEnabled(Profile $profile): bool
     {
-        return $this->booleanFromData($profile, self::VOICE_ENABLED_KEY, true);
+        return $this->hasConfiguredVoice($profile)
+            && $this->booleanFromData($profile, self::VOICE_ENABLED_KEY, true);
     }
 
     public function voiceAutoplayEnabled(Profile $profile): bool
@@ -50,6 +55,59 @@ class ProfileVoiceSettings
         $data[self::VOICE_AUTOPLAY_ENABLED_KEY] = $voiceEnabled && $voiceAutoplayEnabled;
 
         return $data;
+    }
+
+    public function hasConfiguredVoice(Profile $profile): bool
+    {
+        if ($profile->relationLoaded('voices')) {
+            return $profile->voices->contains(
+                fn (Voice $voice): bool => (bool) $voice->active && $this->voiceIsConfigured($voice)
+            );
+        }
+
+        if (! $profile->exists) {
+            return false;
+        }
+
+        return $profile->voices()
+            ->where('active', true)
+            ->whereNotNull('source_voice_id')
+            ->where('source_voice_id', '<>', '')
+            ->whereNotNull('source')
+            ->where('source', '<>', '')
+            ->exists();
+    }
+
+    public function voiceIsConfigured(Voice $voice): bool
+    {
+        return filled($voice->source_voice_id) && filled($voice->source);
+    }
+
+    public function initializeAfterSuccessfulClone(Voice $voice, bool $hadConfiguredVoice): void
+    {
+        if (! $voice->profile_id) {
+            return;
+        }
+
+        DB::transaction(function () use ($hadConfiguredVoice, $voice): void {
+            $profile = Profile::query()->lockForUpdate()->find($voice->profile_id);
+
+            if (! $profile instanceof Profile) {
+                return;
+            }
+
+            $data = is_array($profile->data) ? $profile->data : [];
+
+            if (! array_key_exists(self::VOICE_SETTINGS_INITIALIZED_KEY, $data)) {
+                if (! $hadConfiguredVoice) {
+                    $data[self::VOICE_ENABLED_KEY] = true;
+                    $data[self::VOICE_AUTOPLAY_ENABLED_KEY] = true;
+                }
+
+                $data[self::VOICE_SETTINGS_INITIALIZED_KEY] = true;
+                $profile->forceFill(['data' => $data])->save();
+            }
+        });
     }
 
     private function booleanFromData(Profile $profile, string $key, bool $default): bool

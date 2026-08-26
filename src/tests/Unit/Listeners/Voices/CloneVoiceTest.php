@@ -14,6 +14,7 @@ use App\Enums\SubscriptionUsageType;
 use App\Events\Voices\VoiceSampleAdded;
 use App\Jobs\Voices\DeleteReplacedProviderVoice;
 use App\Listeners\Voices\CloneVoice;
+use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\SubscriptionUse;
@@ -23,6 +24,7 @@ use App\Models\VoiceProviderRequest;
 use App\Models\VoiceSample;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileConversationMessageService;
+use App\Services\ProfileVoiceSettings;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -36,8 +38,17 @@ class CloneVoiceTest extends TestCase
         Event::fake();
         Queue::fake();
         $user = User::factory()->create();
+        $profile = Profile::factory()->create([
+            'user_id' => $user->id,
+            'data' => [
+                ProfileVoiceSettings::VOICE_ENABLED_KEY => false,
+                ProfileVoiceSettings::VOICE_AUTOPLAY_ENABLED_KEY => false,
+                ProfileVoiceSettings::VOICE_SETTINGS_INITIALIZED_KEY => true,
+            ],
+        ]);
         $voice = Voice::factory()->create([
             'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'source' => 'elevenlabs',
             'source_voice_id' => 'old-provider-voice',
         ]);
@@ -86,12 +97,73 @@ class CloneVoiceTest extends TestCase
         (new CloneVoice($manager))->handle(new VoiceSampleAdded($voice, $voiceSample));
 
         $this->assertSame('new-provider-voice', $voice->fresh()->source_voice_id);
+        $profile->refresh();
+        $this->assertFalse($profile->data[ProfileVoiceSettings::VOICE_ENABLED_KEY]);
+        $this->assertFalse($profile->data[ProfileVoiceSettings::VOICE_AUTOPLAY_ENABLED_KEY]);
         Queue::assertPushed(
             DeleteReplacedProviderVoice::class,
             fn (DeleteReplacedProviderVoice $job): bool => $job->voiceId === $voice->id
                 && $job->provider === 'elevenlabs'
                 && $job->providerVoiceId === 'old-provider-voice'
         );
+    }
+
+    public function test_first_successful_clone_enables_voice_and_autoplay_by_default(): void
+    {
+        Event::fake();
+        Queue::fake();
+        $user = User::factory()->create();
+        $profile = Profile::factory()->create([
+            'user_id' => $user->id,
+            'data' => [
+                ProfileVoiceSettings::VOICE_ENABLED_KEY => false,
+                ProfileVoiceSettings::VOICE_AUTOPLAY_ENABLED_KEY => false,
+            ],
+        ]);
+        $voice = Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source' => null,
+            'source_voice_id' => null,
+        ]);
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'duration' => 10,
+            'active' => true,
+        ]);
+        VoiceProviderRequest::factory()->pending()->create([
+            'voice_id' => $voice->id,
+            'voice_sample_id' => $voiceSample->id,
+            'source' => '',
+            'source_voice_id' => null,
+            'request_url' => '',
+        ]);
+        $client = Mockery::mock(VoiceClient::class);
+        $client->shouldReceive('cloneVoice')->once()->andReturn(new VoiceClientClonedVoice(
+            'elevenlabs',
+            'first-provider-voice',
+            'completed',
+            [],
+            'https://api.elevenlabs.io/v1/voices/add',
+        ));
+        $manager = Mockery::mock(VoiceManager::class);
+        $manager->shouldReceive('driver')->once()->andReturn($client);
+        $notifications = Mockery::mock(NotificationDispatcher::class);
+        $notifications->shouldReceive('send')->once();
+        $messages = Mockery::mock(ProfileConversationMessageService::class);
+        $messages->shouldReceive('generateMissingAudiosForVoice')->once();
+        $usage = Mockery::mock(SubscriptionUsageRecorder::class);
+        $usage->shouldReceive('finalize')->once();
+        $this->app->instance(NotificationDispatcher::class, $notifications);
+        $this->app->instance(ProfileConversationMessageService::class, $messages);
+        $this->app->instance(SubscriptionUsageRecorder::class, $usage);
+
+        (new CloneVoice($manager))->handle(new VoiceSampleAdded($voice, $voiceSample));
+
+        $profile->refresh();
+        $this->assertTrue($profile->data[ProfileVoiceSettings::VOICE_ENABLED_KEY]);
+        $this->assertTrue($profile->data[ProfileVoiceSettings::VOICE_AUTOPLAY_ENABLED_KEY]);
+        $this->assertTrue($profile->data[ProfileVoiceSettings::VOICE_SETTINGS_INITIALIZED_KEY]);
     }
 
     public function test_failed_clone_releases_reserved_usage_and_marks_provider_request_failed(): void
@@ -128,7 +200,7 @@ class CloneVoiceTest extends TestCase
 
         $this->assertSame(0, (int) $subscription->limit()->firstOrFail()->voice_clones_remaining);
 
-        $listener = new CloneVoice(app(\App\Classes\VoiceService\VoiceManager::class));
+        $listener = new CloneVoice(app(VoiceManager::class));
 
         $listener->failed(
             new VoiceSampleAdded($voice, $voiceSample),

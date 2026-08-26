@@ -3727,7 +3727,7 @@
                 "profile"
               ]
             },
-            "description": "Lists profiles that belong to the authenticated user. Requires token ability: profile:read."
+            "description": "Lists profiles that belong to the authenticated user. Voice fields include effective voice_enabled, voice_autoplay_enabled, and voice_clone_status (pending, processing, completed, failed, or null). Requires token ability: profile:read."
           },
           "response": []
         },
@@ -3799,7 +3799,7 @@
                 "{{profile_id}}"
               ]
             },
-            "description": "Retrieves the profile identified by profile_id."
+            "description": "Retrieves the profile identified by profile_id. voice_enabled and voice_autoplay_enabled are always false when no completed clone exists; voice_clone_status exposes pending, processing, completed, failed, or null."
           },
           "response": []
         },
@@ -3915,7 +3915,7 @@
                 "{{profile_alias}}"
               ]
             },
-            "description": "Retrieves a profile by alias. Requires profile:read and does not validate profile ownership."
+            "description": "Retrieves a published profile by alias, including effective voice settings and voice_clone_status. Requires profile:read and does not validate profile ownership."
           },
           "response": []
         },
@@ -4180,6 +4180,40 @@
           "response": []
         },
         {
+          "name": "Update Profile Voice Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"voice_enabled\": true,\n  \"voice_autoplay_enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/voice-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "voice-settings"
+              ]
+            },
+            "description": "Updates profile voice and autoplay preferences. Enabling profile voice requires a completed clone and returns 422 when no cloned voice exists; false/false remains valid without a clone. Requires token ability: profile:write."
+          },
+          "response": []
+        },
+        {
           "name": "Activate Profile",
           "request": {
             "method": "POST",
@@ -4201,7 +4235,7 @@
                 "activate"
               ]
             },
-            "description": "Activates and publishes a profile when publication requirements are met and the owner has a current subscription with an available active-profile slot. Returns 402 when there is no active subscription and 409 when the plan active-profile limit is reached. Requires token ability: profile:write."
+            "description": "Activates and publishes a profile when name, alias, description, an active avatar, and an approved indexed source are present. A cloned voice is optional. The owner must have a current subscription with an available active-profile slot. Returns 402 when there is no active subscription and 409 when the plan active-profile limit is reached. Requires token ability: profile:write."
           },
           "response": []
         },

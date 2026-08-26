@@ -693,7 +693,7 @@ class ProfileControllerTest extends TestAPI
 
         $this->assertContains('alias', $missing);
         $this->assertContains('avatar', $missing);
-        $this->assertContains('voice', $missing);
+        $this->assertNotContains('voice', $missing);
         $this->assertContains('source', $missing);
         $this->assertFalse((bool) $profile->fresh()->active);
     }
@@ -930,6 +930,52 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonValidationErrors(['voice_autoplay_enabled', 'voice_enabled']);
     }
 
+    public function test_user_can_not_enable_profile_voice_without_a_completed_clone(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::factory()->create(['user_id' => $user->id]);
+
+        Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source' => null,
+            'source_voice_id' => null,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => true,
+                'voice_enabled' => true,
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['voice_enabled']);
+        $this->assertFalse((bool) ($profile->fresh()->data['voice_enabled'] ?? false));
+    }
+
+    public function test_user_can_enable_profile_voice_with_a_completed_clone(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::factory()->create(['user_id' => $user->id]);
+
+        Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+            'source_voice_id' => 'configured-provider-voice',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->patchJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/voice-settings', [
+                'voice_autoplay_enabled' => true,
+                'voice_enabled' => true,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.voice_enabled', true);
+        $response->assertJsonPath('data.voice_autoplay_enabled', true);
+    }
+
     public function test_user_without_profile_write_ability_can_not_update_profile_voice_settings(): void
     {
         $user = User::factory()->create(['role' => 'user']);
@@ -1163,17 +1209,6 @@ class ProfileControllerTest extends TestAPI
             'personality' => $this->faker->text(100),
             'active' => false,
             'status' => ProfileStatus::Draft,
-        ]);
-
-        Voice::create([
-            'user_id' => $user->id,
-            'profile_id' => $profile->id,
-            'name' => $profile->name,
-            'description' => $profile->description,
-            'language_code' => 'es',
-            'source_voice_id' => 'voice-provider-id',
-            'source' => 'elevenlabs',
-            'active' => true,
         ]);
 
         ProfileAvatar::create([
