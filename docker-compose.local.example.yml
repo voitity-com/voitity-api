@@ -1,0 +1,12 @@
+services:
+  queue:
+    command:
+      - php
+      - artisan
+      - queue:work
+      - database
+      - --queue=chat,default
+      - --sleep=1
+      - --tries=3
+      - --timeout=300
+      - --max-time=3600
