@@ -726,6 +726,12 @@ Resources:
                   - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${AdminDistribution}
               - Effect: Allow
                 Action:
+                  - cloudfront:DescribeFunction
+                  - cloudfront:UpdateFunction
+                  - cloudfront:PublishFunction
+                Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/bigmelo-web-uri-rewrite
+              - Effect: Allow
+                Action:
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Ref ExistingApiEnvSecretArn
