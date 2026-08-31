@@ -3894,6 +3894,108 @@
           "response": []
         },
         {
+          "name": "Get Profile Appearance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/appearance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "appearance"
+              ]
+            },
+            "description": "Returns the selected profile template, active background type, stored background image URL, and available templates. Requires profile:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Appearance",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"template_key\": \"profile05\",\n  \"background_type\": \"css\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/appearance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "appearance"
+              ]
+            },
+            "description": "Updates template_key and/or background_type. template_key accepts profile01, profile02, profile03, profile04, or profile05. background_type accepts css or image; image requires a previously uploaded background. Requires profile:write."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Profile Background Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{profile_background_image_file_path}}"
+                },
+                {
+                  "key": "template_key",
+                  "value": "profile01",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/appearance/background-image",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "appearance",
+                "background-image"
+              ]
+            },
+            "description": "Uploads or safely replaces the background image, selects image background, and optionally updates the template. Accepts JPG, PNG, or WebP up to 10 MB. Uses local profile storage in development and the configured profiles S3 disk in production. Requires profile:write."
+          },
+          "response": []
+        },
+        {
           "name": "Get Profile By Alias",
           "request": {
             "method": "GET",
@@ -8139,6 +8241,11 @@
     {
       "key": "widget_enabled",
       "value": "true",
+      "type": "string"
+    },
+    {
+      "key": "profile_background_image_file_path",
+      "value": "",
       "type": "string"
     },
     {

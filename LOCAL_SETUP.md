@@ -67,6 +67,9 @@ DB_QUEUE_AFTER_COMMIT=true
 ADMIN_APP_URL=http://localhost:3000
 PROFILE_DOMAIN_DRIVER=local
 PROFILE_DOMAIN_LOCAL_PUBLIC_URL_PATTERN=http://{hostname}:3001
+FILESYSTEM_PROFILES_DRIVER=local
+PROFILE_APPEARANCE_DISK=profiles
+PROFILE_APPEARANCE_VISIBILITY=public
 ```
 
 Docker Compose inyecta la conexión local a PostgreSQL, por lo que los valores
@@ -340,3 +343,35 @@ coordinada el mapeo en Compose y las URLs de los `.env` de ambos frontends.
   infraestructura.
 - No ejecutes desde esta guía comandos de AWS, despliegue ni migraciones contra
   una base remota.
+
+## Fondos personalizados de perfiles
+
+El editor de templates guarda las imágenes mediante el disco Laravel
+`profiles`. En local, `FILESYSTEM_PROFILES_DRIVER=local` escribe los archivos
+en `src/storage/app/public/profiles/{profileId}/backgrounds/` y la API los
+publica desde `APP_URL/storage/...`. Si una instalación local no muestra la
+imagen, crea el enlace público de Laravel una sola vez:
+
+```sh
+cd /Users/abel/Documents/tike/apps/voitity-api
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec app php artisan storage:link
+```
+
+Producción usa el mismo código y cambia únicamente la configuración del disco:
+
+```env
+FILESYSTEM_PROFILES_DRIVER=s3
+PROFILE_APPEARANCE_DISK=profiles
+PROFILE_APPEARANCE_VISIBILITY=public
+AWS_PROFILES_BUCKET=nombre-del-bucket
+AWS_PROFILES_URL=https://dominio-publico-de-assets
+AWS_DEFAULT_REGION=region-configurada
+```
+
+Las credenciales de AWS deben permanecer en el mecanismo seguro de variables
+del entorno de despliegue; no se guardan en `.env.example`, Git ni Postman. No
+es necesario crear carpetas manualmente en S3: la clave
+`profiles/{profileId}/backgrounds/{uuid}.ext` crea el prefijo al subir el
+objeto. Una imagen nueva se guarda primero, luego se actualiza la base de datos
+y solo después se elimina la anterior, para conservar el fondo existente si la
+carga falla.
