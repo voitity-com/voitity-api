@@ -104,6 +104,7 @@ class ProfileController extends Controller
                     self::AVATAR_RESPONSE_COLUMNS,
                     self::SOURCE_RESPONSE_COLUMNS,
                     'conversationMessages',
+                    'appearance',
                 ])
                 ->orderByDesc('created_at')
                 ->get();
@@ -382,6 +383,7 @@ class ProfileController extends Controller
                     self::AVATAR_RESPONSE_COLUMNS,
                     self::SOURCE_RESPONSE_COLUMNS,
                     'conversationMessages',
+                    'appearance',
                 ])
                 ->first();
 
@@ -832,6 +834,7 @@ class ProfileController extends Controller
             self::AVATAR_RESPONSE_COLUMNS,
             self::SOURCE_RESPONSE_COLUMNS,
             'conversationMessages',
+            'appearance',
         ]);
     }
 

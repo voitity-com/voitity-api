@@ -48,6 +48,7 @@ class ProfileResponse
             'products_enabled' => (bool) $this->profile->products_enabled,
             'feature_settings' => app(FeatureService::class)->profileFeatureRows($this->profile),
             'messaging_capabilities' => app(ProfileMessagingCapabilitiesService::class)->forProfile($this->profile),
+            'appearance' => ProfileAppearanceResponse::forProfile($this->profile)->toArray(),
             'created_at' => $this->profile->created_at?->toJSON(),
             'updated_at' => $this->profile->updated_at?->toJSON(),
         ];

@@ -133,6 +133,11 @@ class Profile extends Model
         return $this->hasOne(ProfileWidget::class);
     }
 
+    public function appearance(): HasOne
+    {
+        return $this->hasOne(ProfileAppearance::class);
+    }
+
     public function domain(): HasOne
     {
         return $this->hasOne(ProfileDomain::class);

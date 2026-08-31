@@ -36,6 +36,7 @@ class PublicProfileResponse
                 ->profileFeatureRows($this->profile),
             'messaging_capabilities' => app(ProfileMessagingCapabilitiesService::class)
                 ->forProfile($this->profile),
+            'appearance' => ProfileAppearanceResponse::forProfile($this->profile)->toArray(false),
         ];
     }
 }

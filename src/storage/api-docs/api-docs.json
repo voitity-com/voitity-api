@@ -1229,6 +1229,164 @@
                 }
             }
         },
+        "/api/profile/{profile}/appearance": {
+            "get": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Get profile template and background settings",
+                "operationId": "66da37c3ff329841e860b0e46838dbde",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Appearance retrieved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "404": {
+                        "description": "Profile not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Update profile template or background type",
+                "operationId": "19bb1e6a774966485bed513108efb1b3",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "template_key": {
+                                        "type": "string",
+                                        "enum": [
+                                            "profile01",
+                                            "profile02",
+                                            "profile03",
+                                            "profile04",
+                                            "profile05"
+                                        ],
+                                        "example": "profile05"
+                                    },
+                                    "background_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "css",
+                                            "image"
+                                        ],
+                                        "example": "css"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Appearance updated"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/profile/{profile}/appearance/background-image": {
+            "post": {
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Upload or replace the profile background image",
+                "operationId": "990c412f16b11fed79916baaa67c1abb",
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "image"
+                                ],
+                                "properties": {
+                                    "image": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "template_key": {
+                                        "type": "string",
+                                        "enum": [
+                                            "profile01",
+                                            "profile02",
+                                            "profile03",
+                                            "profile04",
+                                            "profile05"
+                                        ],
+                                        "example": "profile05"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Background image uploaded"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/profile/chats": {
             "get": {
                 "tags": [

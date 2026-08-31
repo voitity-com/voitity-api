@@ -18,6 +18,7 @@ use App\Http\Controllers\api\v1\NotificationPreferenceController;
 use App\Http\Controllers\api\v1\PaymentController;
 use App\Http\Controllers\api\v1\PaymentMethodController;
 use App\Http\Controllers\api\v1\PaymentOperationsHealthController;
+use App\Http\Controllers\api\v1\ProfileAppearanceController;
 use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
 use App\Http\Controllers\api\v1\ProfileController;
@@ -189,6 +190,9 @@ Route::prefix('/profile')->group(function () {
     Route::patch('/{profile}/features', [ProfileFeatureController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/widget', [ProfileWidgetController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/widget', [ProfileWidgetController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/appearance', [ProfileAppearanceController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::patch('/{profile}/appearance', [ProfileAppearanceController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::post('/{profile}/appearance/background-image', [ProfileAppearanceController::class, 'uploadBackgroundImage'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/domain', [ProfileDomainController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::post('/{profile}/domain', [ProfileDomainController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/domain/verify', [ProfileDomainController::class, 'verify'])->middleware(['auth:sanctum', 'abilities:profile:write']);
