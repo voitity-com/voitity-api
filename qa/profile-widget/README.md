@@ -2,7 +2,7 @@
 
 ## Scope
 
-This protocol validates the API settings, installation snippet, isolated launcher, desktop panel, mobile full-screen chat, persistence, links, and microphone restrictions.
+This protocol validates the API settings, installation snippet, isolated launcher, desktop panel, mobile inset chat, persistence, links, and microphone restrictions.
 
 ## Preconditions
 
@@ -51,7 +51,7 @@ Expected mobile behavior at 390 x 844:
 
 - the launcher stays inside safe viewport edges;
 - the text bubble and avatar remain visible;
-- opening the widget uses the complete viewport;
+- opening the widget leaves at least 16 pixels of the host page visible around the panel, in addition to device safe areas;
 - the close button remains visible above the profile content;
 - the composer, send button, message list, and avatar do not overflow horizontally;
 - the on-screen keyboard does not permanently hide the composer after closing.
