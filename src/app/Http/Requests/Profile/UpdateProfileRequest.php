@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Profile;
 
+use App\Rules\NotReservedProfileAlias;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -47,6 +48,7 @@ class UpdateProfileRequest extends FormRequest
                 'filled',
                 'string',
                 'max:100',
+                new NotReservedProfileAlias,
                 Rule::unique('profiles', 'alias')->ignore($profileId)->whereNull('deleted_at'),
             ],
             'description' => 'sometimes|required|string|max:500',

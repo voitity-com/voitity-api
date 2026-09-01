@@ -197,6 +197,21 @@ class ProfileControllerTest extends TestAPI
         $response->assertJsonValidationErrors(['alias']);
     }
 
+    public function test_user_can_not_create_profile_with_reserved_alias(): void
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken())
+            ->postJson(self::ENDPOINT_PROFILE, [
+                'name' => $this->faker->name,
+                'alias' => 'landing',
+                'description' => $this->faker->text(200),
+                'genre' => 'male',
+                'personality' => $this->faker->text(100),
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alias']);
+    }
+
     public function test_unauthorized_user_can_not_list_profiles()
     {
         $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
@@ -617,6 +632,28 @@ class ProfileControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
                 'alias' => 'taken-alias',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alias']);
+        $this->assertSame('current-alias', $profile->fresh()->alias);
+    }
+
+    public function test_user_can_not_update_profile_with_reserved_alias_regardless_of_case(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $profile = Profile::create([
+            'user_id' => $user->id,
+            'name' => $this->faker->name,
+            'alias' => 'current-alias',
+            'description' => $this->faker->text(200),
+            'genre' => 'male',
+            'personality' => $this->faker->text(100),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->json('PATCH', self::ENDPOINT_PROFILE.'/'.$profile->id, [
+                'alias' => 'LANDING',
             ]);
 
         $response->assertStatus(422);
