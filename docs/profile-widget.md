@@ -61,7 +61,7 @@ The administrator generates environment-aware code:
 
 The loader is versioned at `/widget/v1.js`. This keeps installed sites compatible if a future loader requires a new contract. The loader uses Shadow DOM so host styles do not alter the launcher.
 
-The admin preview does not recreate the launcher with separate UI code. It loads this same installation script inside a sandboxed, dark simulated host page. The avatar starts in the real bottom-right position and a click opens the actual 390-pixel widget panel, with the same viewport-dependent height and mobile full-screen rule used on customer sites.
+The admin preview does not recreate the launcher with separate UI code. It loads this same installation script inside a sandboxed, dark simulated host page. The avatar starts in the real bottom-right position and a click opens the actual 390-pixel widget panel, with the same viewport-dependent height and mobile inset rule used on customer sites.
 
 On first load it requests only the public widget configuration. The iframe is created lazily after a click and opens:
 
@@ -77,7 +77,7 @@ The embedded mode:
 
 - reuses the public `Profile` component and its message, audio, product, media, and social-link behavior;
 - uses the existing mobile layout because the desktop panel is 390 pixels wide;
-- becomes full-screen on host viewports of 620 pixels or less;
+- leaves at least 16 pixels of the host page visible around the panel on viewports of 620 pixels or less, in addition to device safe areas;
 - skips the normal page analytics-consent overlay and SEO metadata mutation;
 - records profile views with the `widget_chat` surface;
 - stores the visitor chat in the Bigmelo iframe origin rather than the host origin.
