@@ -148,6 +148,7 @@ class ActivationReportService
 
         return ActivationEvent::query()
             ->whereIn('user_id', $userIds)
+            ->whereIn('event_type', collect(ActivationEventType::funnel())->map->value->all())
             ->where('occurred_at', '<=', $to)
             ->orderBy('occurred_at')
             ->get();

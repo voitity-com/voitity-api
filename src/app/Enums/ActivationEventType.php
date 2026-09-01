@@ -26,7 +26,6 @@ enum ActivationEventType: string
             self::WhatsappAdded,
             self::ProductCreated,
             self::ConversationStarted,
-            self::LinkCopied,
         ];
     }
 
@@ -38,7 +37,6 @@ enum ActivationEventType: string
             self::WhatsappAdded,
             self::ProductCreated,
             self::ConversationStarted,
-            self::LinkCopied,
         ];
     }
 }

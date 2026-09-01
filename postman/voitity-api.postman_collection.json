@@ -1570,7 +1570,7 @@
                 { "key": "medium", "value": "{{reports_medium}}", "disabled": true }
               ]
             },
-            "description": "Returns the trial activation funnel, overview, campaign performance and conversion metrics. Requires an authenticated user with role admin. The date range may not exceed 366 days."
+            "description": "Returns the eight-stage trial activation funnel through the first conversation, plus overview, campaign performance and conversion metrics. Requires an authenticated user with role admin. The date range may not exceed 366 days."
           },
           "response": []
         },
@@ -1591,7 +1591,7 @@
                 { "key": "search", "value": "{{reports_search}}", "disabled": true }
               ]
             },
-            "description": "Lists users in the selected trial cohort with completed milestones, next step, attribution, profile and subscription state. Requires an authenticated user with role admin."
+            "description": "Lists users in the selected trial cohort with progress across the eight reported milestones, next step, attribution, profile and subscription state. Requires an authenticated user with role admin."
           },
           "response": []
         }

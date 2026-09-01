@@ -90,8 +90,13 @@ class AdminActivationReportControllerTest extends TestAPI
         $response->assertJsonPath('data.overview.users_activated', 1);
         $response->assertJsonPath('data.overview.converted_to_paid', 1);
         $response->assertJsonPath('data.overview.activation_rate', 100);
-        $response->assertJsonPath('data.funnel.8.event', ActivationEventType::LinkCopied->value);
-        $response->assertJsonPath('data.funnel.8.users', 1);
+        $response->assertJsonCount(8, 'data.funnel');
+        $response->assertJsonPath('data.funnel.7.event', ActivationEventType::ConversationStarted->value);
+        $response->assertJsonPath('data.funnel.7.users', 1);
+        $this->assertNotContains(
+            ActivationEventType::LinkCopied->value,
+            collect($response->json('data.funnel'))->pluck('event')->all()
+        );
         $response->assertJsonPath('data.campaigns.0.campaign', 'fitness-coaches-co');
         $response->assertJsonPath('data.campaigns.0.converted_to_paid', 1);
     }
@@ -115,9 +120,16 @@ class AdminActivationReportControllerTest extends TestAPI
             'occurred_at' => now(),
             'idempotency_key' => "test:{$user->id}:profile",
         ]);
+        ActivationEvent::query()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'event_type' => ActivationEventType::LinkCopied,
+            'occurred_at' => now()->addSecond(),
+            'idempotency_key' => "test:{$user->id}:link",
+        ]);
         $token = $admin->createToken('reports', ['user:read'])->plainTextToken;
 
-        $this->withToken($token)
+        $response = $this->withToken($token)
             ->getJson('/api/admin/reports/activation/users?search=coach')
             ->assertOk()
             ->assertJsonPath('data.users.0.id', $user->id)
@@ -125,5 +137,10 @@ class AdminActivationReportControllerTest extends TestAPI
             ->assertJsonPath('data.users.0.next_step', ActivationEventType::AvatarAdded->value)
             ->assertJsonPath('data.users.0.activated', false)
             ->assertJsonPath('data.pagination.total', 1);
+
+        $this->assertNotContains(
+            ActivationEventType::LinkCopied->value,
+            $response->json('data.users.0.completed_events')
+        );
     }
 }
