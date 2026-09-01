@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileProductStatus;
 use App\Enums\ProfileStatus;
 use App\Http\Responses\Products\ProfileProductResponse;
@@ -69,6 +70,11 @@ class ProfileProductControllerTest extends TestAPI
             ->assertJsonPath('data.destination_type', 'whatsapp')
             ->assertJsonPath('data.status', 'published');
         $product = ProfileProduct::query()->firstOrFail();
+        $this->assertDatabaseHas('activation_events', [
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'event_type' => ActivationEventType::ProductCreated->value,
+        ]);
         Storage::disk('profiles')->assertExists($product->storage_path);
         $this->assertStringStartsWith('https://wa.me/573001234567?text=', $response->json('data.action_url'));
         $this->assertStringContainsString(
@@ -568,6 +574,7 @@ class ProfileProductControllerTest extends TestAPI
         $service = app(ProfileProductPromptService::class);
 
         $profile->forceFill([
+            'products_enabled' => false,
             'product_recommendation_guidance' => 'Ofrece suplementos cuando sean relevantes.',
         ])->save();
         $this->assertSame([], $service->productsForPrompt($profile));

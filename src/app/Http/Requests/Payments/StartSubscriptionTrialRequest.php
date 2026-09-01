@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Payments;
 
 use App\Enums\SubscriptionPlan;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,7 +15,7 @@ class StartSubscriptionTrialRequest extends FormRequest
     }
 
     /**
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -33,6 +34,12 @@ class StartSubscriptionTrialRequest extends FormRequest
             'payment_source.customer_data.full_name' => ['nullable', 'string', 'max:255'],
             'payment_source.customer_data.phone_number' => ['nullable', 'string', 'max:50'],
             'payment_source.metadata' => ['nullable', 'array'],
+            'attribution' => ['nullable', 'array'],
+            'attribution.utm_source' => ['nullable', 'string', 'max:255'],
+            'attribution.utm_medium' => ['nullable', 'string', 'max:255'],
+            'attribution.utm_campaign' => ['nullable', 'string', 'max:255'],
+            'attribution.utm_term' => ['nullable', 'string', 'max:255'],
+            'attribution.utm_content' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

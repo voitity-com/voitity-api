@@ -4,11 +4,13 @@ namespace App\Classes\ProfilePublication;
 
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Classes\Subscriptions\SubscriptionPlanCatalog;
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileStatus;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -17,13 +19,14 @@ class ProfileActivationService
     public function __construct(
         private readonly SubscriptionEntitlementService $entitlements,
         private readonly SubscriptionPlanCatalog $planCatalog,
+        private readonly ActivationEventRecorder $activationEvents,
     ) {}
 
     public function activate(User $user, Profile $profile): Profile
     {
         $subscription = $this->entitlements->assertHasActiveSubscription($user);
 
-        return DB::transaction(function () use ($profile, $subscription, $user): Profile {
+        $activatedProfile = DB::transaction(function () use ($profile, $subscription, $user): Profile {
             User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
 
             /** @var Subscription|null $lockedSubscription */
@@ -98,5 +101,15 @@ class ProfileActivationService
 
             return $lockedProfile->fresh();
         });
+
+        $this->activationEvents->record(
+            $user,
+            ActivationEventType::ProfilePublished,
+            "profile:{$activatedProfile->id}:published",
+            profile: $activatedProfile,
+            subscription: $subscription,
+        );
+
+        return $activatedProfile;
     }
 }

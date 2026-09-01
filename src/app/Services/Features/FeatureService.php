@@ -235,10 +235,15 @@ class FeatureService
 
     public function initializeProfileFeatures(Profile $profile, bool $enabled = false): void
     {
-        $this->updateProfileFeatures(
-            $profile,
-            array_fill_keys(array_keys($this->profileCatalog()), $enabled)
-        );
+        $settings = array_fill_keys(array_keys($this->profileCatalog()), $enabled);
+
+        if (! $enabled) {
+            foreach ($this->defaultEnabledProfileFeatures() as $key) {
+                $settings[$key] = true;
+            }
+        }
+
+        $this->updateProfileFeatures($profile, $settings);
     }
 
     public function integrationFeatureKey(string $provider): ?string
@@ -296,5 +301,16 @@ class FeatureService
     private function defaultProfileFeatureEnabled(): bool
     {
         return false;
+    }
+
+    /** @return list<string> */
+    private function defaultEnabledProfileFeatures(): array
+    {
+        return [
+            self::PRODUCTS,
+            self::INTEGRATIONS_TIKTOK,
+            self::INTEGRATIONS_YOUTUBE,
+            self::INTEGRATIONS_OTHER,
+        ];
     }
 }

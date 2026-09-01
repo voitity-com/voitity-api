@@ -25,7 +25,7 @@ class ProfileProductController extends Controller
         Request $request,
         Profile $profile,
         ProfileProductService $service,
-        FeatureService $features
+        FeatureService $features,
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
@@ -82,7 +82,7 @@ class ProfileProductController extends Controller
         StoreProfileProductRequest $request,
         Profile $profile,
         ProfileProductService $service,
-        FeatureService $features
+        FeatureService $features,
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;

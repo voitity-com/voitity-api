@@ -2,20 +2,24 @@
 
 namespace App\Services\Insights;
 
+use App\Enums\ActivationEventType;
 use App\Enums\ChatEndReason;
 use App\Enums\ChatStatus;
 use App\Events\ChatClosed;
 use App\Models\Chat;
 use App\Models\Profile;
+use App\Services\Activation\ActivationEventRecorder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ChatLifecycleService
 {
+    public function __construct(private readonly ActivationEventRecorder $activationEvents) {}
+
     public function resolve(Profile $profile, ?int $chatId, ?string $visitorIdHash): array
     {
-        return DB::transaction(function () use ($chatId, $profile, $visitorIdHash): array {
+        [$chat, $isNew] = DB::transaction(function () use ($chatId, $profile, $visitorIdHash): array {
             $chat = $chatId ? $profile->chats()->lockForUpdate()->find($chatId) : null;
 
             if ($chat instanceof Chat && ! $this->isActive($chat)) {
@@ -41,6 +45,19 @@ class ChatLifecycleService
 
             return [$chat, $isNew];
         });
+
+        if ($isNew) {
+            $profile->loadMissing('user');
+            $this->activationEvents->record(
+                $profile->user,
+                ActivationEventType::ConversationStarted,
+                "profile:{$profile->id}:conversation:{$chat->id}",
+                profile: $profile,
+                metadata: ['surface' => $visitorIdHash ? 'public_profile' : 'owner_preview'],
+            );
+        }
+
+        return [$chat, $isNew];
     }
 
     public function closeInactive(?Carbon $at = null): int

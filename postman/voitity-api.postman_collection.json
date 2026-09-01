@@ -1551,6 +1551,53 @@
       ]
     },
     {
+      "name": "Admin Reports",
+      "item": [
+        {
+          "name": "Get Activation Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/reports/activation?from={{reports_from}}&to={{reports_to}}&campaign={{reports_campaign}}&source={{reports_source}}&medium={{reports_medium}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "reports", "activation"],
+              "query": [
+                { "key": "from", "value": "{{reports_from}}" },
+                { "key": "to", "value": "{{reports_to}}" },
+                { "key": "campaign", "value": "{{reports_campaign}}", "disabled": true },
+                { "key": "source", "value": "{{reports_source}}", "disabled": true },
+                { "key": "medium", "value": "{{reports_medium}}", "disabled": true }
+              ]
+            },
+            "description": "Returns the trial activation funnel, overview, campaign performance and conversion metrics. Requires an authenticated user with role admin. The date range may not exceed 366 days."
+          },
+          "response": []
+        },
+        {
+          "name": "List Activation Report Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/reports/activation/users?from={{reports_from}}&to={{reports_to}}&page={{reports_page}}&per_page={{reports_per_page}}&search={{reports_search}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "reports", "activation", "users"],
+              "query": [
+                { "key": "from", "value": "{{reports_from}}" },
+                { "key": "to", "value": "{{reports_to}}" },
+                { "key": "page", "value": "{{reports_page}}" },
+                { "key": "per_page", "value": "{{reports_per_page}}" },
+                { "key": "search", "value": "{{reports_search}}", "disabled": true }
+              ]
+            },
+            "description": "Lists users in the selected trial cohort with completed milestones, next step, attribution, profile and subscription state. Requires an authenticated user with role admin."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Feature Flags",
       "item": [
         {
@@ -1856,7 +1903,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"payment_source_id\": {{payment_method_id}},\n  \"terms_accepted\": true\n}"
+              "raw": "{\n  \"plan\": \"{{payment_plan}}\",\n  \"payment_source_id\": {{payment_method_id}},\n  \"terms_accepted\": true,\n  \"attribution\": {\n    \"utm_source\": \"{{reports_source}}\",\n    \"utm_medium\": \"{{reports_medium}}\",\n    \"utm_campaign\": \"{{reports_campaign}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/subscription/trial",
@@ -6690,6 +6737,66 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Get Profile Activation Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/activation-progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "activation-progress"
+              ]
+            },
+            "description": "Returns the commercial activation checklist for the profile: published, WhatsApp, product, conversation and copied link. Requires profile ownership or admin role and token ability profile:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Profile Link Copied",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"link_copied\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/activation-events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "activation-events"
+              ]
+            },
+            "description": "Records the idempotent copied-link milestone from the publication dock. Requires profile ownership or admin role and token ability profile:write."
+          },
+          "response": []
         },
         {
           "name": "Profile Knowledge",

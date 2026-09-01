@@ -12,6 +12,9 @@ capabilities, and production process requirements are documented in
 [`docs/subscriptions-and-usage.md`](docs/subscriptions-and-usage.md).
 Payment methods, checkout, renewals, credit charges, webhooks, and payment
 security are documented in [`docs/payments.md`](docs/payments.md).
+The internal activation funnel, campaign attribution, report endpoints, and
+default profile features are documented in
+[`docs/ACTIVATION_REPORTS.md`](docs/ACTIVATION_REPORTS.md).
 The unauthenticated published-profile surface, encrypted visitor chat sessions,
 rate limits, and deployment order are documented in
 [`docs/public-profile-api.md`](docs/public-profile-api.md).

@@ -5,6 +5,7 @@ namespace App\Classes\Subscriptions;
 use App\Classes\PaymentService\PaymentPayloadSanitizer;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCreateRequest;
+use App\Enums\ActivationEventType;
 use App\Enums\PaymentCurrency;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\PaymentProvider;
@@ -14,6 +15,7 @@ use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +31,7 @@ class SubscriptionTrialService
         private readonly PaymentMethodService $paymentMethods,
         private readonly PaymentPayloadSanitizer $payloadSanitizer,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+        private readonly ?ActivationEventRecorder $activationEvents = null,
     ) {}
 
     /**
@@ -103,7 +106,7 @@ class SubscriptionTrialService
 
     public function activateTrialFromPaymentOrder(PaymentOrder $paymentOrder): Subscription
     {
-        return DB::transaction(function () use ($paymentOrder): Subscription {
+        $subscription = DB::transaction(function () use ($paymentOrder): Subscription {
             /** @var PaymentOrder $order */
             $order = PaymentOrder::query()
                 ->with('user')
@@ -160,6 +163,16 @@ class SubscriptionTrialService
 
             return $subscription;
         });
+
+        $this->activationEvents?->record(
+            $subscription->user,
+            ActivationEventType::TrialStarted,
+            "subscription:{$subscription->id}:trial-started",
+            subscription: $subscription,
+            metadata: ['plan' => $subscription->plan->value],
+        );
+
+        return $subscription;
     }
 
     public function cancelTrial(User $user): Subscription
