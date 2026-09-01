@@ -3,12 +3,14 @@
 namespace App\Services\Products;
 
 use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileProductDestinationType;
 use App\Enums\ProfileProductStatus;
 use App\Models\Profile;
 use App\Models\ProfileProduct;
 use App\Models\ProfileProductImport;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\ProfileKnowledge\ProfileKnowledgeIndexScheduler;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ class ProfileProductService
         private readonly ProfileProductImageService $images,
         private readonly SubscriptionPlanCapabilityService $capabilities,
         private readonly ProfileKnowledgeIndexScheduler $knowledgeIndex,
+        private readonly ActivationEventRecorder $activationEvents,
     ) {}
 
     /**
@@ -58,7 +61,7 @@ class ProfileProductService
                     $attributes
                 );
 
-                return ProfileProduct::query()->create([
+                $product = ProfileProduct::query()->create([
                     ...$attributes,
                     'public_id' => $publicId,
                     'profile_id' => $lockedProfile->id,
@@ -75,6 +78,16 @@ class ProfileProductService
                     'social_image_height' => $storedImage['social_height'] ?? null,
                     'published_at' => $attributes['status'] === ProfileProductStatus::Published->value ? now() : null,
                 ]);
+
+                $this->activationEvents->record(
+                    $user,
+                    ActivationEventType::ProductCreated,
+                    "profile:{$lockedProfile->id}:product-created",
+                    profile: $lockedProfile,
+                    metadata: ['product_id' => $product->id],
+                );
+
+                return $product;
             });
         } catch (\Throwable $e) {
             if ($storedImage) {

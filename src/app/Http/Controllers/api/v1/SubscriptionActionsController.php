@@ -9,6 +9,7 @@ use App\Classes\Subscriptions\PaymentMethodService;
 use App\Classes\Subscriptions\SubscriptionBillingService;
 use App\Classes\Subscriptions\SubscriptionPaymentSourceService;
 use App\Classes\Subscriptions\SubscriptionTrialService;
+use App\Enums\ActivationEventType;
 use App\Enums\PaymentOrderStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
@@ -22,6 +23,7 @@ use App\Models\PaymentOrder;
 use App\Models\PaymentSource;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -115,6 +117,7 @@ class SubscriptionActionsController extends Controller
         PaymentService $paymentService,
         SubscriptionTrialService $trialService,
         PaymentMethodService $paymentMethods,
+        ActivationEventRecorder $activationEvents,
     ): JsonResponse {
         try {
             /** @var User $user */
@@ -141,6 +144,15 @@ class SubscriptionActionsController extends Controller
                     $terms,
                 );
             }
+
+            $activationEvents->record(
+                $user,
+                ActivationEventType::TrialStarted,
+                "subscription:{$trial['subscription']->id}:trial-started",
+                subscription: $trial['subscription'],
+                metadata: ['plan' => $plan->value],
+                attribution: (array) ($request->validated('attribution') ?? []),
+            );
 
             return response()->json([
                 'message' => 'Subscription trial started successfully.',

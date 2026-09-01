@@ -41,7 +41,7 @@ class Profile extends Model
         'profession_key' => 'custom',
         'profession_template_version' => '2026-07',
         'networks' => '{}',
-        'products_enabled' => false,
+        'products_enabled' => true,
     ];
 
     protected $casts = [

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\api\v1\AdminActivationReportController;
 use App\Http\Controllers\api\v1\AdminFeatureController;
 use App\Http\Controllers\api\v1\AdminUserController;
 use App\Http\Controllers\api\v1\AppNotificationController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\api\v1\NotificationPreferenceController;
 use App\Http\Controllers\api\v1\PaymentController;
 use App\Http\Controllers\api\v1\PaymentMethodController;
 use App\Http\Controllers\api\v1\PaymentOperationsHealthController;
+use App\Http\Controllers\api\v1\ProfileActivationProgressController;
 use App\Http\Controllers\api\v1\ProfileAppearanceController;
 use App\Http\Controllers\api\v1\ProfileAudioTranscriptionController;
 use App\Http\Controllers\api\v1\ProfileChatController;
@@ -141,6 +143,8 @@ Route::get('/integrations/instagram/callback', [ProfileIntegrationController::cl
 Route::get('/integrations/tiktok/callback', [ProfileIntegrationController::class, 'tiktokCallback']);
 
 Route::prefix('/admin')->group(function () {
+    Route::get('/reports/activation', [AdminActivationReportController::class, 'summary'])->middleware(['auth:sanctum']);
+    Route::get('/reports/activation/users', [AdminActivationReportController::class, 'users'])->middleware(['auth:sanctum']);
     Route::get('/features', [AdminFeatureController::class, 'index'])->middleware(['auth:sanctum']);
     Route::patch('/features', [AdminFeatureController::class, 'update'])->middleware(['auth:sanctum']);
     Route::get('/users', [AdminUserController::class, 'index'])->middleware(['auth:sanctum']);
@@ -188,6 +192,8 @@ Route::prefix('/profile')->group(function () {
     Route::delete('/{profile}/sources/{source}', [ProfileKnowledgeController::class, 'deleteSource'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/features', [ProfileFeatureController::class, 'index'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/features', [ProfileFeatureController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/activation-progress', [ProfileActivationProgressController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
+    Route::post('/{profile}/activation-events', [ProfileActivationProgressController::class, 'store'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/widget', [ProfileWidgetController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}/widget', [ProfileWidgetController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::get('/{profile}/appearance', [ProfileAppearanceController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);

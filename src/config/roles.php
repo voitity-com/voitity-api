@@ -40,6 +40,7 @@ return [
             'admin.users.view',
             'admin.users.impersonate',
             'admin.users.subscriptions.manage',
+            'admin.reports.view',
             'business:read',
             'business:write',
             'business:activate',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Enums\ActivationEventType;
 use App\Enums\AvatarGenerationStatus;
 use App\Enums\AvatarVariant;
 use App\Exceptions\Avatar\AvatarGenerationInProgressException;
@@ -17,6 +18,7 @@ use App\Models\AiImage;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -231,8 +233,12 @@ class AvatarController extends Controller
         }
     }
 
-    public function activate(Request $request, Profile $profile, AvatarRepository $avatarRepository): JsonResponse
-    {
+    public function activate(
+        Request $request,
+        Profile $profile,
+        AvatarRepository $avatarRepository,
+        ActivationEventRecorder $activationEvents,
+    ): JsonResponse {
         try {
             $user = $request->user();
 
@@ -259,6 +265,14 @@ class AvatarController extends Controller
 
             $variant = AvatarVariant::from((string) $validated['variant']);
             $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar, $variant);
+
+            $activationEvents->record(
+                $user,
+                ActivationEventType::AvatarAdded,
+                "profile:{$profile->id}:avatar-added",
+                profile: $profile,
+                metadata: ['avatar_id' => $activeAvatar->id],
+            );
 
             $this->notifyProfileOwner($profile, 'avatar_activated');
 

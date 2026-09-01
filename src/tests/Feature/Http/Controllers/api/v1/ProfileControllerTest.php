@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileSourceStatus;
 use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionPlan;
@@ -82,6 +83,7 @@ class ProfileControllerTest extends TestAPI
         $this->assertEquals($profile_data['description'], $new_profile->description);
         $this->assertSame('en', $new_profile->locale);
         $this->assertFalse((bool) $new_profile->active);
+        $this->assertTrue((bool) $new_profile->products_enabled);
         $this->assertSame(ProfileStatus::Draft, $new_profile->status);
         $this->assertSame($new_profile->user_id, $baseVoice->user_id);
         $this->assertSame($new_profile->name, $baseVoice->name);
@@ -106,15 +108,22 @@ class ProfileControllerTest extends TestAPI
             ->keys();
         $this->assertCount($catalog->count(), $settings);
 
+        $defaultEnabledFeatures = collect([
+            FeatureService::PRODUCTS,
+            FeatureService::INTEGRATIONS_TIKTOK,
+            FeatureService::INTEGRATIONS_YOUTUBE,
+            FeatureService::INTEGRATIONS_OTHER,
+        ]);
+
         foreach ($profileFeatureKeys as $featureKey) {
             $this->assertTrue($settings->has($featureKey));
             $this->assertTrue($settings[$featureKey]['available']);
-            $this->assertFalse($settings[$featureKey]['enabled']);
-            $this->assertFalse($settings[$featureKey]['effective']);
+            $this->assertSame($defaultEnabledFeatures->contains($featureKey), $settings[$featureKey]['enabled']);
+            $this->assertSame($defaultEnabledFeatures->contains($featureKey), $settings[$featureKey]['effective']);
             $this->assertDatabaseHas('profile_feature_settings', [
                 'profile_id' => $new_profile->id,
                 'feature_key' => $featureKey,
-                'enabled' => false,
+                'enabled' => $defaultEnabledFeatures->contains($featureKey),
             ]);
         }
         $this->assertTrue($settings[FeatureService::DOMAINS_CUSTOM]['available']);
@@ -124,6 +133,11 @@ class ProfileControllerTest extends TestAPI
         $this->assertDatabaseMissing('profile_feature_settings', [
             'profile_id' => $new_profile->id,
             'feature_key' => FeatureService::DOMAINS_CUSTOM,
+        ]);
+        $this->assertDatabaseHas('activation_events', [
+            'user_id' => $user->id,
+            'profile_id' => $new_profile->id,
+            'event_type' => ActivationEventType::ProfileCreated->value,
         ]);
         $this->assertDatabaseHas('profile_widgets', [
             'profile_id' => $new_profile->id,

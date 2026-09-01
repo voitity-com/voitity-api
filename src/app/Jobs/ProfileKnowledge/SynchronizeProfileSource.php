@@ -3,9 +3,11 @@
 namespace App\Jobs\ProfileKnowledge;
 
 use App\Classes\ProfileKnowledge\ProfileDataSynchronizer;
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileSourceStatus;
 use App\Models\ProfileSource;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileKnowledge\ProfileKnowledgeIndexer;
 use Illuminate\Bus\Queueable;
@@ -39,8 +41,11 @@ class SynchronizeProfileSource implements ShouldQueue
         return [(new WithoutOverlapping("profile-knowledge:{$profileId}"))->releaseAfter(15)->expireAfter(600)];
     }
 
-    public function handle(ProfileDataSynchronizer $synchronizer, ProfileKnowledgeIndexer $indexer): void
-    {
+    public function handle(
+        ProfileDataSynchronizer $synchronizer,
+        ProfileKnowledgeIndexer $indexer,
+        ?ActivationEventRecorder $activationEvents = null,
+    ): void {
         $source = ProfileSource::query()->with(['profile', 'items'])->find($this->sourceId);
 
         if (! $source instanceof ProfileSource || $source->status === ProfileSourceStatus::Duplicate) {
@@ -92,6 +97,18 @@ class SynchronizeProfileSource implements ShouldQueue
                 'processing_completed_at' => now(),
                 'indexed_at' => now(),
             ]);
+
+            $source->loadMissing(['profile', 'user']);
+
+            if ($source->user instanceof User) {
+                ($activationEvents ?? app(ActivationEventRecorder::class))->record(
+                    $source->user,
+                    ActivationEventType::SourceSynchronized,
+                    "profile:{$source->profile_id}:source-synchronized",
+                    profile: $source->profile,
+                    metadata: ['source_id' => $source->id],
+                );
+            }
 
             $this->notifySuccess($source->fresh());
 

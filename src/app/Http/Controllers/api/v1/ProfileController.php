@@ -6,6 +6,7 @@ use App\Classes\ProfilePublication\ProfileActivationService;
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
+use App\Enums\ActivationEventType;
 use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionUsageType;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
@@ -19,6 +20,7 @@ use App\Http\Responses\Profile\ProfileResponse;
 use App\Models\Profile;
 use App\Models\User;
 use App\Models\Voice;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\Features\FeatureService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\ProfileVoiceSettings;
@@ -168,6 +170,7 @@ class ProfileController extends Controller
         SubscriptionUsageRecorder $usageRecorder,
         FeatureService $features,
         ProfileWidgetService $widgets,
+        ActivationEventRecorder $activationEvents,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -181,6 +184,7 @@ class ProfileController extends Controller
             [$profile] = DB::transaction(function () use ($features, $request, $usageRecorder, $user, $widgets): array {
                 $profile = $user->profiles()->create(array_merge($request->validated(), [
                     'active' => false,
+                    'products_enabled' => true,
                     'status' => ProfileStatus::Draft,
                 ]));
                 $features->initializeProfileFeatures($profile, false);
@@ -206,6 +210,13 @@ class ProfileController extends Controller
                 $user,
                 'profile_created',
                 $this->profileNotificationData($profile)
+            );
+
+            $activationEvents->record(
+                $user,
+                ActivationEventType::ProfileCreated,
+                "profile:{$profile->id}:created",
+                profile: $profile,
             );
 
             return response()->json([
@@ -788,8 +799,11 @@ class ProfileController extends Controller
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
-    public function updateData(StoreProfileDataRequest $request, Profile $profile): JsonResponse
-    {
+    public function updateData(
+        StoreProfileDataRequest $request,
+        Profile $profile,
+        ActivationEventRecorder $activationEvents,
+    ): JsonResponse {
         try {
             $user = $request->user();
 
@@ -804,6 +818,17 @@ class ProfileController extends Controller
             if ($request->isUpdatingNetworks()) {
                 $profile->networks = (object) $request->validated('networks');
                 $profile->save();
+
+                $networks = array_change_key_case((array) $request->validated('networks'), CASE_LOWER);
+
+                if (filled($networks['whatsapp'] ?? null)) {
+                    $activationEvents->record(
+                        $user,
+                        ActivationEventType::WhatsappAdded,
+                        "profile:{$profile->id}:whatsapp-added",
+                        profile: $profile,
+                    );
+                }
             } else {
                 $profile->update($request->validated());
             }
