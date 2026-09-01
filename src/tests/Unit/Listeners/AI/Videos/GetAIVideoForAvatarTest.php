@@ -6,6 +6,7 @@ use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\AiVideo as AiVideoResult;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\ActivationEventType;
 use App\Enums\AvatarGenerationStatus;
 use App\Enums\AvatarVariant;
 use App\Enums\SubscriptionPlan;
@@ -75,6 +76,12 @@ class GetAIVideoForAvatarTest extends TestCase
         $this->assertSame('active', $avatar->status);
         $this->assertSame(AvatarGenerationStatus::Completed, $avatar->generation_status);
         $this->assertSame(AvatarVariant::Animation, $avatar->selected_variant);
+        $this->assertDatabaseHas('activation_events', [
+            'event_type' => ActivationEventType::AvatarAdded->value,
+            'idempotency_key' => "profile:{$aiVideo->profile_id}:avatar-added",
+            'profile_id' => $aiVideo->profile_id,
+            'user_id' => $aiVideo->user_id,
+        ]);
     }
 
     #[Test]

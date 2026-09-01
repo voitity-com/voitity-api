@@ -5,12 +5,14 @@ namespace App\Listeners\AI\Videos;
 use App\Classes\Subscriptions\AvatarGenerationUsageService;
 use App\Classes\VideoAIService\VideoAIArtifactStorage;
 use App\Classes\VideoAIService\VideoAIService;
+use App\Enums\ActivationEventType;
 use App\Enums\AvatarGenerationStatus;
 use App\Enums\AvatarVariant;
 use App\Events\AI\Videos\AiVideoForAvatarCreated;
 use App\Listeners\Concerns\RoutesToMediaQueue;
 use App\Models\ProfileAvatar;
 use App\Models\User;
+use App\Services\Activation\ActivationEventRecorder;
 use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -46,6 +48,7 @@ class GetAIVideoForAvatar implements ShouldQueue
         if ($aiVideo->status === 'succeeded' && $aiVideo->file) {
             $avatar = $this->updateProfileAvatar($event, $aiVideo);
             $this->finalizeAvatarUsage($avatar, $aiVideo);
+            $this->recordAvatarAdded($avatar);
 
             Log::info('GetAIVideoForAvatar skipped because AiVideo is already stored.', [
                 'aivideo_id' => $aiVideo->id,
@@ -78,6 +81,7 @@ class GetAIVideoForAvatar implements ShouldQueue
 
                 $avatar = $this->updateProfileAvatar($event, $aiVideo);
                 $this->finalizeAvatarUsage($avatar, $aiVideo);
+                $this->recordAvatarAdded($avatar);
                 $this->notifyAvatarGenerated($avatar);
 
                 Log::info('AI video generated and stored', [
@@ -282,6 +286,23 @@ class GetAIVideoForAvatar implements ShouldQueue
             'profile_id' => $profile->id,
             'action_url' => "/dashboard/profiles/{$profile->id}/avatar",
         ]);
+    }
+
+    private function recordAvatarAdded(?ProfileAvatar $avatar): void
+    {
+        if (! $avatar || ! $avatar->profile || ! $avatar->profile->user instanceof User) {
+            return;
+        }
+
+        $profile = $avatar->profile;
+
+        app(ActivationEventRecorder::class)->record(
+            $profile->user,
+            ActivationEventType::AvatarAdded,
+            "profile:{$profile->id}:avatar-added",
+            profile: $profile,
+            metadata: ['avatar_id' => $avatar->id],
+        );
     }
 
     private function finalizeAvatarUsage(?ProfileAvatar $avatar, $aiVideo): void
