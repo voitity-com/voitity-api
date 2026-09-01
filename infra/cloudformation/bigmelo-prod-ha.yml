@@ -531,12 +531,57 @@ Resources:
                 - Name: SizeRestrictions_BODY
                   ActionToUse:
                     Count: {}
+                - Name: CrossSiteScripting_BODY
+                  ActionToUse:
+                    Count: {}
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: managed-common
             SampledRequestsEnabled: true
-        - Name: AWSManagedKnownBadInputs
+        - Name: BlockCrossSiteScriptingBody
           Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            AndStatement:
+              Statements:
+                - LabelMatchStatement:
+                    Scope: LABEL
+                    Key: awswaf:managed:aws:core-rule-set:CrossSiteScripting_Body
+                - NotStatement:
+                    Statement:
+                      AndStatement:
+                        Statements:
+                          - ByteMatchStatement:
+                              FieldToMatch:
+                                Method: {}
+                              PositionalConstraint: EXACTLY
+                              SearchString: POST
+                              TextTransformations:
+                                - Priority: 0
+                                  Type: NONE
+                          - RegexMatchStatement:
+                              FieldToMatch:
+                                UriPath: {}
+                              RegexString: ^/api/profile/[0-9]+/appearance/background-image$
+                              TextTransformations:
+                                - Priority: 0
+                                  Type: NONE
+                          - ByteMatchStatement:
+                              FieldToMatch:
+                                SingleHeader:
+                                  Name: content-type
+                              PositionalConstraint: STARTS_WITH
+                              SearchString: multipart/form-data
+                              TextTransformations:
+                                - Priority: 0
+                                  Type: LOWERCASE
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: cross-site-scripting-body
+            SampledRequestsEnabled: true
+        - Name: AWSManagedKnownBadInputs
+          Priority: 2
           OverrideAction:
             None: {}
           Statement:
@@ -548,7 +593,7 @@ Resources:
             MetricName: managed-known-bad-inputs
             SampledRequestsEnabled: true
         - Name: PerIpRateLimit
-          Priority: 2
+          Priority: 3
           Action:
             Block: {}
           Statement:

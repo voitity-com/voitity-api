@@ -355,6 +355,25 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetsDistribution}
 
+  ProfilesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Sub bigmelo-${Environment}-profiles-${AWS::AccountId}
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadProfileMedia
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/images/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/videos/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/audio/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/profiles/*/backgrounds/*
+
   ApiRepository:
     Type: AWS::ECR::Repository
     Properties:
