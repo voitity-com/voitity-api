@@ -214,8 +214,57 @@ Resources:
             Action: ssm:GetCommandInvocation
             Resource: '*'
 
+  ApiAlbAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-alb-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireApiAlbAccessLogs
+            Status: Enabled
+            ExpirationInDays: 30
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiAlbAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApiAlbAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowElasticLoadBalancingLogDelivery
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ApiAlbAccessLogsBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*'
+
   ApiLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: ApiAlbAccessLogsBucketPolicy
     Properties:
       Name: bigmelo-prod-api
       Scheme: internet-facing
@@ -228,6 +277,12 @@ Resources:
           Value: 'true'
         - Key: idle_timeout.timeout_seconds
           Value: '65'
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref ApiAlbAccessLogsBucket
+        - Key: access_logs.s3.prefix
+          Value: alb
       Tags:
         - Key: Project
           Value: bigmelo
@@ -507,6 +562,33 @@ Resources:
               Value: !GetAtt MediaQueue.QueueName
         TargetValue: 2
 
+  ApiMultipartUploadPathSet:
+    Type: AWS::WAFv2::RegexPatternSet
+    Properties:
+      Name: bigmelo-prod-api-multipart-uploads
+      Description: Exact API paths allowed to bypass only the WAF body XSS relabel block for multipart uploads
+      Scope: REGIONAL
+      RegularExpressionList:
+        - '^/api/avatar/generate$'
+        - '^/api/businesses/[0-9]+/sources$'
+        - '^/api/profile/[0-9]+/appearance/background-image$'
+        - '^/api/profile/[0-9]+/conversation-messages/(initial|fallback_no_answer)/audio$'
+        - '^/api/profile/[0-9]+/integrations/onlyfans/media$'
+        - '^/api/profile/[0-9]+/integrations/other/media$'
+        - '^/api/profile/[0-9]+/messages/audio$'
+        - '^/api/profile/[0-9]+/products$'
+        - '^/api/profile/[0-9]+/products/[0-9]+$'
+        - '^/api/profile/[0-9]+/products/imports/preview$'
+        - '^/api/profile/[0-9]+/sources/cv$'
+        - '^/api/profile/[0-9]+/transcriptions/audio$'
+        - '^/api/public/profiles/[0-9]+/messages/audio$'
+        - '^/api/voice/[0-9]+/sample$'
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
   ApiWebAcl:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -560,10 +642,10 @@ Resources:
                               TextTransformations:
                                 - Priority: 0
                                   Type: NONE
-                          - RegexMatchStatement:
+                          - RegexPatternSetReferenceStatement:
+                              Arn: !GetAtt ApiMultipartUploadPathSet.Arn
                               FieldToMatch:
                                 UriPath: {}
-                              RegexString: ^/api/profile/[0-9]+/appearance/background-image$
                               TextTransformations:
                                 - Priority: 0
                                   Type: NONE
@@ -610,6 +692,39 @@ Resources:
     Properties:
       ResourceArn: !Ref ApiLoadBalancer
       WebACLArn: !GetAtt ApiWebAcl.Arn
+
+  ApiWafLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: aws-waf-logs-bigmelo-prod-api
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: bigmelo
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApiWafLoggingConfiguration:
+    Type: AWS::WAFv2::LoggingConfiguration
+    Properties:
+      ResourceArn: !GetAtt ApiWebAcl.Arn
+      LogDestinationConfigs:
+        - !GetAtt ApiWafLogGroup.Arn
+      RedactedFields:
+        - SingleHeader:
+            Name: authorization
+        - SingleHeader:
+            Name: cookie
+      LoggingFilter:
+        DefaultBehavior: DROP
+        Filters:
+          - Behavior: KEEP
+            Requirement: MEETS_ANY
+            Conditions:
+              - ActionCondition:
+                  Action: BLOCK
 
   AlarmTopic:
     Type: AWS::SNS::Topic

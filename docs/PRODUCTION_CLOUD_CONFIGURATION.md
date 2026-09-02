@@ -1,6 +1,6 @@
 # Configuración de producción de Bigmelo
 
-Última revisión: 24 de agosto de 2026. Región principal: `us-east-1`.
+Última revisión: 2 de septiembre de 2026. Región principal: `us-east-1`.
 
 ## Objetivo operativo
 
@@ -126,6 +126,83 @@ El dashboard `bigmelo-prod-operations` muestra tráfico, errores 5xx, capacidad,
 Los logs de API, workers y scheduler se envían a `/bigmelo/prod/api` con retención de 14 días. Las alarmas publican en el topic SNS `bigmelo-prod-operations`.
 
 Pendiente operativo: confirmar el correo o canal de guardia que debe suscribirse al topic SNS. AWS exige confirmar la suscripción por parte del destinatario.
+
+## Incidente de cargas multipart bloqueadas por AWS WAF
+
+### Síntoma y diagnóstico
+
+Entre el 1 y el 2 de septiembre de 2026, la edición de un producto desde `admin.bigmelo.com` fallaba al adjuntar una imagen y guardar su destino de WhatsApp. El navegador mostraba `TypeError: Failed to fetch`, aunque el número y el archivo cumplían las validaciones de la aplicación.
+
+La investigación confirmó esta secuencia:
+
+1. el preflight `OPTIONS` llegaba al API y respondía `204`;
+2. el `POST multipart/form-data` no aparecía en los logs de Nginx ni de Laravel;
+3. la métrica `AWS/WAFV2` registraba el bloqueo en la regla `BlockCrossSiteScriptingBody`;
+4. la regla administrada `CrossSiteScripting_BODY` etiquetaba bytes del cuerpo multipart como XSS;
+5. la regla personalizada convertía esa etiqueta en `BLOCK` antes de que la petición llegara al ALB;
+6. la respuesta generada por WAF no incluía los encabezados CORS de Laravel, por lo que el navegador presentaba el bloqueo como `Failed to fetch` en lugar de mostrar el `403` real.
+
+Durante los siete días revisados, WAF contó 11 coincidencias de `CrossSiteScripting_BODY` y bloqueó 9. También contó 153 coincidencias de `SizeRestrictions_BODY`. Esta última regla permanece en modo `COUNT`; los valores sirven como señal operativa y no son por sí mismos errores de la aplicación.
+
+La excepción existente sólo cubría `POST /api/profile/{id}/appearance/background-image`. El administrador y la web usan el mismo formato para más operaciones, por lo que el problema también podía aparecer de manera intermitente al cambiar el archivo o el contenido inspeccionado.
+
+### Superficies multipart revisadas
+
+La lista administrada por infraestructura incluye únicamente estas rutas y mantiene una coincidencia exacta del método, la ruta y el tipo de contenido:
+
+| Función | Ruta permitida |
+| --- | --- |
+| Generar avatar | `POST /api/avatar/generate` |
+| Fuente de negocio | `POST /api/businesses/{business}/sources` |
+| Fondo del perfil | `POST /api/profile/{profile}/appearance/background-image` |
+| Audio inicial o sin respuesta | `POST /api/profile/{profile}/conversation-messages/{initial|fallback_no_answer}/audio` |
+| Medio de OnlyFans | `POST /api/profile/{profile}/integrations/onlyfans/media` |
+| Medio de integración Otro | `POST /api/profile/{profile}/integrations/other/media` |
+| Audio de chat autenticado | `POST /api/profile/{profile}/messages/audio` |
+| Crear producto | `POST /api/profile/{profile}/products` |
+| Editar producto | `POST /api/profile/{profile}/products/{product}` |
+| Previsualizar importación CSV | `POST /api/profile/{profile}/products/imports/preview` |
+| CV o fuente del perfil | `POST /api/profile/{profile}/sources/cv` |
+| Transcribir audio | `POST /api/profile/{profile}/transcriptions/audio` |
+| Audio del perfil público | `POST /api/public/profiles/{profile}/messages/audio` |
+| Muestra de voz | `POST /api/voice/{voice}/sample` |
+
+Conectar OnlyFans, YouTube, Instagram o TikTok, sincronizar contenido y editar selecciones usa JSON u OAuth y no requiere esta excepción.
+
+### Solución aplicada
+
+`ApiMultipartUploadPathSet` es un `AWS::WAFv2::RegexPatternSet` que contiene las rutas anteriores. `BlockCrossSiteScriptingBody` omite su bloqueo adicional solamente cuando se cumplen las tres condiciones siguientes:
+
+- método exactamente `POST`;
+- URI incluida en `ApiMultipartUploadPathSet`;
+- encabezado `Content-Type` que comienza por `multipart/form-data`.
+
+La solución no desactiva AWS WAF ni permite rutas generales. Las reglas administradas, `AWSManagedKnownBadInputs`, el rate limit por IP, la autenticación, las abilities de Sanctum y las validaciones de tipo y tamaño del API continúan activas.
+
+Para que un incidente futuro pueda atribuirse a una ruta concreta:
+
+- WAF conserva durante 14 días sólo las peticiones bloqueadas en `aws-waf-logs-bigmelo-prod-api`;
+- los encabezados `Authorization` y `Cookie` se redactan en los logs de WAF;
+- el ALB guarda access logs cifrados con SSE-S3 en un bucket privado del stack;
+- los objetos del access log del ALB expiran después de 30 días;
+- la política del bucket limita la escritura al servicio de Elastic Load Balancing de esta cuenta y región.
+
+### Regla obligatoria para nuevas cargas de archivos
+
+Cada endpoint nuevo que use `FormData` o acepte `multipart/form-data` debe completar este checklist antes de llegar a producción:
+
+1. declarar una ruta concreta; no usar comodines de varios segmentos;
+2. mantener autenticación, autorización, validación MIME y límite de tamaño en Laravel;
+3. agregar su expresión exacta a `ApiMultipartUploadPathSet` en `infra/cloudformation/bigmelo-prod-ha.yml`;
+4. verificar que la excepción siga exigiendo `POST` y `multipart/form-data`;
+5. validar el template con `cfn-lint` y `aws cloudformation validate-template`;
+6. revisar un change set y confirmar que no reemplaza el ALB ni el Web ACL;
+7. probar desde el dominio público con un archivo representativo para incluir CloudFront, WAF y ALB en la prueba;
+8. confirmar que la petición llega al API y que no aumenta `BlockedRequests` para `BlockCrossSiteScriptingBody`;
+9. revisar los logs de WAF y ALB si el navegador vuelve a mostrar `Failed to fetch`;
+10. no establecer manualmente el `Content-Type` desde `fetch`; el navegador debe agregar el boundary multipart.
+
+No se debe resolver este problema desactivando `CrossSiteScripting_BODY`, permitiendo todo `multipart/form-data` ni agregando CORS indiscriminadamente a respuestas de seguridad. La excepción debe permanecer limitada a las rutas de negocio auditadas.
 
 ## Capacidad y pruebas
 
