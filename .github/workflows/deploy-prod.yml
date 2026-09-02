@@ -33,6 +33,9 @@ jobs:
       - name: Reject committed Runway credentials
         run: bash scripts/check-no-runway-secrets.sh
 
+      - name: Verify public profile media policy
+        run: bash scripts/check-profile-public-media-policy.sh
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:

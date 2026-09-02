@@ -4,6 +4,24 @@ Profiles can keep up to 15 products. The application-level catalog limit caps
 the active plan capability, including the internal admin plan, so API responses,
 CSV imports, manual creation, and the administrator all use the same value.
 
+## Product image storage
+
+Uploaded product images use `PRODUCTS_IMAGE_DISK` (`profiles` by default) and
+are stored under `products/{profile_id}/{public_id}/`. The original image and
+the generated social preview use bucket-owned ACLs. In production, public
+`GET`/`HEAD` access is granted centrally and only for `products/*` by
+`ProfilesBucketPolicy` in `infra/cloudformation/bigmelo-prod.yml`.
+
+The API returns `Storage::disk(...)->url(...)`, so `AWS_PROFILES_URL` must point
+at the public origin configured for the profiles bucket. A successful upload is
+not sufficient validation: production checks must also request both the
+original image and its social preview anonymously and expect HTTP `200`.
+
+Private sources such as `sources/*` and `businesses/*` must never be added to
+the public policy. When adding a new public media folder, update the policy,
+`scripts/check-profile-public-media-policy.sh`, and the infrastructure
+documentation in the same change.
+
 Only published products are supplied to the chat prompt. Product recommendations
 must also be enabled for the profile and the Products feature must be effective.
 The final response filters model-selected IDs against that published inventory

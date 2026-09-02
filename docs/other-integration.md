@@ -10,7 +10,9 @@ All files use `OTHER_MEDIA_DISK` (`profiles` by default) and are written under:
 integrations/other/{profile_id}/{uuid}/media.{extension}
 ```
 
-With `FILESYSTEM_PROFILES_DRIVER=local`, Laravel stores the object under `storage/app/public` and serves it through `/storage`. With `FILESYSTEM_PROFILES_DRIVER=s3`, the same code writes to `AWS_PROFILES_BUCKET`. The production bucket must allow the public GET/HEAD and CORS behavior already required by the existing `profiles` disk.
+With `FILESYSTEM_PROFILES_DRIVER=local`, Laravel stores the object under `storage/app/public` and serves it through `/storage`. With `FILESYSTEM_PROFILES_DRIVER=s3`, the same code writes to `AWS_PROFILES_BUCKET`. Objects keep the bucket-owner ACL; production grants anonymous `GET`/`HEAD` centrally and only for `integrations/other/*` through `ProfilesBucketPolicy` in `infra/cloudformation/bigmelo-prod.yml`.
+
+Validation must cover both halves of the flow: the authenticated upload must succeed and the resulting `media_url` must return HTTP `200` without AWS credentials. A successful database write does not prove that browsers can display the object. The same policy mechanism covers `integrations/onlyfans/*`; private source prefixes remain excluded.
 
 Supported files are JPG, PNG, WEBP, GIF (10 MB by default), and MP4, MOV, WEBM (100 MB by default). Upload and deletion use the configured disk, so deleting media or disconnecting the integration removes both local and S3 objects.
 

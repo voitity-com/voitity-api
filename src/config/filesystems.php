@@ -12,7 +12,8 @@ $profilesRoot = env(
     strtolower((string) $profilesDriver) === 's3' ? '' : storage_path('app/public')
 );
 
-// BucketOwnerEnforced accepts this canned ACL while keeping objects private behind CloudFront.
+// Keep ownership on the bucket. Public profile-media prefixes are exposed centrally by
+// the production bucket policy instead of granting public-read ACLs per object.
 $s3UploadOptions = static fn (mixed $driver): array => strtolower((string) $driver) === 's3'
     ? ['ACL' => 'bucket-owner-full-control']
     : [];

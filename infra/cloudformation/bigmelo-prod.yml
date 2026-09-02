@@ -373,6 +373,9 @@ Resources:
               - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/videos/*
               - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/audio/*
               - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/profiles/*/backgrounds/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/products/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/integrations/onlyfans/*
+              - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/integrations/other/*
 
   ApiRepository:
     Type: AWS::ECR::Repository

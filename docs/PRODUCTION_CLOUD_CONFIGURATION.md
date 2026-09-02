@@ -26,7 +26,34 @@ Los templates fuente son `infra/cloudformation/bigmelo-prod.yml` e `infra/cloudf
 | Bigmelo Labs | `bigmelolabs.com`, `www.bigmelolabs.com` | Stack y CloudFront independientes | Revisado, sin cambios |
 | Abeldev | `abeldev.com`, `www.abeldev.com` | Stack y CloudFront independientes | Revisado, sin cambios |
 
-Los buckets de web, admin, assets y archivos privados bloquean acceso público directo y usan cifrado en reposo. CloudFront es la entrada pública para los sitios estáticos.
+Los buckets de web, admin, assets y archivos privados bloquean acceso público directo y usan cifrado en reposo. CloudFront es la entrada pública para los sitios estáticos. El bucket de perfiles conserva una política de lectura pública limitada a prefijos de medios que deben mostrarse en el navegador; no concede lectura a fuentes, documentos ni archivos internos.
+
+### Medios públicos del bucket de perfiles
+
+Los objetos nuevos conservan el control del propietario del bucket mediante el ACL `bucket-owner-full-control`. La lectura anónima se decide centralmente en `ProfilesBucketPolicy`, no mediante ACL públicos por objeto. Los únicos prefijos públicos son:
+
+| Función | Prefijo público |
+| --- | --- |
+| Imágenes y avatares | `images/*` |
+| Videos generados | `videos/*` |
+| Audios públicos | `audio/*` |
+| Fondos del perfil | `profiles/*/backgrounds/*` |
+| Imágenes y vistas sociales de productos | `products/*` |
+| Medios manuales de OnlyFans | `integrations/onlyfans/*` |
+| Medios de la integración Otro | `integrations/other/*` |
+
+Los prefijos `sources/*`, `businesses/*` y cualquier documento de conocimiento continúan privados y se entregan únicamente mediante endpoints autenticados cuando corresponde. `scripts/check-profile-public-media-policy.sh` bloquea el despliegue si falta un prefijo público conocido o si se intenta exponer uno de los prefijos privados controlados.
+
+El control de mayoría de edad de OnlyFans pertenece a la interfaz de Bigmelo; no convierte el objeto de S3 en privado. Una persona que conozca la URL del objeto puede solicitarlo directamente. No se debe usar este prefijo para material que requiera autorización estricta. Ese caso exige una entrega separada mediante URLs firmadas o un endpoint autenticado.
+
+Después de cualquier cambio de almacenamiento se debe comprobar por separado:
+
+1. que el archivo existe en S3 con el tipo MIME y tamaño esperados;
+2. que la URL devuelta por el API responde `200` sin credenciales;
+3. que el administrador y la superficie pública muestran el archivo;
+4. que un prefijo privado representativo continúa respondiendo `403` de forma anónima.
+
+El 2 de septiembre de 2026 se detectó que productos, OnlyFans y Otro aceptaban la carga pero los objetos nuevos quedaban inaccesibles. La configuración global asignaba `bucket-owner-full-control`, mientras la política sólo incluía imágenes, videos, audio y fondos. El objeto se guardaba correctamente y la base de datos recibía una URL válida, pero S3 devolvía `403`; por eso el navegador mostraba una imagen rota. La corrección añadió los tres prefijos públicos faltantes a CloudFormation. Los objetos existentes comenzaron a funcionar sin volver a cargarlos.
 
 ## Flujo del API
 
