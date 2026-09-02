@@ -2939,6 +2939,208 @@ class AnswerBuilderTest extends TestCase
         $this->assertSame([], $response['media']);
     }
 
+    public function test_rag_does_not_attach_thematically_matching_media_when_proactive_media_is_disabled(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+        config()->set('ai-knowledge.retrieval.proactive_media_enabled', false);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create(['locale' => 'es']);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $integration = ProfileIntegration::create([
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_user_id' => 'UCfitness',
+            'username' => '@fitness',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+        $media = ProfileIntegrationMedia::create([
+            'profile_integration_id' => $integration->id,
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_YOUTUBE,
+            'provider_media_id' => 'gym-session',
+            'media_type' => 'VIDEO',
+            'media_url' => 'https://www.youtube.com/watch?v=gym-session',
+            'permalink' => 'https://www.youtube.com/watch?v=gym-session',
+            'caption' => 'Entrenamiento en gimnasio',
+            'observation' => 'Sesión para visitantes que entrenan en gimnasio.',
+            'selected' => true,
+            'taken_at' => now(),
+        ]);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Sí, voy al gimnasio.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Perfecto, en el gimnasio podemos organizar tu entrenamiento según tu experiencia.',
+                'media_request' => false,
+                'media_action' => 'none',
+                'media_ids' => [],
+                'product_request' => false,
+                'product_action' => 'none',
+                'product_ids' => [],
+                'references' => [],
+                'constraints' => [],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [[
+                            'source_type' => 'integration_media',
+                            'source_id' => (string) $media->id,
+                        ]],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([], $response['media']);
+        $this->assertStringNotContainsString('YouTube', $response['text']);
+    }
+
+    public function test_product_request_takes_priority_over_unrequested_media_and_recovers_the_retrieved_product(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+        config()->set('ai-knowledge.retrieval.proactive_media_enabled', true);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'locale' => 'es',
+            'products_enabled' => true,
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Entrenamiento personalizado',
+            'description' => 'Plan personalizado con seguimiento y una primera clase gratis.',
+            'image_url' => 'https://cdn.example.com/training.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://example.com/training',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $media = $this->createSelectedYouTubeVideo($profile, $user);
+        $media->forceFill([
+            'caption' => 'Sofía puede entrenar a sus clientes',
+            'observation' => 'Video sobre cómo Sofía puede entrenar de forma personalizada.',
+        ])->save();
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => '¿Me puedes entrenar?',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Sí, puedo entrenarte con un plan personalizado y seguimiento.',
+                'media_request' => true,
+                'media_action' => 'show',
+                'media_ids' => [$media->id],
+                'product_request' => true,
+                'product_action' => 'none',
+                'product_ids' => [],
+                'references' => [],
+                'constraints' => [],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [
+                            ['source_type' => 'product', 'source_id' => (string) $product->id],
+                            ['source_type' => 'integration_media', 'source_id' => (string) $media->id],
+                        ],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$product->id], collect($response['products'])->pluck('id')->all());
+        $this->assertSame([], $response['media']);
+        $this->assertStringNotContainsString('YouTube', $response['text']);
+    }
+
+    public function test_explicit_media_request_can_show_media_together_with_a_relevant_product(): void
+    {
+        Event::fake([SubscriptionUsageRequested::class]);
+
+        $user = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::factory()->for($user)->create([
+            'locale' => 'es',
+            'products_enabled' => true,
+        ]);
+        $product = app(ProfileProductService::class)->create($profile, $user, [
+            'name' => 'Entrenamiento personalizado',
+            'description' => 'Plan personalizado con seguimiento.',
+            'image_url' => 'https://cdn.example.com/training.jpg',
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://example.com/training',
+            'status' => 'published',
+        ]);
+        $chat = Chat::create(['profile_id' => $profile->id]);
+        $media = $this->createSelectedYouTubeVideo($profile, $user);
+        $question = Message::create([
+            'profile_id' => $profile->id,
+            'chat_id' => $chat->id,
+            'text' => 'Muéstrame un video y el entrenamiento personalizado.',
+            'type' => 'question',
+            'source' => 'api',
+        ]);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldReceive('getAnswer')->once()->andReturn(new ChatAIAnswer(
+            source: 'openai',
+            answer: json_encode([
+                'answer' => 'Te muestro el video y la opción de entrenamiento personalizado.',
+                'media_request' => true,
+                'media_action' => 'show',
+                'media_ids' => [$media->id],
+                'product_request' => true,
+                'product_action' => 'show',
+                'product_ids' => [$product->id],
+                'references' => [],
+                'constraints' => [],
+            ], JSON_THROW_ON_ERROR),
+            status: 'success',
+            response: [
+                '_bigmelo' => [
+                    'knowledge' => [
+                        'mode' => 'rag',
+                        'retrieved_sources' => [
+                            ['source_type' => 'product', 'source_id' => (string) $product->id],
+                            ['source_type' => 'integration_media', 'source_id' => (string) $media->id],
+                        ],
+                    ],
+                ],
+            ],
+        ));
+        $voiceManager = Mockery::mock(VoiceManager::class);
+        $voiceManager->shouldReceive('driver')->never();
+
+        $response = (new AnswerBuilder($chatAiClient, $voiceManager))->getAnswer($profile, $question)->toArray();
+
+        $this->assertSame([$product->id], collect($response['products'])->pluck('id')->all());
+        $this->assertSame([$media->id], collect($response['media'])->pluck('id')->all());
+    }
+
     public function test_rag_recognizes_an_infographic_as_an_explicit_other_media_request(): void
     {
         Event::fake([SubscriptionUsageRequested::class]);

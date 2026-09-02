@@ -66,6 +66,12 @@ class AnswerBuilder
         }
 
         $mediaService = app(ProfileMediaPromptService::class);
+        $textMediaContext = $mediaService->analyze(
+            $profile,
+            $question->text,
+            $question->chat_id,
+            $question->id
+        );
         $validatedStructuredMediaIds = $structuredAnswer !== null
             ? $this->uniqueIntegers([
                 ...($structuredAnswer['media_action'] === 'show' ? $structuredAnswer['media_ids'] : []),
@@ -82,20 +88,10 @@ class AnswerBuilder
                     $question->chat_id,
                     $question->id
                 ),
-                $mediaService->analyze(
-                    $profile,
-                    $question->text,
-                    $question->chat_id,
-                    $question->id
-                )
+                $textMediaContext
             );
         } else {
-            $mediaContext = $mediaService->analyze(
-                $profile,
-                $question->text,
-                $question->chat_id,
-                $question->id
-            );
+            $mediaContext = $textMediaContext;
         }
         $answerText = $this->conversationMessages()->stripNoAnswerMarker(
             $structuredAnswer['answer'] ?? $rawAnswerText
@@ -133,8 +129,10 @@ class AnswerBuilder
             ])
             : [];
         $productPayload = $productService->payloadForIds($structuredProductIds, $availableProducts);
+        $hasProductRecommendationIntent = $queryIntent->productRecommendation
+            || (bool) ($structuredAnswer['product_request'] ?? false);
 
-        if ($productPayload === [] && $queryIntent->productRecommendation) {
+        if ($productPayload === [] && $hasProductRecommendationIntent) {
             $mentionedProductIds = $this->productIdsMentionedInText($answerText, $availableProducts);
             $productPayload = $productService->payloadForIds($mentionedProductIds, $availableProducts);
             $recoveryReason = 'answer_product_name';
@@ -160,7 +158,7 @@ class AnswerBuilder
 
         if (
             $productPayload !== []
-            && $queryIntent->productRecommendation
+            && $hasProductRecommendationIntent
             && ($hasNoAnswerMarker || trim($answerText) === '' || $this->answerIndicatesNoAnswer($answerText))
         ) {
             $answerText = $this->productRecommendationFallbackAnswer($productPayload, $profile);
@@ -168,6 +166,13 @@ class AnswerBuilder
         }
         $mediaPayloadWasReplaced = false;
         $usesMediaRuleAnswer = false;
+        $hasExplicitMediaRequest = (bool) ($textMediaContext['wants_media'] ?? false);
+
+        if ($productPayload !== [] && ! $hasExplicitMediaRequest) {
+            $mediaPayload = [];
+            $mediaContext['wants_media'] = false;
+            $mediaContext['candidate_media'] = [];
+        }
 
         if (
             $mediaPayload === []
@@ -188,11 +193,27 @@ class AnswerBuilder
             $mediaPayload === []
             && ! ($mediaContext['wants_media'] ?? false)
             && ($mediaContext['candidate_media'] ?? []) !== []
-            && ($usesKnowledgeRetrieval || config('ai-knowledge.retrieval.proactive_media_enabled', false))
+            && $usesKnowledgeRetrieval
+            && $this->hasDirectMediaShowIntent($question->text)
         ) {
-            $mediaPayload = config('ai-knowledge.retrieval.proactive_media_enabled', false)
-                ? $this->stronglyRelevantMediaPayloadForQuestion($question, $mediaContext, $answerText)
-                : $this->mediaPayloadUsedInAnswer($question, $mediaContext, $answerText);
+            $mediaPayload = $this->explicitlyRequestedMediaPayloadUsedInAnswer(
+                $question,
+                $mediaContext,
+                $answerText,
+            );
+
+            if ($mediaPayload !== []) {
+                $mediaContext['wants_media'] = true;
+            }
+        }
+
+        if (
+            $mediaPayload === []
+            && ! ($mediaContext['wants_media'] ?? false)
+            && ($mediaContext['candidate_media'] ?? []) !== []
+            && config('ai-knowledge.retrieval.proactive_media_enabled', false)
+        ) {
+            $mediaPayload = $this->stronglyRelevantMediaPayloadForQuestion($question, $mediaContext, $answerText);
 
             if ($mediaPayload !== []) {
                 $mediaContext['wants_media'] = true;
@@ -885,14 +906,13 @@ class AnswerBuilder
     }
 
     /**
-     * Infer an omitted structured reference only when the generated answer
-     * and the visitor question share a factual term from the same retrieved
-     * media record. This prevents attaching merely similar retrieval results.
+     * Recover an omitted media reference only after a direct show/share verb
+     * and an exact factual term connects the question, answer, and retrieved item.
      *
      * @param  array<string, mixed>  $mediaContext
      * @return array<int, array<string, mixed>>
      */
-    private function mediaPayloadUsedInAnswer(
+    private function explicitlyRequestedMediaPayloadUsedInAnswer(
         Message $question,
         array $mediaContext,
         string $answerText
@@ -1083,6 +1103,16 @@ class AnswerBuilder
         $normalized = mb_strtolower($text);
 
         return preg_match('/\b(muestra|mu[eé]strame|muestres|mostrar|ens[eé][ñn]ame|ver|ve|quiero|show|see|view)\b/u', $normalized) === 1;
+    }
+
+    private function hasDirectMediaShowIntent(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+
+        return preg_match(
+            '/\b(muestra|mu[eé]strame|muestres|mostrar|ens[eé][ñn]ame|comparte|comp[aá]rteme|env[ií]a|env[ií]ame|show|share|send)\b/u',
+            $normalized,
+        ) === 1;
     }
 
     private function looksLikeMediaRequest(string $text): bool
