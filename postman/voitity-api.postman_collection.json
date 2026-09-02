@@ -759,7 +759,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\"\n}"
+              "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"locale\": \"{{signup_locale}}\",\n  \"password\": \"{{signup_password}}\",\n  \"password_confirmation\": \"{{signup_password}}\",\n  \"checkout_intent\": {\n    \"intent\": \"trial\",\n    \"plan\": \"starter\",\n    \"cycle\": \"month\",\n    \"locale\": \"{{signup_locale}}\",\n    \"landingVariant\": \"entrenadores\",\n    \"attribution\": {\n      \"utm_source\": \"postman\",\n      \"utm_medium\": \"qa\",\n      \"utm_campaign\": \"fitness_colombia_launch\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/sign-up",
@@ -772,7 +772,7 @@
                 "sign-up"
               ]
             },
-            "description": "Creates an email/password user, sends a verification email, and stores email, password, and verification_user_id in the active environment. The user cannot sign in until the verification link is opened. Copy the token from the local logs or Mailtrap into verification_token to test Verify Email."
+            "description": "Creates an email/password user, persists the optional pending checkout intent for cross-browser continuation, sends a verification email, and stores email, password, and verification_user_id in the active environment. The user cannot sign in until the verification link is opened. Copy the token from the local logs or Mailtrap into verification_token to test Verify Email."
           },
           "response": []
         },

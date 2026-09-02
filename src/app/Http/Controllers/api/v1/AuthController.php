@@ -144,7 +144,15 @@ class AuthController extends Controller
      *             @OA\Property(property="last_name", type="string", nullable=true, example="Moreno"),
      *             @OA\Property(property="email", type="string", example="abel@example.com"),
      *             @OA\Property(property="password", type="string", example="Test12345!"),
-     *             @OA\Property(property="password_confirmation", type="string", example="Test12345!")
+     *             @OA\Property(property="password_confirmation", type="string", example="Test12345!"),
+     *             @OA\Property(property="checkout_intent", type="object", nullable=true,
+     *                 @OA\Property(property="intent", type="string", enum={"checkout","trial"}),
+     *                 @OA\Property(property="plan", type="string", example="starter"),
+     *                 @OA\Property(property="cycle", type="string", enum={"month","year"}),
+     *                 @OA\Property(property="locale", type="string", enum={"en","es"}),
+     *                 @OA\Property(property="landingVariant", type="string", example="entrenadores"),
+     *                 @OA\Property(property="attribution", type="object")
+     *             )
      *         )
      *     ),
      *
@@ -163,7 +171,8 @@ class AuthController extends Controller
      *                 @OA\Property(property="first_name", type="string", nullable=true),
      *                 @OA\Property(property="last_name", type="string", nullable=true),
      *                 @OA\Property(property="avatar", type="string", nullable=true),
-     *                 @OA\Property(property="provider", type="string")
+     *                 @OA\Property(property="provider", type="string"),
+     *                 @OA\Property(property="checkout_intent", type="object", nullable=true)
      *             )
      *         )
      *     ),
@@ -192,6 +201,7 @@ class AuthController extends Controller
             'locale' => $validated['locale'],
             'password' => $validated['password'],
             'provider' => 'email',
+            'pending_checkout_intent' => $validated['checkout_intent'] ?? null,
         ]);
 
         $verificationUrl = $emailVerificationService->createVerificationUrl($user);
@@ -657,6 +667,7 @@ class AuthController extends Controller
             'role' => $user->role,
             'locale' => $user->locale,
             'email_verified_at' => $user->email_verified_at?->toJSON(),
+            'checkout_intent' => $user->pending_checkout_intent,
         ];
     }
 

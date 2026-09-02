@@ -115,6 +115,7 @@ class SubscriptionPaymentSourceService
 
         if ($paymentOrder->status === PaymentOrderStatus::Approved) {
             $subscription = $this->subscriptionPlanActivator->activateForPaymentOrder($paymentOrder);
+            $user->forceFill(['pending_checkout_intent' => null])->save();
             $paymentSource->refresh();
         }
 

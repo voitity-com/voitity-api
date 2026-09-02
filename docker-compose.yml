@@ -21,6 +21,7 @@ services:
       - DB_DATABASE=voitity
       - DB_USERNAME=voitity
       - DB_PASSWORD=voitity
+      - APP_URL=http://localhost:8000
       - RUN_QUEUE_WORKER=${RUN_QUEUE_WORKER:-false}
 
   queue:
@@ -54,6 +55,7 @@ services:
       - DB_PASSWORD=voitity
       - DB_QUEUE_RETRY_AFTER=360
       - DB_QUEUE_AFTER_COMMIT=true
+      - APP_URL=http://localhost:8000
       - RUN_QUEUE_WORKER=false
 
   scheduler:
@@ -80,6 +82,7 @@ services:
       - DB_DATABASE=voitity
       - DB_USERNAME=voitity
       - DB_PASSWORD=voitity
+      - APP_URL=http://localhost:8000
       - RUN_QUEUE_WORKER=false
 
   db:

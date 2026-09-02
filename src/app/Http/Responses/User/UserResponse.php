@@ -24,6 +24,7 @@ class UserResponse
             'google_verified_at' => $this->user->google_verified_at?->toJSON(),
             'created_at' => $this->user->created_at?->toJSON(),
             'updated_at' => $this->user->updated_at?->toJSON(),
+            'checkout_intent' => $this->user->pending_checkout_intent,
         ];
     }
 }

@@ -116,6 +116,44 @@
                                     "password_confirmation": {
                                         "type": "string",
                                         "example": "Test12345!"
+                                    },
+                                    "checkout_intent": {
+                                        "properties": {
+                                            "intent": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "checkout",
+                                                    "trial"
+                                                ]
+                                            },
+                                            "plan": {
+                                                "type": "string",
+                                                "example": "starter"
+                                            },
+                                            "cycle": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "month",
+                                                    "year"
+                                                ]
+                                            },
+                                            "locale": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "en",
+                                                    "es"
+                                                ]
+                                            },
+                                            "landingVariant": {
+                                                "type": "string",
+                                                "example": "entrenadores"
+                                            },
+                                            "attribution": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object",
+                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -161,6 +199,10 @@
                                                 },
                                                 "provider": {
                                                     "type": "string"
+                                                },
+                                                "checkout_intent": {
+                                                    "type": "object",
+                                                    "nullable": true
                                                 }
                                             },
                                             "type": "object"
@@ -3802,6 +3844,10 @@
                                                 "updated_at": {
                                                     "type": "string",
                                                     "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "checkout_intent": {
+                                                    "type": "object",
                                                     "nullable": true
                                                 }
                                             },

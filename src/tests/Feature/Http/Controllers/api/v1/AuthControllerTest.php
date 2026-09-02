@@ -24,7 +24,7 @@ class AuthControllerTest extends TestAPI
     public function get_access_token_with_email_and_password(): void
     {
         // Create the test user first
-        \App\Models\User::create([
+        User::create([
             'name' => 'Test Admin User',
             'email' => 'voitity@gmail.com',
             'password' => bcrypt('qwerty123'),
@@ -459,6 +459,7 @@ class AuthControllerTest extends TestAPI
     public function sign_up_creates_pending_email_user_and_sends_verification_email(): void
     {
         Mail::fake();
+        config()->set('app.url', 'http://localhost:8000');
 
         $response = $this->postJson(self::ENDPOINT_AUTH.'/sign-up', [
             'name' => 'Abel Moreno',
@@ -466,6 +467,19 @@ class AuthControllerTest extends TestAPI
             'locale' => 'es',
             'password' => 'Test12345!',
             'password_confirmation' => 'Test12345!',
+            'checkout_intent' => [
+                'intent' => 'trial',
+                'plan' => 'starter',
+                'cycle' => 'month',
+                'locale' => 'es',
+                'landingVariant' => 'entrenadores',
+                'attribution' => [
+                    'utm_source' => 'tiktok',
+                    'utm_medium' => 'paid_social',
+                    'utm_campaign' => 'fitness_colombia_launch',
+                    'utm_content' => 'video_01',
+                ],
+            ],
         ]);
 
         $response->assertStatus(201);
@@ -501,6 +515,8 @@ class AuthControllerTest extends TestAPI
         $this->assertNotNull($user->email_verification_token);
         $this->assertNotNull($user->email_verification_sent_at);
         $this->assertNotNull($user->email_verification_expires_at);
+        $this->assertSame('trial', $user->pending_checkout_intent['intent']);
+        $this->assertSame('fitness_colombia_launch', $user->pending_checkout_intent['attribution']['utm_campaign']);
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
             'role' => 'user',
@@ -513,6 +529,7 @@ class AuthControllerTest extends TestAPI
         Mail::assertSent(
             VerifyEmailAddress::class,
             fn (VerifyEmailAddress $mail): bool => $mail->hasTo('abel.signup@example.com')
+                && str_starts_with($mail->verificationUrl, 'http://localhost:8000/api/auth/verify-email/')
                 && str_contains($mail->verificationUrl, '/api/auth/verify-email/'.$user->id)
         );
         Mail::assertNotSent(WelcomeEmail::class);
@@ -535,6 +552,31 @@ class AuthControllerTest extends TestAPI
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['email']);
+    }
+
+    #[Test]
+    public function sign_up_rejects_invalid_checkout_intent(): void
+    {
+        $response = $this->postJson(self::ENDPOINT_AUTH.'/sign-up', [
+            'name' => 'Invalid Intent',
+            'email' => 'invalid.intent@example.com',
+            'password' => 'Test12345!',
+            'password_confirmation' => 'Test12345!',
+            'checkout_intent' => [
+                'intent' => 'trial',
+                'plan' => 'starter<script>',
+                'cycle' => 'weekly',
+                'unexpected' => 'discard-me',
+            ],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors([
+            'checkout_intent',
+            'checkout_intent.plan',
+            'checkout_intent.cycle',
+        ]);
+        $this->assertDatabaseMissing('users', ['email' => 'invalid.intent@example.com']);
     }
 
     #[Test]

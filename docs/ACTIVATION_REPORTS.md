@@ -28,10 +28,13 @@ sensitive payloads are stored in `activation_events`.
 ## Attribution
 
 The public landing preserves `utm_source`, `utm_medium`, `utm_campaign`,
-`utm_term`, and `utm_content` on its trial CTA. The admin checkout intent keeps
-those values through registration and sign-in. Starting a trial sends the
-attribution to the API and stores it on the `trial_started` event. Report
-campaign cohorts are anchored to that event.
+`utm_term`, and `utm_content` on its trial CTA. Email registration stores the
+validated pending checkout intent on the user as well as in the browser. After
+authentication, `GET /api/user` returns the pending intent so the admin can
+continue the campaign checkout even when verification happened in another
+browser. Starting a trial sends the attribution to the API, stores it on the
+`trial_started` event, and clears the pending intent. Report campaign cohorts
+are anchored to that event.
 
 ## API
 
