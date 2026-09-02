@@ -41,6 +41,8 @@ recorded in
 - `pgdata`: named volume for PostgreSQL data
 - `vendor`: named volume mounted at `/var/www/html/vendor` so Composer dependencies are not hidden by the `./src` bind mount
 
+Keep `APP_URL=http://localhost:8000` in local Docker environments. Email verification links are generated explicitly from this value instead of the proxied request host; omitting port `8000` produces links that do not reach the local API.
+
 The app container runs `docker/entrypoint.sh` before starting Laravel. The entrypoint installs Composer dependencies if `vendor/autoload.php` is missing, creates `src/.env` from `src/.env.example` if needed, and generates `APP_KEY` when it is empty.
 
 ## Start The App

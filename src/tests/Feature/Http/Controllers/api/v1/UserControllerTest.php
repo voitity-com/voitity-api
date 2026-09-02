@@ -13,7 +13,7 @@ class UserControllerTest extends TestAPI
 
     public function test_unauthorized_user_can_not_show_logged_user(): void
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->faker->word())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->faker->word())
             ->json('GET', self::ENDPOINT_USER);
 
         $response->assertStatus(401);
@@ -35,7 +35,7 @@ class UserControllerTest extends TestAPI
         ]);
         $token = $user->createToken('test-token', ['profile:read'])->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->json('GET', self::ENDPOINT_USER);
 
         $response->assertStatus(403);
@@ -50,9 +50,15 @@ class UserControllerTest extends TestAPI
             'last_name' => 'Moreno',
             'provider' => 'email',
             'avatar' => 'https://example.com/avatar.jpg',
+            'pending_checkout_intent' => [
+                'intent' => 'trial',
+                'plan' => 'starter',
+                'cycle' => 'month',
+                'landingVariant' => 'entrenadores',
+            ],
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->getToken($user->email, 'test123'))
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->json('GET', self::ENDPOINT_USER);
 
         $response->assertStatus(200);
@@ -64,6 +70,8 @@ class UserControllerTest extends TestAPI
         $response->assertJsonPath('data.email', $user->email);
         $response->assertJsonPath('data.role', 'admin');
         $response->assertJsonPath('data.provider', 'email');
+        $response->assertJsonPath('data.checkout_intent.intent', 'trial');
+        $response->assertJsonPath('data.checkout_intent.plan', 'starter');
         $response->assertJsonMissing(['password' => $user->password]);
         $response->assertJsonMissing(['remember_token' => $user->remember_token]);
     }

@@ -37,7 +37,8 @@ class UserController extends Controller
      *                 @OA\Property(property="email_verified_at", type="string", format="date-time", nullable=true),
      *                 @OA\Property(property="google_verified_at", type="string", format="date-time", nullable=true),
      *                 @OA\Property(property="created_at", type="string", format="date-time", nullable=true),
-     *                 @OA\Property(property="updated_at", type="string", format="date-time", nullable=true)
+     *                 @OA\Property(property="updated_at", type="string", format="date-time", nullable=true),
+     *                 @OA\Property(property="checkout_intent", type="object", nullable=true)
      *             )
      *         )
      *     ),

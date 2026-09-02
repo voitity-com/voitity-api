@@ -38,6 +38,7 @@ class User extends Authenticatable
         'email_verification_expires_at',
         'google_verified_at',
         'free_trial_used_at',
+        'pending_checkout_intent',
     ];
 
     /**
@@ -64,6 +65,7 @@ class User extends Authenticatable
             'email_verification_expires_at' => 'datetime',
             'google_verified_at' => 'datetime',
             'free_trial_used_at' => 'datetime',
+            'pending_checkout_intent' => 'array',
             'password' => 'hashed',
         ];
     }

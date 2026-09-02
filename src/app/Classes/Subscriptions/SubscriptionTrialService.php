@@ -156,6 +156,7 @@ class SubscriptionTrialService
             $this->limitPeriods->createInitialLimit($subscription);
 
             $user->free_trial_used_at = $startedAt;
+            $user->pending_checkout_intent = null;
             $user->save();
 
             $order->subscription_id = $subscription->id;

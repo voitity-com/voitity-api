@@ -174,7 +174,13 @@ class PaymentControllerTest extends TestAPI
             ], 201),
         ]);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'pending_checkout_intent' => [
+                'intent' => 'trial',
+                'plan' => 'starter',
+                'cycle' => 'month',
+            ],
+        ]);
         $token = $user->createToken('test-token', ['payments:create'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -214,6 +220,7 @@ class PaymentControllerTest extends TestAPI
 
         $user->refresh();
         $this->assertNotNull($user->free_trial_used_at);
+        $this->assertNull($user->pending_checkout_intent);
         $this->assertDatabaseHas('payment_orders', [
             'user_id' => $user->id,
             'plan' => 'starter',

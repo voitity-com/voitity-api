@@ -19,7 +19,13 @@ class EmailVerificationService
             'email_verification_expires_at' => $now->copy()->addMinutes((int) config('email-verification.expires_in_minutes')),
         ])->save();
 
-        return route('auth.verify-email', ['user' => $user->id, 'token' => $token, 'redirect' => 1], true);
+        $relativeUrl = route('auth.verify-email', [
+            'user' => $user->id,
+            'token' => $token,
+            'redirect' => 1,
+        ], false);
+
+        return rtrim((string) config('app.url'), '/').'/'.ltrim($relativeUrl, '/');
     }
 
     public function verify(User $user, ?string $token): EmailVerificationResult
