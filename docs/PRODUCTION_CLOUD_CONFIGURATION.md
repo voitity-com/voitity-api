@@ -179,6 +179,8 @@ Conectar OnlyFans, YouTube, Instagram o TikTok, sincronizar contenido y editar s
 
 La solución no desactiva AWS WAF ni permite rutas generales. Las reglas administradas, `AWSManagedKnownBadInputs`, el rate limit por IP, la autenticación, las abilities de Sanctum y las validaciones de tipo y tamaño del API continúan activas.
 
+El primer change set de esta corrección declaró una expresión por operación y CloudFormation lo revirtió antes de modificar tráfico porque WAF limita cada `RegexPatternSet` a 10 expresiones. Las rutas relacionadas se agruparon sin ampliar segmentos ni métodos, dejando 9 expresiones. Este límite debe comprobarse al agregar cargas nuevas; cuando se alcance, se debe consolidar por prefijos exactos o crear otro pattern set, nunca reemplazar las rutas por un comodín general.
+
 Para que un incidente futuro pueda atribuirse a una ruta concreta:
 
 - WAF conserva durante 14 días sólo las peticiones bloqueadas en `aws-waf-logs-bigmelo-prod-api`;
@@ -194,13 +196,14 @@ Cada endpoint nuevo que use `FormData` o acepte `multipart/form-data` debe compl
 1. declarar una ruta concreta; no usar comodines de varios segmentos;
 2. mantener autenticación, autorización, validación MIME y límite de tamaño en Laravel;
 3. agregar su expresión exacta a `ApiMultipartUploadPathSet` en `infra/cloudformation/bigmelo-prod-ha.yml`;
-4. verificar que la excepción siga exigiendo `POST` y `multipart/form-data`;
-5. validar el template con `cfn-lint` y `aws cloudformation validate-template`;
-6. revisar un change set y confirmar que no reemplaza el ALB ni el Web ACL;
-7. probar desde el dominio público con un archivo representativo para incluir CloudFront, WAF y ALB en la prueba;
-8. confirmar que la petición llega al API y que no aumenta `BlockedRequests` para `BlockCrossSiteScriptingBody`;
-9. revisar los logs de WAF y ALB si el navegador vuelve a mostrar `Failed to fetch`;
-10. no establecer manualmente el `Content-Type` desde `fetch`; el navegador debe agregar el boundary multipart.
+4. verificar que el pattern set no supere 10 expresiones y que cualquier agrupación mantenga segmentos exactos;
+5. verificar que la excepción siga exigiendo `POST` y `multipart/form-data`;
+6. validar el template con `cfn-lint` y `aws cloudformation validate-template`;
+7. revisar un change set y confirmar que no reemplaza el ALB ni el Web ACL;
+8. probar desde el dominio público con un archivo representativo para incluir CloudFront, WAF y ALB en la prueba;
+9. confirmar que la petición llega al API y que no aumenta `BlockedRequests` para `BlockCrossSiteScriptingBody`;
+10. revisar los logs de WAF y ALB si el navegador vuelve a mostrar `Failed to fetch`;
+11. no establecer manualmente el `Content-Type` desde `fetch`; el navegador debe agregar el boundary multipart.
 
 No se debe resolver este problema desactivando `CrossSiteScripting_BODY`, permitiendo todo `multipart/form-data` ni agregando CORS indiscriminadamente a respuestas de seguridad. La excepción debe permanecer limitada a las rutas de negocio auditadas.
 
