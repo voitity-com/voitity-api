@@ -160,7 +160,7 @@ Resources:
       SqsManagedSseEnabled: true
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt MediaDeadLetterQueue.Arn
-        maxReceiveCount: 5
+        maxReceiveCount: 25
       Tags:
         - Key: Project
           Value: bigmelo
@@ -778,6 +778,22 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       AlarmActions: [!Ref AlarmTopic]
+  MediaDeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Bigmelo media dead letter queue contains a failed job
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt MediaDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
 
   ApiExternalHealthCheck:
     Type: AWS::Route53::HealthCheck
@@ -820,7 +836,7 @@ Resources:
           "widgets": [
             {"type":"metric","x":0,"y":0,"width":12,"height":6,"properties":{"title":"API traffic and errors","region":"${AWS::Region}","period":300,"metrics":[["AWS/ApplicationELB","RequestCount","LoadBalancer","${ApiLoadBalancer.LoadBalancerFullName}",{"stat":"Sum"}],[".","HTTPCode_Target_5XX_Count",".",".",{"stat":"Sum","yAxis":"right"}]]}},
             {"type":"metric","x":12,"y":0,"width":12,"height":6,"properties":{"title":"API capacity","region":"${AWS::Region}","period":60,"metrics":[["AWS/AutoScaling","GroupInServiceInstances","AutoScalingGroupName","bigmelo-prod-api"],["AWS/EC2","CPUUtilization","AutoScalingGroupName","bigmelo-prod-api",{"stat":"Average","yAxis":"right"}]]}},
-            {"type":"metric","x":0,"y":6,"width":12,"height":6,"properties":{"title":"Queue backlog","region":"${AWS::Region}","period":60,"metrics":[["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","bigmelo-prod-chat"],[".",".",".","bigmelo-prod-default"],[".",".",".","bigmelo-prod-media"]]}},
+            {"type":"metric","x":0,"y":6,"width":12,"height":6,"properties":{"title":"Queue backlog","region":"${AWS::Region}","period":60,"metrics":[["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","bigmelo-prod-chat"],[".",".",".","bigmelo-prod-default"],[".",".",".","bigmelo-prod-media"],[".",".",".","bigmelo-prod-media-dlq",{"color":"#d62728","yAxis":"right"}]]}},
             {"type":"metric","x":12,"y":6,"width":12,"height":6,"properties":{"title":"PostgreSQL","region":"${AWS::Region}","period":300,"metrics":[["AWS/RDS","CPUUtilization","DBInstanceIdentifier","${DatabaseIdentifier}"],[".","DatabaseConnections",".",".",{"yAxis":"right"}],[".","FreeStorageSpace",".",".",{"yAxis":"right"}]]}}
           ]
         }

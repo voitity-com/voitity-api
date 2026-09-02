@@ -381,6 +381,7 @@ Artisan::command('integrations:refresh-youtube', function (YouTubeIntegrationSer
 Schedule::command('payments:heartbeat')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('insights:close-inactive-chats')->everyFiveMinutes()->withoutOverlapping(5)->onOneServer();
 Schedule::command('ai-knowledge:index --pending')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
+Schedule::command('avatars:reconcile-processing')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('profile-domains:refresh')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
 Schedule::command('profile-domains:refresh --active')->hourly()->withoutOverlapping(10)->onOneServer();
 Schedule::command('integrations:refresh-youtube')->dailyAt('02:20')->withoutOverlapping(60)->onOneServer();
