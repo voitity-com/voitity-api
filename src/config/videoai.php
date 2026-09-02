@@ -48,6 +48,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Avatar Generation Recovery
+    |--------------------------------------------------------------------------
+    |
+    | The scheduler requeues avatar generation stages that have remained in a
+    | processing state longer than this interval. Updating the avatar timestamp
+    | acts as a lightweight claim and prevents repeated dispatches.
+    |
+    */
+
+    'avatar_recovery' => [
+        'stale_after_minutes' => (int) env('AVATAR_RECOVERY_STALE_AFTER_MINUTES', 15),
+        'batch_size' => (int) env('AVATAR_RECOVERY_BATCH_SIZE', 100),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Video AI Service Drivers
     |--------------------------------------------------------------------------
     |
