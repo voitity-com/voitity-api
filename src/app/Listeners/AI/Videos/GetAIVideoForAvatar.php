@@ -46,7 +46,7 @@ class GetAIVideoForAvatar implements ShouldQueue
         }
 
         if ($aiVideo->status === 'succeeded' && $aiVideo->file) {
-            $avatar = $this->updateProfileAvatar($event, $aiVideo);
+            $avatar = $this->updateProfileAvatar($event, $aiVideo, preserveCompletedState: true);
             $this->finalizeAvatarUsage($avatar, $aiVideo);
             $this->recordAvatarAdded($avatar);
 
@@ -154,16 +154,25 @@ class GetAIVideoForAvatar implements ShouldQueue
         ]);
     }
 
-    private function updateProfileAvatar(AiVideoForAvatarCreated $event, $aiVideo): ?ProfileAvatar
-    {
+    private function updateProfileAvatar(
+        AiVideoForAvatarCreated $event,
+        $aiVideo,
+        bool $preserveCompletedState = false,
+    ): ?ProfileAvatar {
         if (! $aiVideo->profile_id) {
             return null;
         }
 
-        return DB::transaction(function () use ($event, $aiVideo): ProfileAvatar {
+        return DB::transaction(function () use ($event, $aiVideo, $preserveCompletedState): ProfileAvatar {
             $avatar = ProfileAvatar::where('profile_id', $aiVideo->profile_id)
                 ->where('aiimage_id', $event->aiImage?->id)
                 ->first();
+
+            if ($preserveCompletedState
+                && $avatar?->exists
+                && $avatar->generation_status === AvatarGenerationStatus::Completed) {
+                return $avatar->fresh(['profile.user']);
+            }
 
             if (! $avatar) {
                 $avatar = new ProfileAvatar([

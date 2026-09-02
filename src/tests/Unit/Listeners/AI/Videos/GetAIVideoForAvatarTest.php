@@ -227,6 +227,53 @@ class GetAIVideoForAvatarTest extends TestCase
         $this->assertSame('Video generation failed moderation.', $notification->data['reason']);
     }
 
+    #[Test]
+    public function it_does_not_reactivate_a_completed_avatar_when_a_duplicate_event_arrives(): void
+    {
+        [$aiImage, $aiVideo] = $this->aiImageAndVideo();
+        $aiVideo->update([
+            'status' => 'succeeded',
+            'file' => 'https://example.com/generated-video.mp4',
+        ]);
+        $completedAvatar = ProfileAvatar::create([
+            'user_id' => $aiVideo->user_id,
+            'profile_id' => $aiVideo->profile_id,
+            'aiimage_id' => $aiImage->id,
+            'ai_video_id' => $aiVideo->id,
+            'file' => $aiVideo->file,
+            'status' => ProfileAvatar::STATUS_INACTIVE,
+            'generation_status' => AvatarGenerationStatus::Completed,
+            'selected_variant' => AvatarVariant::Animation,
+        ]);
+        $newerAiImage = AiImage::create([
+            'user_id' => $aiImage->user_id,
+            'profile_id' => $aiImage->profile_id,
+            'source_id' => 'newer-image-source-id',
+            'source' => 'runway',
+            'status' => 'succeeded',
+            'file' => 'https://example.com/newer-image.png',
+        ]);
+        $activeAvatar = ProfileAvatar::create([
+            'user_id' => $aiVideo->user_id,
+            'profile_id' => $aiVideo->profile_id,
+            'aiimage_id' => $newerAiImage->id,
+            'file' => 'https://example.com/newer-image.png',
+            'status' => ProfileAvatar::STATUS_ACTIVE,
+            'generation_status' => AvatarGenerationStatus::Completed,
+            'selected_variant' => AvatarVariant::Enhanced,
+        ]);
+
+        $service = Mockery::mock(VideoAIService::class);
+        $service->shouldNotReceive('getVideo');
+
+        $listener = new GetAIVideoForAvatar($service, new VideoAIArtifactStorage);
+        $listener->handle(new AiVideoForAvatarCreated($aiVideo->fresh(), $aiImage));
+
+        $this->assertSame(ProfileAvatar::STATUS_INACTIVE, $completedAvatar->fresh()->status);
+        $this->assertSame(ProfileAvatar::STATUS_ACTIVE, $activeAvatar->fresh()->status);
+        $this->assertSame(AvatarVariant::Enhanced, $activeAvatar->fresh()->selected_variant);
+    }
+
     private function aiImageAndVideo(): array
     {
         $user = User::factory()->create();
