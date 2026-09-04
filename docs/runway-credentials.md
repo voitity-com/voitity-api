@@ -52,15 +52,17 @@ El workflow `.github/workflows/deploy-prod.yml` ejecuta
 `scripts/deploy/sync-production-env.sh` en la instancia EC2 antes de las
 migraciones y antes de recrear los contenedores. El script:
 
-1. descarga una versión fijada por commit del ejecutor oficial `asm-exec` y
+1. verifica o instala una versión fijada de AWS Workload Credentials Provider,
+   usando un instalador oficial fijado por commit y SHA-256;
+2. descarga una versión fijada por commit del ejecutor oficial `asm-exec` y
    valida su SHA-256;
-2. resuelve `AWSCURRENT` mediante una referencia dinámica con hasta tres
+3. resuelve `AWSCURRENT` mediante una referencia dinámica con hasta tres
    intentos para tolerar timeouts transitorios, sin devolver el contenido del
    secreto a GitHub Actions ni a SSM;
-3. valida las variables obligatorias y el formato de `RUNWAY_API_KEY`;
-4. incorpora la configuración no secreta de dominios personalizados;
-5. reemplaza `/opt/bigmelo/api/.env` de forma atómica y con permisos `0600`;
-6. continúa con limpieza de configuración, migraciones, recreación de
+4. valida las variables obligatorias y el formato de `RUNWAY_API_KEY`;
+5. incorpora la configuración no secreta de dominios personalizados;
+6. reemplaza `/opt/bigmelo/api/.env` de forma atómica y con permisos `0600`;
+7. continúa con limpieza de configuración, migraciones, recreación de
    contenedores y reinicio de colas.
 
 Si la resolución, el checksum o una validación falla, el archivo `.env` vigente
