@@ -124,12 +124,18 @@ class PublicProfileControllerTest extends TestAPI
             );
     }
 
-    public function test_only_active_avatar_file_is_exposed_for_public_profile(): void
+    public function test_only_active_avatar_media_is_exposed_for_public_profile(): void
     {
         $profile = $this->publicProfile();
+        $image = AiImage::factory()->create([
+            'user_id' => $profile->user_id,
+            'profile_id' => $profile->id,
+            'file' => 'https://assets.example.com/public-avatar.png',
+        ]);
         ProfileAvatar::factory()->create([
             'user_id' => $profile->user_id,
             'profile_id' => $profile->id,
+            'aiimage_id' => $image->id,
             'file' => 'aivideos/public-avatar.mp4',
             'status' => ProfileAvatar::STATUS_ACTIVE,
         ]);
@@ -137,6 +143,7 @@ class PublicProfileControllerTest extends TestAPI
         $this->getJson("/api/public/profiles/{$profile->id}/avatar")
             ->assertOk()
             ->assertJsonPath('data.file', 'aivideos/public-avatar.mp4')
+            ->assertJsonPath('data.image_url', 'https://assets.example.com/public-avatar.png')
             ->assertJsonMissingPath('data.user_id')
             ->assertJsonMissingPath('data.profile_id')
             ->assertJsonMissingPath('data.failure_reason');

@@ -7,6 +7,7 @@ use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
 use App\Enums\ProfileStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Responses\Profile\PublicProfileAvatarResponse;
 use App\Http\Responses\Profile\PublicProfileResponse;
 use App\Http\Responses\Profile\PublicProfileSeoResponse;
 use App\Models\Profile;
@@ -109,9 +110,7 @@ class PublicProfileController extends Controller
 
         return response()->json([
             'message' => 'Avatar retrieved successfully.',
-            'data' => [
-                'file' => $avatar->file,
-            ],
+            'data' => (new PublicProfileAvatarResponse($avatar))->toArray(),
         ]);
     }
 

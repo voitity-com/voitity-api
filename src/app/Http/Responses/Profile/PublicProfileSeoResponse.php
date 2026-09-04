@@ -4,7 +4,6 @@ namespace App\Http\Responses\Profile;
 
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
-use Illuminate\Support\Facades\Storage;
 
 class PublicProfileSeoResponse
 {
@@ -26,29 +25,10 @@ class PublicProfileSeoResponse
     {
         /** @var ProfileAvatar|null $avatar */
         $avatar = $this->profile->avatars->first();
-        $file = $avatar?->aiImage?->file;
 
-        if (! is_string($file) || ! $this->isImageFile($file)) {
-            $file = $avatar?->file;
-        }
-
-        if (! is_string($file) || ! $this->isImageFile($file)) {
-            return null;
-        }
-
-        if ($this->isPublicHttpUrl($file)) {
-            return $file;
-        }
-
-        return Storage::disk((string) config('videoai.profiles.disk', 'profiles'))->url($file);
-    }
-
-    private function isImageFile(string $file): bool
-    {
-        $path = parse_url($file, PHP_URL_PATH);
-        $extension = strtolower(pathinfo(is_string($path) ? $path : $file, PATHINFO_EXTENSION));
-
-        return in_array($extension, ['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp'], true);
+        return $avatar
+            ? (new PublicProfileAvatarResponse($avatar))->imageUrl()
+            : null;
     }
 
     private function isPublicHttpUrl(string $value): bool

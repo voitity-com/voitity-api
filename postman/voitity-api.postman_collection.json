@@ -3288,7 +3288,7 @@
                 "avatar"
               ]
             },
-            "description": "Returns the active avatar file for a public profile without exposing generation metadata."
+            "description": "Returns the active avatar file plus image_url, a public static image suitable for message thumbnails and social previews. image_url is null only when the active avatar has no usable image source. Generation metadata is not exposed."
           },
           "response": []
         },
