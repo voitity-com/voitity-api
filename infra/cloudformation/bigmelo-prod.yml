@@ -536,6 +536,22 @@ Resources:
                 Resource:
                   - !GetAtt AssetsBucket.Arn
                   - !GetAtt PrivateBucket.Arn
+              - Sid: ManageProfileArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/*
+              - Sid: ListProfileArtifacts
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}
               - Effect: Allow
                 Action:
                   - ses:SendEmail

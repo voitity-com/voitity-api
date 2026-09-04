@@ -163,6 +163,47 @@ class VoiceServiceTest extends TestCase
         $this->assertSame(SubscriptionUse::STATUS_RELEASED, SubscriptionUse::firstOrFail()->status);
     }
 
+    #[Test]
+    public function it_releases_reserved_tts_quota_when_the_provider_returns_a_failed_result(): void
+    {
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        $subscription = $this->createActiveSubscriptionFor($user, 20);
+        $voice = Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+        ]);
+        $client = new class implements VoiceClient
+        {
+            public function cloneVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientClonedVoice
+            {
+                throw new \RuntimeException('Not used.');
+            }
+
+            public function addVoice(Voice $voice, VoiceSample $voiceSample): VoiceClientAddedSample
+            {
+                throw new \RuntimeException('Not used.');
+            }
+
+            public function generateAudio(Voice $voice, string $text): VoiceClientGeneratedAudio
+            {
+                return new VoiceClientGeneratedAudio(
+                    voice: $voice,
+                    text: $text,
+                    status: 'failed',
+                    metadata: ['error' => 'Audio storage failed.'],
+                );
+            }
+        };
+
+        $generatedAudio = (new VoiceService($voice, $client))->generateAudio('Hola');
+
+        $this->assertTrue($generatedAudio->isFailed());
+        $this->assertSame(20, $subscription->limit()->firstOrFail()->tts_characters_remaining);
+        $this->assertSame(SubscriptionUse::STATUS_RELEASED, SubscriptionUse::firstOrFail()->status);
+    }
+
     private function createActiveSubscriptionFor(User $user, int $ttsCharacters): Subscription
     {
         $subscription = Subscription::create([

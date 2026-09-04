@@ -319,7 +319,7 @@ class ElevenLabsVoiceClient implements DeletesProviderVoices, VoiceClient
     /**
      * Store generated audio file and return URL.
      */
-    protected function storeGeneratedAudio(Voice $voice, string $audioContent): ?string
+    protected function storeGeneratedAudio(Voice $voice, string $audioContent): string
     {
         try {
             $diskName = config('voice.generated_audio.disk', 'public');
@@ -328,19 +328,29 @@ class ElevenLabsVoiceClient implements DeletesProviderVoices, VoiceClient
             $filename = ($folder ? "{$folder}/" : '').$voice->id.'/'.uniqid().'.mp3';
             $disk = Storage::disk($diskName);
 
-            $disk->put($filename, $audioContent, [
+            $stored = $disk->put($filename, $audioContent, [
                 'ContentType' => 'audio/mpeg',
                 'visibility' => $visibility,
             ]);
 
-            return $disk->url($filename);
-        } catch (\Exception $e) {
+            if (! $stored) {
+                throw new \RuntimeException("Unable to store generated audio at {$filename}.");
+            }
+
+            $audioUrl = $disk->url($filename);
+
+            if (trim($audioUrl) === '') {
+                throw new \RuntimeException("Generated audio URL is empty for {$filename}.");
+            }
+
+            return $audioUrl;
+        } catch (\Throwable $e) {
             Log::error('Failed to store generated audio', [
                 'voice_id' => $voice->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return null;
+            throw $e;
         }
     }
 }

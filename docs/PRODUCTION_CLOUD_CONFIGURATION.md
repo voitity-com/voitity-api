@@ -44,6 +44,8 @@ Los objetos nuevos conservan el control del propietario del bucket mediante el A
 
 Los prefijos `sources/*`, `businesses/*` y cualquier documento de conocimiento continúan privados y se entregan únicamente mediante endpoints autenticados cuando corresponde. `scripts/check-profile-public-media-policy.sh` bloquea el despliegue si falta un prefijo público conocido o si se intenta exponer uno de los prefijos privados controlados.
 
+El rol `ApiInstanceRole` necesita acceso de lectura, escritura, ACL de propietario, eliminación y cancelación multipart sobre todos los objetos del bucket de perfiles, además de `s3:ListBucket`. Ese acceso de aplicación cubre avatares, imágenes y videos generados, audios, fondos, productos, fuentes privadas e integraciones; no vuelve públicos esos objetos. `ProfilesBucketPolicy` sigue siendo la única lista que decide qué prefijos pueden leerse anónimamente. El mismo control de CI también exige estos permisos del rol para evitar que una actualización de CloudFormation elimine permisos agregados manualmente.
+
 El control de mayoría de edad de OnlyFans pertenece a la interfaz de Bigmelo; no convierte el objeto de S3 en privado. Una persona que conozca la URL del objeto puede solicitarlo directamente. No se debe usar este prefijo para material que requiera autorización estricta. Ese caso exige una entrega separada mediante URLs firmadas o un endpoint autenticado.
 
 Después de cualquier cambio de almacenamiento se debe comprobar por separado:

@@ -11,6 +11,7 @@ use App\Exceptions\Voices\ElevenLabsVoiceClientCouldNotCloneVoice;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceSample;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -64,6 +65,80 @@ class ElevenLabsVoiceClientTest extends TestCase
         $this->expectExceptionMessage('ElevenLabs API key is not configured');
 
         new ElevenLabsVoiceClient;
+    }
+
+    #[Test]
+    public function it_marks_audio_generation_as_failed_when_storage_fails(): void
+    {
+        Config::set('voice.generated_audio.disk', 'profiles');
+
+        $voice = new class extends Voice
+        {
+            public function __construct()
+            {
+                $this->id = 1;
+                $this->source_voice_id = 'provider-voice-id';
+                $this->language_code = 'es';
+            }
+        };
+
+        Http::fake([
+            'api.elevenlabs.io/v1/text-to-speech/provider-voice-id' => Http::response(
+                'generated-mp3-content',
+                200,
+                ['Content-Type' => 'audio/mpeg']
+            ),
+        ]);
+
+        $disk = \Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('put')
+            ->once()
+            ->andThrow(new \RuntimeException('S3 access denied.'));
+        Storage::shouldReceive('disk')
+            ->once()
+            ->with('profiles')
+            ->andReturn($disk);
+
+        $generatedAudio = (new ElevenLabsVoiceClient)->generateAudio($voice, 'Hola');
+
+        $this->assertTrue($generatedAudio->isFailed());
+        $this->assertNull($generatedAudio->audioUrl);
+        $this->assertNull($generatedAudio->audioContent);
+        $this->assertStringContainsString('S3 access denied.', $generatedAudio->metadata['error']);
+    }
+
+    #[Test]
+    public function it_returns_a_completed_audio_only_after_the_file_is_stored(): void
+    {
+        Config::set('voice.generated_audio.disk', 'local');
+        Config::set('voice.generated_audio.folder', 'audio');
+        Config::set('voice.generated_audio.visibility', 'public');
+
+        $voice = new class extends Voice
+        {
+            public function __construct()
+            {
+                $this->id = 1;
+                $this->source_voice_id = 'provider-voice-id';
+                $this->language_code = 'es';
+            }
+        };
+
+        Http::fake([
+            'api.elevenlabs.io/v1/text-to-speech/provider-voice-id' => Http::response(
+                'generated-mp3-content',
+                200,
+                ['Content-Type' => 'audio/mpeg']
+            ),
+        ]);
+
+        $generatedAudio = (new ElevenLabsVoiceClient)->generateAudio($voice, 'Hola');
+        $storedFiles = Storage::disk('local')->allFiles('audio/1');
+
+        $this->assertTrue($generatedAudio->isSuccessful());
+        $this->assertNotEmpty($generatedAudio->audioUrl);
+        $this->assertCount(1, $storedFiles);
+        Storage::disk('local')->assertExists($storedFiles[0]);
     }
 
     #[Test]

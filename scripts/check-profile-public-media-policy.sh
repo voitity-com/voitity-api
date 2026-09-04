@@ -11,6 +11,8 @@ if [[ ! -f "$template" ]]; then
 fi
 
 policy_block="$(sed -n '/^  ProfilesBucketPolicy:/,/^  ApiRepository:/p' "$template")"
+runtime_policy_block="$(sed -n '/^  ApiInstanceRole:/,/^  ApiInstanceProfile:/p' "$template")"
+normalized_runtime_policy="$(sed -E 's/^[[:space:]]*-[[:space:]]*//' <<<"$runtime_policy_block")"
 
 required_public_prefixes=(
   '/images/*'
@@ -36,4 +38,32 @@ for private_prefix in '/sources/*' '/businesses/*'; do
   fi
 done
 
-echo "Public profile media prefixes are explicitly covered; private source prefixes remain excluded."
+required_runtime_actions=(
+  's3:GetObject'
+  's3:PutObject'
+  's3:PutObjectAcl'
+  's3:DeleteObject'
+  's3:AbortMultipartUpload'
+  's3:ListBucket'
+)
+
+for action in "${required_runtime_actions[@]}"; do
+  if ! grep -Fxq -- "$action" <<<"$normalized_runtime_policy"; then
+    echo "ApiInstanceRole is missing required profile storage action: $action" >&2
+    exit 1
+  fi
+done
+
+required_runtime_resources=(
+  '!Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}/*'
+  '!Sub arn:${AWS::Partition}:s3:::bigmelo-${Environment}-profiles-${AWS::AccountId}'
+)
+
+for resource in "${required_runtime_resources[@]}"; do
+  if ! grep -Fxq -- "$resource" <<<"$normalized_runtime_policy"; then
+    echo "ApiInstanceRole is missing required profile storage resource: $resource" >&2
+    exit 1
+  fi
+done
+
+echo "Public profile media prefixes and API runtime storage permissions are explicitly covered; private source prefixes remain excluded from anonymous access."
