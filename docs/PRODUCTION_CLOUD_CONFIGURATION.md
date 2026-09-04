@@ -134,7 +134,7 @@ El push a `prod` del API:
 5. actualiza una instancia a la vez mediante SSM;
 6. valida `/health/ready` antes de continuar con la siguiente.
 
-No se usa SSH. Los valores sensibles se resuelven en tiempo de ejecución mediante `asm-exec` y referencias dinámicas de Secrets Manager. En las instancias de la API, `sync-production-env.sh` garantiza que AWS Workload Credentials Provider esté disponible en `localhost:2773` y entrega a `asm-exec` su token SSRF únicamente dentro del proceso. Esto evita depender de la disponibilidad del endpoint MCP remoto durante un despliegue. Los despliegues de web también usan referencias dinámicas y `asm-exec`.
+No se usa SSH. Los valores sensibles se resuelven en tiempo de ejecución mediante `asm-exec` y referencias dinámicas de Secrets Manager. En las instancias de la API, `sync-production-env.sh` garantiza que AWS Workload Credentials Provider esté disponible en `localhost:2773`, configura explícitamente `us-east-1` y entrega a `asm-exec` su token SSRF únicamente dentro del proceso. Esto evita depender de la detección implícita de región o de la disponibilidad del endpoint MCP remoto durante un despliegue. Los despliegues de web también usan referencias dinámicas y `asm-exec`.
 
 `main` y `prod` deben apuntar al mismo commit después de cada entrega a producción.
 

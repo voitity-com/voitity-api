@@ -53,7 +53,8 @@ El workflow `.github/workflows/deploy-prod.yml` ejecuta
 migraciones y antes de recrear los contenedores. El script:
 
 1. verifica o instala una versión fijada de AWS Workload Credentials Provider,
-   usando un instalador oficial fijado por commit y SHA-256;
+   usando un instalador oficial fijado por commit y SHA-256, y configura
+   explícitamente la región `us-east-1`;
 2. descarga una versión fijada por commit del ejecutor oficial `asm-exec` y
    valida su SHA-256;
 3. resuelve `AWSCURRENT` mediante una referencia dinámica con hasta tres

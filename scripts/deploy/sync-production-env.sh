@@ -16,6 +16,9 @@ workload_provider_installer_checksum="bf4e75b64572eac4bc765690c3a1bb3cc0b6f495f7
 workload_provider_installer_url="https://raw.githubusercontent.com/aws/aws-workload-credentials-provider/${workload_provider_installer_commit}/install.sh"
 workload_provider_endpoint="${AWS_SECRETS_MANAGER_AGENT_ENDPOINT:-http://localhost:2773}"
 workload_provider_token_path="${AWS_SECRETS_MANAGER_AGENT_TOKEN_FILE:-/var/run/awssmatoken}"
+workload_provider_binary_path="/opt/aws/workload-credentials-provider/bin/aws-workload-credentials-provider"
+workload_provider_config_path="/etc/aws-workload-credentials-provider/config.toml"
+workload_provider_service="aws-workload-credentials-provider-sm.service"
 
 if [[ ! "$profile_domain_distribution_id" =~ ^E[A-Z0-9]+$ ]]; then
     echo "Invalid profile domain distribution ID." >&2
@@ -37,9 +40,10 @@ test -d "$target_directory"
 asm_exec_path="$(mktemp)"
 environment_path="$(mktemp "${target_directory}/.env.next.XXXXXX")"
 workload_provider_installer_path=""
+workload_provider_config_source_path="$(mktemp)"
 
 cleanup() {
-    rm -f "$asm_exec_path" "$environment_path"
+    rm -f "$asm_exec_path" "$environment_path" "$workload_provider_config_source_path"
 
     if [[ -n "$workload_provider_installer_path" ]]; then
         rm -f "$workload_provider_installer_path"
@@ -53,14 +57,39 @@ workload_provider_is_ready() {
         curl --fail --silent --show-error --max-time 2 "${workload_provider_endpoint}/ping" >/dev/null
 }
 
-ensure_workload_provider() {
-    if workload_provider_is_ready; then
-        return
-    fi
+wait_for_workload_provider() {
+    for _ in {1..20}; do
+        if workload_provider_is_ready; then
+            return
+        fi
 
+        sleep 1
+    done
+
+    return 1
+}
+
+ensure_workload_provider() {
     if [[ "$(uname -s)" != "Linux" ]] || [[ "$(id -u)" -ne 0 ]]; then
         echo "The AWS Workload Credentials Provider must be installed by root on Linux." >&2
         exit 1
+    fi
+
+    printf '%s\n' \
+        '[capabilities.secrets_manager]' \
+        'region = "us-east-1"' > "$workload_provider_config_source_path"
+
+    if [[ -x "$workload_provider_binary_path" ]] && getent group awscreds >/dev/null; then
+        if ! cmp -s "$workload_provider_config_source_path" "$workload_provider_config_path"; then
+            install -D -T -m 440 -o root -g awscreds \
+                "$workload_provider_config_source_path" \
+                "$workload_provider_config_path"
+            systemctl restart "$workload_provider_service"
+        fi
+
+        if wait_for_workload_provider; then
+            return
+        fi
     fi
 
     workload_provider_installer_path="$(mktemp)"
@@ -72,16 +101,13 @@ ensure_workload_provider() {
         "$workload_provider_installer_path" | sha256sum --check --status
     chmod 700 "$workload_provider_installer_path"
 
-    AWCP_VERSION="$workload_provider_version" bash "$workload_provider_installer_path"
+    AWCP_VERSION="$workload_provider_version" bash "$workload_provider_installer_path" \
+        --config "$workload_provider_config_source_path"
 
-    for _ in {1..20}; do
-        if workload_provider_is_ready; then
-            echo "AWS Workload Credentials Provider is ready."
-            return
-        fi
-
-        sleep 1
-    done
+    if wait_for_workload_provider; then
+        echo "AWS Workload Credentials Provider is ready."
+        return
+    fi
 
     echo "AWS Workload Credentials Provider did not become ready." >&2
     exit 1
