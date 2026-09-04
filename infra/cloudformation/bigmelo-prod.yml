@@ -517,6 +517,7 @@ Resources:
                 Resource: !GetAtt ApiRepository.Arn
               - Effect: Allow
                 Action:
+                  - secretsmanager:DescribeSecret
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Ref ExistingApiEnvSecretArn
