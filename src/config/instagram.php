@@ -17,6 +17,7 @@ return [
     'enable_fb_login' => (bool) env('INSTAGRAM_ENABLE_FB_LOGIN', false),
     'force_reauth' => (bool) env('INSTAGRAM_FORCE_REAUTH', env('INSTAGRAM_FORCE_AUTHENTICATION', true)),
     'oauth_state_ttl_minutes' => (int) env('INSTAGRAM_OAUTH_STATE_TTL_MINUTES', 10),
+    'short_lived_token_ttl_seconds' => (int) env('INSTAGRAM_SHORT_LIVED_TOKEN_TTL_SECONDS', 3600),
     'media_limit' => (int) env('INSTAGRAM_MEDIA_LIMIT', 100),
     'selection_limit' => (int) env('INSTAGRAM_MEDIA_SELECTION_LIMIT', 10),
 ];

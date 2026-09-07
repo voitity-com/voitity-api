@@ -117,15 +117,18 @@ class ProfileIntegrationControllerTest extends TestAPI
 
         Http::fake([
             'https://api.instagram.com/oauth/access_token' => Http::response([
-                'access_token' => 'short-token',
-                'user_id' => '17841400000000000',
+                'data' => [[
+                    'access_token' => 'short-token',
+                    'permissions' => 'instagram_business_basic',
+                    'user_id' => '17841400000000000',
+                ]],
             ]),
             'https://graph.instagram.com/access_token*' => Http::response([
                 'access_token' => 'long-token',
                 'expires_in' => 5183944,
                 'token_type' => 'bearer',
             ]),
-            'https://graph.instagram.com/v25.0/me/media*' => Http::response([
+            'https://graph.instagram.com/v25.0/17841400000000000/media*' => Http::response([
                 'data' => [[
                     'caption' => 'Media caption',
                     'id' => '18000000000000000',
@@ -136,10 +139,12 @@ class ProfileIntegrationControllerTest extends TestAPI
                 ]],
             ]),
             'https://graph.instagram.com/v25.0/me*' => Http::response([
-                'account_type' => 'BUSINESS',
-                'id' => '17841400000000000',
-                'media_count' => 1,
-                'username' => 'bigmelo',
+                'data' => [[
+                    'account_type' => 'BUSINESS',
+                    'media_count' => 1,
+                    'user_id' => '17841400000000000',
+                    'username' => 'bigmelo',
+                ]],
             ]),
         ]);
 
@@ -171,6 +176,151 @@ class ProfileIntegrationControllerTest extends TestAPI
             'observation' => 'Media caption',
             'permalink' => 'https://www.instagram.com/p/test/',
         ]);
+
+        $integration = ProfileIntegration::query()
+            ->where('profile_id', $profile->id)
+            ->where('provider', ProfileIntegration::PROVIDER_INSTAGRAM)
+            ->firstOrFail();
+        $this->assertSame(['instagram_business_basic'], $integration->scopes);
+
+        Http::assertSent(fn ($request): bool => str_starts_with(
+            $request->url(),
+            'https://graph.instagram.com/v25.0/17841400000000000/media'
+        ));
+    }
+
+    public function test_instagram_callback_falls_back_to_the_explicit_user_id_when_me_is_rejected(): void
+    {
+        $this->useEncryptionKey();
+
+        config([
+            'instagram.admin_redirect_url' => 'http://localhost:3000',
+            'instagram.auth_url' => 'https://www.instagram.com/oauth/authorize',
+            'instagram.client_id' => '123',
+            'instagram.client_secret' => 'secret',
+            'instagram.graph_api_version' => 'v25.0',
+            'instagram.graph_base_url' => 'https://graph.instagram.com',
+            'instagram.long_lived_token_url' => 'https://graph.instagram.com/access_token',
+            'instagram.redirect_uri' => 'http://localhost:8000/api/integrations/instagram/callback',
+            'instagram.scopes' => ['instagram_business_basic'],
+            'instagram.token_url' => 'https://api.instagram.com/oauth/access_token',
+        ]);
+
+        Http::fake([
+            'https://api.instagram.com/oauth/access_token' => Http::response([
+                'data' => [[
+                    'access_token' => 'short-token',
+                    'user_id' => '17841400000000000',
+                ]],
+            ]),
+            'https://graph.instagram.com/access_token*' => Http::response([
+                'error' => ['code' => 100, 'message' => 'Unsupported request'],
+            ], 400),
+            'https://graph.instagram.com/v25.0/me*' => Http::response([
+                'error' => ['code' => 100, 'message' => 'Unsupported request'],
+            ], 400),
+            'https://graph.instagram.com/v25.0/17841400000000000/media*' => Http::response(['data' => []]),
+            'https://graph.instagram.com/v25.0/17841400000000000*' => Http::response([
+                'data' => [[
+                    'account_type' => 'BUSINESS',
+                    'media_count' => 0,
+                    'user_id' => '17841400000000000',
+                    'username' => 'bigmelo',
+                ]],
+            ]),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $connectUrl = app(InstagramIntegrationService::class)->connectUrl($profile, $user);
+        parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
+
+        $response = $this->getJson('/api/integrations/instagram/callback?'.http_build_query([
+            'code' => 'ig-code',
+            'state' => $query['state'],
+        ]));
+
+        $response->assertRedirect(
+            "http://localhost:3000/dashboard/profiles/{$profile->id}/integrations?provider=instagram&connected=1&synced=1"
+        );
+        $this->assertDatabaseHas('profile_integrations', [
+            'profile_id' => $profile->id,
+            'provider_user_id' => '17841400000000000',
+            'status' => ProfileIntegration::STATUS_CONNECTED,
+        ]);
+    }
+
+    public function test_instagram_callback_failure_returns_to_the_profile_integration_page(): void
+    {
+        $this->useEncryptionKey();
+
+        config([
+            'instagram.admin_redirect_url' => 'http://localhost:3000',
+            'instagram.auth_url' => 'https://www.instagram.com/oauth/authorize',
+            'instagram.client_id' => '123',
+            'instagram.client_secret' => 'secret',
+            'instagram.graph_api_version' => 'v25.0',
+            'instagram.graph_base_url' => 'https://graph.instagram.com',
+            'instagram.long_lived_token_url' => 'https://graph.instagram.com/access_token',
+            'instagram.redirect_uri' => 'http://localhost:8000/api/integrations/instagram/callback',
+            'instagram.scopes' => ['instagram_business_basic'],
+            'instagram.token_url' => 'https://api.instagram.com/oauth/access_token',
+        ]);
+
+        Http::fake([
+            'https://api.instagram.com/oauth/access_token' => Http::response([
+                'access_token' => 'short-token',
+                'user_id' => '17841400000000000',
+            ]),
+            'https://graph.instagram.com/access_token*' => Http::response([], 400),
+            'https://graph.instagram.com/v25.0/me*' => Http::response([], 400),
+            'https://graph.instagram.com/v25.0/17841400000000000*' => Http::response([], 400),
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $connectUrl = app(InstagramIntegrationService::class)->connectUrl($profile, $user);
+        parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
+
+        $response = $this->getJson('/api/integrations/instagram/callback?'.http_build_query([
+            'code' => 'ig-code',
+            'state' => $query['state'],
+        ]));
+
+        $response->assertRedirect(
+            "http://localhost:3000/dashboard/profiles/{$profile->id}/integrations?provider=instagram&oauth=error"
+        );
+        $this->assertDatabaseMissing('profile_integrations', [
+            'profile_id' => $profile->id,
+            'provider' => ProfileIntegration::PROVIDER_INSTAGRAM,
+        ]);
+    }
+
+    public function test_instagram_denied_callback_returns_to_the_profile_integration_page(): void
+    {
+        config([
+            'instagram.admin_redirect_url' => 'http://localhost:3000',
+            'instagram.auth_url' => 'https://www.instagram.com/oauth/authorize',
+            'instagram.client_id' => '123',
+            'instagram.client_secret' => 'secret',
+            'instagram.redirect_uri' => 'http://localhost:8000/api/integrations/instagram/callback',
+            'instagram.scopes' => ['instagram_business_basic'],
+        ]);
+
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $connectUrl = app(InstagramIntegrationService::class)->connectUrl($profile, $user);
+        parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
+
+        $response = $this->getJson('/api/integrations/instagram/callback?'.http_build_query([
+            'error' => 'access_denied',
+            'error_reason' => 'user_denied',
+            'state' => $query['state'],
+        ]));
+
+        $response->assertRedirect(
+            "http://localhost:3000/dashboard/profiles/{$profile->id}/integrations?provider=instagram&oauth=denied"
+        );
     }
 
     public function test_tiktok_connect_url_uses_tiktok_login_parameters(): void

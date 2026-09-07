@@ -87,9 +87,22 @@ class ProfileIntegrationController extends Controller
         $code = (string) $request->query('code', '');
         $error = (string) $request->query('error', '');
         $adminBaseUrl = (string) config('instagram.admin_redirect_url', 'http://localhost:3000');
+        $callbackContext = $instagram->callbackContext($state);
 
         if ($error !== '') {
-            return redirect()->away($adminBaseUrl.'/dashboard/profiles?instagram=denied');
+            Log::notice('Instagram OAuth authorization denied.', [
+                'profile_id' => $callbackContext['profile_id'],
+                'user_id' => $callbackContext['user_id'],
+                'error' => $error,
+                'error_reason' => (string) $request->query('error_reason', ''),
+                'state_hash' => hash('sha256', $state),
+            ]);
+
+            return redirect()->away($this->instagramCallbackRedirect(
+                $adminBaseUrl,
+                $callbackContext['profile_id'],
+                'denied'
+            ));
         }
 
         try {
@@ -103,19 +116,36 @@ class ProfileIntegrationController extends Controller
                 Log::warning('Instagram connected but initial sync failed.', [
                     'integration_id' => $integration->id,
                     'profile_id' => $integration->profile_id,
+                    'exception' => $e::class,
                     'message' => $e->getMessage(),
                 ]);
             }
+
+            Log::info('Instagram OAuth connection completed.', [
+                'integration_id' => $integration->id,
+                'profile_id' => $integration->profile_id,
+                'user_id' => $integration->user_id,
+                'provider_user_id' => $integration->provider_user_id,
+                'initial_sync_completed' => $synced,
+            ]);
 
             return redirect()->away(
                 $adminBaseUrl.'/dashboard/profiles/'.$integration->profile_id.'/integrations?provider=instagram&connected=1&synced='.($synced ? '1' : '0')
             );
         } catch (\Throwable $e) {
             Log::warning('Instagram OAuth callback failed.', [
+                'profile_id' => $callbackContext['profile_id'],
+                'user_id' => $callbackContext['user_id'],
+                'exception' => $e::class,
                 'message' => $e->getMessage(),
+                'state_hash' => hash('sha256', $state),
             ]);
 
-            return redirect()->away($adminBaseUrl.'/dashboard/profiles?instagram=error');
+            return redirect()->away($this->instagramCallbackRedirect(
+                $adminBaseUrl,
+                $callbackContext['profile_id'],
+                'error'
+            ));
         }
     }
 
@@ -1096,6 +1126,19 @@ class ProfileIntegrationController extends Controller
     private function selectionLimit(Profile $profile, string $provider): int
     {
         return $this->capabilities->selectedMediaPerProfile($profile, $provider);
+    }
+
+    private function instagramCallbackRedirect(string $adminBaseUrl, ?int $profileId, string $result): string
+    {
+        if ($profileId) {
+            return rtrim($adminBaseUrl, '/')
+                ."/dashboard/profiles/{$profileId}/integrations?"
+                .http_build_query(['provider' => 'instagram', 'oauth' => $result]);
+        }
+
+        return rtrim($adminBaseUrl, '/')
+            .'/dashboard/profiles?'
+            .http_build_query(['instagram' => $result]);
     }
 
     /**

@@ -39,6 +39,12 @@ class InstagramIntegrationService
             now()->addMinutes(max(1, (int) config('instagram.oauth_state_ttl_minutes', 10)))
         );
 
+        Log::info('Instagram OAuth connection initiated.', [
+            'profile_id' => $profile->id,
+            'user_id' => $user->id,
+            'state_hash' => hash('sha256', $state),
+        ]);
+
         $query = [
             'client_id' => config('instagram.client_id'),
             'enable_fb_login' => config('instagram.enable_fb_login', false) ? '1' : '0',
@@ -67,7 +73,7 @@ class InstagramIntegrationService
             throw new InvalidArgumentException('Invalid Instagram OAuth profile.');
         }
 
-        $shortToken = $this->exchangeCodeForToken($code);
+        $shortToken = $this->unwrapDataObject($this->exchangeCodeForToken($code));
         $token = $this->exchangeLongLivedToken($shortToken['access_token'] ?? null) ?: $shortToken;
         $accessToken = (string) ($token['access_token'] ?? $shortToken['access_token'] ?? '');
 
@@ -75,7 +81,20 @@ class InstagramIntegrationService
             throw new RuntimeException('Instagram did not return an access token.');
         }
 
-        $account = $this->fetchAccount($accessToken);
+        $shortTokenUserId = $this->scalarString($shortToken['user_id'] ?? $shortToken['id'] ?? null);
+        $account = $this->fetchAccount($accessToken, $shortTokenUserId);
+        $providerUserId = $this->scalarString(
+            $account['user_id'] ?? $account['id'] ?? $shortTokenUserId
+        );
+
+        if ($providerUserId === null) {
+            throw new RuntimeException('Instagram did not return a user ID.');
+        }
+
+        $grantedScopes = $this->grantedScopes($shortToken);
+        $expiresIn = isset($token['expires_in'])
+            ? (int) $token['expires_in']
+            : (int) config('instagram.short_lived_token_ttl_seconds', 3600);
 
         return ProfileIntegration::updateOrCreate(
             [
@@ -84,19 +103,32 @@ class InstagramIntegrationService
             ],
             [
                 'user_id' => $user->id,
-                'provider_user_id' => $this->scalarString($account['id'] ?? $shortToken['user_id'] ?? null),
+                'provider_user_id' => $providerUserId,
                 'username' => $this->scalarString($account['username'] ?? null),
                 'access_token' => $accessToken,
                 'token_type' => $this->scalarString($token['token_type'] ?? 'bearer'),
-                'scopes' => config('instagram.scopes', ['instagram_business_basic']),
-                'expires_at' => isset($token['expires_in']) ? now()->addSeconds((int) $token['expires_in']) : null,
+                'scopes' => $grantedScopes ?: config('instagram.scopes', ['instagram_business_basic']),
+                'expires_at' => now()->addSeconds(max(1, $expiresIn)),
                 'status' => ProfileIntegration::STATUS_CONNECTED,
                 'metadata' => array_filter([
                     'account' => $account,
-                    'short_token_user_id' => $shortToken['user_id'] ?? null,
+                    'short_token_user_id' => $shortTokenUserId,
                 ]),
             ]
         );
+    }
+
+    /**
+     * @return array{profile_id: int|null, user_id: int|null}
+     */
+    public function callbackContext(string $state): array
+    {
+        $payload = Cache::get($this->stateCacheKey($state));
+
+        return [
+            'profile_id' => is_array($payload) && isset($payload['profile_id']) ? (int) $payload['profile_id'] : null,
+            'user_id' => is_array($payload) && isset($payload['user_id']) ? (int) $payload['user_id'] : null,
+        ];
     }
 
     /**
@@ -114,12 +146,20 @@ class InstagramIntegrationService
             throw new RuntimeException('Instagram access token is missing.');
         }
 
-        $account = $this->fetchAccount($accessToken);
-        $media = $this->fetchMedia($accessToken);
+        $account = $this->fetchAccount($accessToken, $this->scalarString($integration->provider_user_id));
+        $providerUserId = $this->scalarString(
+            $account['user_id'] ?? $account['id'] ?? $integration->provider_user_id
+        );
 
-        DB::transaction(function () use ($account, $integration, $media): void {
+        if ($providerUserId === null) {
+            throw new RuntimeException('Instagram user ID is missing.');
+        }
+
+        $media = $this->fetchMedia($accessToken, $providerUserId);
+
+        DB::transaction(function () use ($account, $integration, $media, $providerUserId): void {
             $integration->forceFill([
-                'provider_user_id' => $this->scalarString($account['id'] ?? $integration->provider_user_id),
+                'provider_user_id' => $providerUserId,
                 'username' => $this->scalarString($account['username'] ?? $integration->username),
                 'last_synced_at' => now(),
                 'status' => ProfileIntegration::STATUS_CONNECTED,
@@ -302,11 +342,11 @@ class InstagramIntegrationService
         $url = (string) config('instagram.long_lived_token_url');
 
         try {
-            return Http::get($url, [
+            return $this->unwrapDataObject(Http::get($url, [
                 'grant_type' => 'ig_exchange_token',
                 'client_secret' => config('instagram.client_secret'),
                 'access_token' => $shortAccessToken,
-            ])->throw()->json();
+            ])->throw()->json());
         } catch (RequestException $e) {
             $this->logInstagramRequestFailure('long-lived token exchange', $url, $e);
 
@@ -317,26 +357,44 @@ class InstagramIntegrationService
     /**
      * @return array<string, mixed>
      */
-    private function fetchAccount(string $accessToken): array
+    private function fetchAccount(string $accessToken, ?string $providerUserId = null): array
     {
-        $url = $this->graphUrl('/me');
+        $paths = ['/me'];
 
-        try {
-            return Http::get($url, [
-                'access_token' => $accessToken,
-                'fields' => 'id,username,account_type,media_count',
-            ])->throw()->json();
-        } catch (RequestException $e) {
-            throw $this->instagramRequestException('account lookup', $url, $e);
+        if ($providerUserId !== null) {
+            $paths[] = '/'.rawurlencode($providerUserId);
         }
+
+        foreach (array_unique($paths) as $index => $path) {
+            $url = $this->graphUrl($path);
+
+            try {
+                $account = $this->unwrapDataObject(Http::get($url, [
+                    'access_token' => $accessToken,
+                    'fields' => 'user_id,username,name,account_type,profile_picture_url,followers_count,follows_count,media_count',
+                ])->throw()->json());
+
+                if ($account !== []) {
+                    return $account;
+                }
+            } catch (RequestException $e) {
+                if ($index === array_key_last($paths)) {
+                    throw $this->instagramRequestException('account lookup', $url, $e);
+                }
+
+                $this->logInstagramRequestFailure('account lookup', $url, $e);
+            }
+        }
+
+        throw new RuntimeException('Instagram returned an empty account response.');
     }
 
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function fetchMedia(string $accessToken): array
+    private function fetchMedia(string $accessToken, string $providerUserId): array
     {
-        $url = $this->graphUrl('/me/media');
+        $url = $this->graphUrl('/'.rawurlencode($providerUserId).'/media');
 
         try {
             $response = Http::get($url, [
@@ -435,6 +493,45 @@ class InstagramIntegrationService
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function unwrapDataObject(array $payload): array
+    {
+        $data = $payload['data'] ?? null;
+
+        if (! is_array($data)) {
+            return $payload;
+        }
+
+        if (array_is_list($data)) {
+            return is_array($data[0] ?? null) ? $data[0] : $payload;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $token
+     * @return array<int, string>
+     */
+    private function grantedScopes(array $token): array
+    {
+        $permissions = $token['permissions'] ?? [];
+
+        if (is_string($permissions)) {
+            $permissions = explode(',', $permissions);
+        }
+
+        return collect(is_array($permissions) ? $permissions : [])
+            ->filter(fn ($permission): bool => is_scalar($permission))
+            ->map(fn ($permission): string => trim((string) $permission))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function parseTimestamp(string $value): ?\DateTimeInterface
