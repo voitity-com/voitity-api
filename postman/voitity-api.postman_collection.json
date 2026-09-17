@@ -3851,6 +3851,32 @@
           "response": []
         },
         {
+          "name": "Get Profile Admin Preview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/{{profile_id}}/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "{{profile_id}}",
+                "preview"
+              ]
+            },
+            "description": "Returns the authenticated dashboard preview payload for a profile, including drafts. Access is limited to the profile owner or an administrator."
+          },
+          "response": []
+        },
+        {
           "name": "Get Profile Widget",
           "event": [
             {
