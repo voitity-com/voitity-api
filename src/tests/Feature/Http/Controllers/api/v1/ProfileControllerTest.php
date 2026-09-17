@@ -10,6 +10,7 @@ use App\Enums\ProfileStatus;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
+use App\Models\FeatureFlag;
 use App\Models\Profile;
 use App\Models\ProfileAvatar;
 use App\Models\ProfileSource;
@@ -66,6 +67,13 @@ class ProfileControllerTest extends TestAPI
         $user = User::where('email', 'voitity@gmail.com')->firstOrFail();
         $this->createActiveSubscriptionFor($user);
 
+        FeatureFlag::query()
+            ->where('key', FeatureService::INTEGRATIONS_INSTAGRAM)
+            ->update(['enabled' => false]);
+        FeatureFlag::query()
+            ->where('key', FeatureService::INTEGRATIONS_TIKTOK)
+            ->update(['enabled' => false]);
+
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson(self::ENDPOINT_PROFILE, $profile_data);
 
@@ -108,22 +116,24 @@ class ProfileControllerTest extends TestAPI
             ->keys();
         $this->assertCount($catalog->count(), $settings);
 
-        $defaultEnabledFeatures = collect([
-            FeatureService::PRODUCTS,
-            FeatureService::INTEGRATIONS_TIKTOK,
-            FeatureService::INTEGRATIONS_YOUTUBE,
-            FeatureService::INTEGRATIONS_OTHER,
-        ]);
+        $globalFeatureStates = FeatureFlag::query()
+            ->pluck('enabled', 'key')
+            ->map(fn (mixed $enabled): bool => (bool) $enabled);
 
         foreach ($profileFeatureKeys as $featureKey) {
+            $expectedAvailable = (bool) $globalFeatureStates->get($featureKey, false);
+            $expectedEnabled = $catalog[$featureKey]['group'] === 'integrations'
+                ? $expectedAvailable
+                : $featureKey === FeatureService::PRODUCTS;
+
             $this->assertTrue($settings->has($featureKey));
-            $this->assertTrue($settings[$featureKey]['available']);
-            $this->assertSame($defaultEnabledFeatures->contains($featureKey), $settings[$featureKey]['enabled']);
-            $this->assertSame($defaultEnabledFeatures->contains($featureKey), $settings[$featureKey]['effective']);
+            $this->assertSame($expectedAvailable, $settings[$featureKey]['available']);
+            $this->assertSame($expectedEnabled, $settings[$featureKey]['enabled']);
+            $this->assertSame($expectedAvailable && $expectedEnabled, $settings[$featureKey]['effective']);
             $this->assertDatabaseHas('profile_feature_settings', [
                 'profile_id' => $new_profile->id,
                 'feature_key' => $featureKey,
-                'enabled' => $defaultEnabledFeatures->contains($featureKey),
+                'enabled' => $expectedEnabled,
             ]);
         }
         $this->assertTrue($settings[FeatureService::DOMAINS_CUSTOM]['available']);

@@ -235,11 +235,19 @@ class FeatureService
 
     public function initializeProfileFeatures(Profile $profile, bool $enabled = false): void
     {
-        $settings = array_fill_keys(array_keys($this->profileCatalog()), $enabled);
+        $featureKeys = array_keys($this->profileCatalog());
+        $settings = array_fill_keys($featureKeys, $enabled);
 
         if (! $enabled) {
-            foreach ($this->defaultEnabledProfileFeatures() as $key) {
-                $settings[$key] = true;
+            $globalFlags = $this->globalFlagsByKey();
+            $settings[self::PRODUCTS] = true;
+
+            foreach ($this->profileCatalog() as $key => $feature) {
+                if (($feature['group'] ?? null) !== 'integrations') {
+                    continue;
+                }
+
+                $settings[$key] = (bool) ($globalFlags->get($key)?->enabled ?? false);
             }
         }
 
@@ -301,16 +309,5 @@ class FeatureService
     private function defaultProfileFeatureEnabled(): bool
     {
         return false;
-    }
-
-    /** @return list<string> */
-    private function defaultEnabledProfileFeatures(): array
-    {
-        return [
-            self::PRODUCTS,
-            self::INTEGRATIONS_TIKTOK,
-            self::INTEGRATIONS_YOUTUBE,
-            self::INTEGRATIONS_OTHER,
-        ];
     }
 }
