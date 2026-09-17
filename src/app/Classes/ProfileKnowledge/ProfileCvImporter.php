@@ -37,8 +37,15 @@ class ProfileCvImporter
     /**
      * @param  array<string, mixed>  $metadata
      */
-    public function import(Profile $profile, User $user, ?UploadedFile $file, ?string $text, ?string $name, array $metadata = []): ProfileSource
-    {
+    public function import(
+        Profile $profile,
+        User $user,
+        ?UploadedFile $file,
+        ?string $text,
+        ?string $name,
+        array $metadata = [],
+        ?int $maxCharacters = null,
+    ): ProfileSource {
         $providedText = $this->normalizeText((string) ($text ?? ''));
         $storedFile = $file
             ? $this->storeSourceFile($profile, $file)
@@ -47,6 +54,11 @@ class ProfileCvImporter
         try {
             $fileText = $file ? $this->extractTextFromFile($file) : '';
             $extractedText = $providedText !== '' ? $providedText : $this->normalizeText($fileText);
+
+            if ($maxCharacters !== null && mb_strlen($extractedText) > $maxCharacters) {
+                throw new \LengthException("Source content can contain up to {$maxCharacters} characters on the current plan.");
+            }
+
             $contentHash = $this->sourceDeduplicator->normalizedContentHash($extractedText);
             $this->sourceDeduplicator->synchronize($profile);
             $duplicate = $contentHash !== null

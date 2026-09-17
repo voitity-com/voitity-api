@@ -35,6 +35,7 @@ class SubscriptionEntitlementService
         private readonly SubscriptionProfileAccessService $profileAccess,
         private readonly SubscriptionUsageFundingService $funding,
         private readonly CreditWalletService $wallets,
+        private readonly FreeSubscriptionService $freeSubscriptions,
     ) {}
 
     /**
@@ -73,18 +74,14 @@ class SubscriptionEntitlementService
     {
         $userId = $user instanceof User ? $user->id : $user;
 
-        try {
-            $subscription = $this->activeSubscriptionFor((int) $userId);
-        } catch (SubscriptionEntitlementException $exception) {
-            $this->profileAccess->deactivateProfilesIfAccessEnded(
-                (int) $userId,
-                'active_subscription_not_found'
-            );
-
-            throw $exception;
-        }
+        $subscription = $this->freeSubscriptions->ensureFor((int) $userId)
+            ->loadMissing('limit', 'user');
 
         $subscription = $this->renewalService->renewIfFree($subscription);
+
+        if ($subscription->renews_at->isPast() && $this->freeSubscriptions->hasPaymentRecoveryWindow($subscription)) {
+            return $subscription;
+        }
 
         if ($subscription->renews_at->isPast()) {
             $subscription->status = $subscription->cancel_at_period_end
@@ -92,11 +89,6 @@ class SubscriptionEntitlementService
                 : SubscriptionStatus::Expired;
             $subscription->active = false;
             $subscription->save();
-            $this->profileAccess->deactivateProfilesIfAccessEnded(
-                (int) $userId,
-                'subscription_expired_during_entitlement_check',
-                $subscription->id
-            );
             $this->notifySubscriptionDeactivated($subscription);
 
             Log::warning('Expired subscription rejected during entitlement check.', [
@@ -105,29 +97,7 @@ class SubscriptionEntitlementService
                 'user_id' => $userId,
             ]);
 
-            throw new SubscriptionEntitlementException(
-                'Active subscription has expired.',
-                ['subscription' => ['Active subscription has expired.']]
-            );
-        }
-
-        return $subscription;
-    }
-
-    private function activeSubscriptionFor(int $userId): Subscription
-    {
-        $subscription = Subscription::query()
-            ->where('user_id', $userId)
-            ->where('active', true)
-            ->with('limit', 'user')
-            ->latest('started_at')
-            ->first();
-
-        if (! $subscription instanceof Subscription) {
-            throw new SubscriptionEntitlementException(
-                'Active subscription not found.',
-                ['subscription' => ['Active subscription not found.']]
-            );
+            return $this->freeSubscriptions->downgrade((int) $userId)->loadMissing('limit', 'user');
         }
 
         return $subscription;

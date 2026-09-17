@@ -3,6 +3,7 @@
 namespace App\Services\ProfileKnowledge;
 
 use App\Classes\EmbeddingService\EmbeddingClient;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Models\ProfileKnowledgeChunk;
 use Illuminate\Support\Collection;
@@ -15,6 +16,7 @@ class ProfileKnowledgeRetriever
     public function __construct(
         private readonly EmbeddingClient $embeddings,
         private readonly ProfileKnowledgeQueryIntentAnalyzer $intentAnalyzer,
+        private readonly ?SubscriptionPlanCapabilityService $planCapabilities = null,
     ) {}
 
     public function retrieve(
@@ -31,6 +33,12 @@ class ProfileKnowledgeRetriever
         $dimensions = (int) config('ai-knowledge.embedding.dimensions', 1536);
         $intent = $this->intentAnalyzer->analyze($intentQuery);
         $forcedTypes = $intent->sourceTypes;
+        $freePlanLockedSourceIds = $profile->sources()
+            ->get()
+            ->filter(fn ($source): bool => (bool) data_get($source->metadata, '_free_plan.locked', false))
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
 
         if (count($vector) !== $dimensions || count($intentVector) !== $dimensions) {
             throw new \RuntimeException('Query embedding dimensions do not match the configured knowledge index.');
@@ -45,12 +53,13 @@ class ProfileKnowledgeRetriever
             ...$candidates->all(),
         ])
             ->unique('id')
+            ->reject(fn (ProfileKnowledgeChunk $chunk): bool => $this->belongsToSource($chunk, $freePlanLockedSourceIds))
             ->reject(fn (ProfileKnowledgeChunk $chunk): bool => in_array($chunk->source_type, $intent->excludedSourceTypes, true))
             ->values();
         $queryTerms = $intent->terms;
         $minimumScore = (float) config('ai-knowledge.retrieval.minimum_score', 0.35);
         $topK = (int) config('ai-knowledge.retrieval.top_k', 8);
-        $maxTokens = (int) config('ai-knowledge.retrieval.max_context_tokens', 2500);
+        $maxTokens = $this->capabilities()->chatContextTokens($profile);
 
         $ranked = $candidates
             ->map(function (ProfileKnowledgeChunk $chunk) use ($intent, $queryTerms): array {
@@ -126,6 +135,21 @@ class ProfileKnowledgeRetriever
             contextTokens: $contextTokens,
             latencyMs: $latencyMs,
         );
+    }
+
+    private function capabilities(): SubscriptionPlanCapabilityService
+    {
+        return $this->planCapabilities ?? app(SubscriptionPlanCapabilityService::class);
+    }
+
+    /** @param array<int, int> $sourceIds */
+    private function belongsToSource(ProfileKnowledgeChunk $chunk, array $sourceIds): bool
+    {
+        $sourceId = $chunk->source_type === 'profile_source'
+            ? (int) $chunk->source_id
+            : (int) data_get($chunk->metadata, 'profile_source_id', 0);
+
+        return $sourceId > 0 && in_array($sourceId, $sourceIds, true);
     }
 
     /**

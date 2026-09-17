@@ -106,6 +106,7 @@ class OpenAIClientTest extends TestCase
 
             return $request->url() === 'https://fake-openai.test/v1/chat/completions'
                 && $payload['model'] === 'gpt-4o-mini'
+                && $payload['max_tokens'] === 300
                 && $payload['response_format'] === ['type' => 'json_object']
                 && $payload['messages'][0]['role'] === 'system'
                 && str_starts_with($systemPrompt, 'Your name is: '.$profile->name)

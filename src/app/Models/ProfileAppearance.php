@@ -20,12 +20,20 @@ class ProfileAppearance extends Model
         'background_type',
         'background_image_disk',
         'background_image_path',
+        'metadata',
     ];
 
     protected $attributes = [
         'template_key' => 'profile01',
         'background_type' => self::BACKGROUND_CSS,
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 
     public function profile(): BelongsTo
     {

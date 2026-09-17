@@ -33,12 +33,14 @@ class ProfileAvatar extends Model
         'selected_variant',
         'failure_code',
         'failure_reason',
+        'metadata',
     ];
 
     protected $casts = [
         'video_duration_seconds' => 'integer',
         'generation_status' => AvatarGenerationStatus::class,
         'selected_variant' => AvatarVariant::class,
+        'metadata' => 'array',
     ];
 
     public function user()

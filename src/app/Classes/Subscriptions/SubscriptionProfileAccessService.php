@@ -151,32 +151,106 @@ class SubscriptionProfileAccessService
         }
 
         $limit = max(0, (int) ($planConfig['limits']['profiles'] ?? 0));
-        $activeProfileIds = Profile::query()
+        $activeProfiles = Profile::query()
             ->where('user_id', $subscription->user_id)
             ->where('active', true)
-            ->pluck('id');
+            ->lockForUpdate()
+            ->get()
+            ->sort(function (Profile $left, Profile $right): int {
+                $leftPublished = $left->status === ProfileStatus::Published ? 1 : 0;
+                $rightPublished = $right->status === ProfileStatus::Published ? 1 : 0;
 
-        if ($activeProfileIds->count() <= $limit) {
+                if ($leftPublished !== $rightPublished) {
+                    return $rightPublished <=> $leftPublished;
+                }
+
+                return $right->updated_at?->getTimestamp() <=> $left->updated_at?->getTimestamp();
+            })
+            ->values();
+
+        if ($activeProfiles->count() <= $limit) {
             return 0;
         }
 
-        $deactivated = Profile::query()
-            ->whereKey($activeProfileIds)
-            ->update([
+        $profilesToSuspend = $activeProfiles->slice($limit);
+
+        foreach ($profilesToSuspend as $profile) {
+            $previousStatus = $profile->status instanceof ProfileStatus
+                ? $profile->status->value
+                : (string) $profile->status;
+
+            $profile->forceFill([
                 'active' => false,
                 'status' => ProfileStatus::Hidden->value,
-                'updated_at' => now(),
-            ]);
+                'subscription_suspended_at' => now(),
+                'suspended_by_subscription_id' => $subscription->id,
+                'subscription_suspension_previous_status' => $previousStatus,
+            ])->save();
+        }
+
+        $deactivated = $profilesToSuspend->count();
 
         Log::warning('Active profiles exceeded a newly activated subscription limit and were deactivated for reselection.', [
             'active_profile_limit' => $limit,
             'plan' => $subscription->plan->value,
             'profile_count' => $deactivated,
-            'profile_ids' => $activeProfileIds->values()->all(),
+            'profile_ids' => $profilesToSuspend->pluck('id')->values()->all(),
             'subscription_id' => $subscription->id,
             'user_id' => $subscription->user_id,
         ]);
 
         return $deactivated;
+    }
+
+    public function restoreProfilesAfterPlanUpgrade(
+        Subscription $subscription,
+        int $sourceSubscriptionId,
+    ): int {
+        $planConfig = config("subscriptions.plans.{$subscription->plan->value}", []);
+        $unlimited = ($planConfig['unlimited'] ?? false) === true;
+        $limit = $unlimited ? PHP_INT_MAX : max(0, (int) ($planConfig['limits']['profiles'] ?? 0));
+
+        return DB::transaction(function () use ($limit, $sourceSubscriptionId, $subscription): int {
+            $activeCount = Profile::query()
+                ->where('user_id', $subscription->user_id)
+                ->where('active', true)
+                ->count();
+            $available = $limit === PHP_INT_MAX ? PHP_INT_MAX : max(0, $limit - $activeCount);
+
+            if ($available === 0) {
+                return 0;
+            }
+
+            $profiles = Profile::query()
+                ->where('user_id', $subscription->user_id)
+                ->where('suspended_by_subscription_id', $sourceSubscriptionId)
+                ->whereNotNull('subscription_suspended_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $restored = 0;
+
+            foreach ($profiles as $profile) {
+                if ($restored >= $available) {
+                    break;
+                }
+
+                $previousStatus = $profile->subscription_suspension_previous_status;
+                $status = is_string($previousStatus) && ProfileStatus::tryFrom($previousStatus)
+                    ? $previousStatus
+                    : ProfileStatus::Draft->value;
+
+                $profile->forceFill([
+                    'active' => true,
+                    'status' => $status,
+                    'subscription_suspended_at' => null,
+                    'suspended_by_subscription_id' => null,
+                    'subscription_suspension_previous_status' => null,
+                ])->save();
+                $restored++;
+            }
+
+            return $restored;
+        });
     }
 }

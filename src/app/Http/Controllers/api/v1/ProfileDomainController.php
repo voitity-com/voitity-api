@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\ProfileDomainService\ProfileDomainProvider;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Enums\ProfileDomainStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProfileDomainRequest;
@@ -77,9 +78,18 @@ class ProfileDomainController extends Controller
         Profile $profile,
         ProfileDomainProvider $provider,
         FeatureService $features,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
+        }
+
+        if (! $planCapabilities->supports($profile, 'custom_domain')) {
+            return response()->json([
+                'message' => 'Custom domains are not included in the current plan.',
+                'code' => 'PLAN_FEATURE_NOT_INCLUDED',
+                'errors' => ['plan_feature' => ['Custom domains are not included in the current plan.']],
+            ], 403);
         }
 
         if (! $features->isGlobalEnabled(FeatureService::DOMAINS_CUSTOM)) {
@@ -191,10 +201,21 @@ class ProfileDomainController extends Controller
      *     @OA\Response(response=404, description="Profile or domain not found")
      * )
      */
-    public function verify(Request $request, Profile $profile): JsonResponse
-    {
+    public function verify(
+        Request $request,
+        Profile $profile,
+        SubscriptionPlanCapabilityService $planCapabilities,
+    ): JsonResponse {
         if ($response = $this->authorizeProfile($request, $profile)) {
             return $response;
+        }
+
+        if (! $planCapabilities->supports($profile, 'custom_domain')) {
+            return response()->json([
+                'message' => 'Custom domains are not included in the current plan.',
+                'code' => 'PLAN_FEATURE_NOT_INCLUDED',
+                'errors' => ['plan_feature' => ['Custom domains are not included in the current plan.']],
+            ], 403);
         }
 
         $domain = $profile->domain()->first();

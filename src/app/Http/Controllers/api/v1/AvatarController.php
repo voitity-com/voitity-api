@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\Repositories\AvatarRepository;
 use App\Classes\Subscriptions\AvatarGenerationSpecification;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Enums\ActivationEventType;
 use App\Enums\AvatarGenerationStatus;
 use App\Enums\AvatarVariant;
@@ -66,6 +67,7 @@ class AvatarController extends Controller
         AvatarRepository $avatarRepository,
         SubscriptionEntitlementService $entitlements,
         AvatarGenerationSpecification $avatarSpecification,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         $profile = null;
 
@@ -80,6 +82,25 @@ class AvatarController extends Controller
 
             if (! $profile || ! $this->userCanGenerateAvatarForProfile($user, $profile)) {
                 return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            if (! $planCapabilities->supports($profile, 'ai_avatar')) {
+                $planCapabilities->assertSupports($profile, 'avatar_upload', 'Avatar upload', false);
+                $avatar = $avatarRepository->storeStaticAvatar($user, $profile, $request->file('image'));
+                $this->notifyProfileOwner($profile, 'avatar_activated');
+
+                return response()->json([
+                    'message' => 'Avatar uploaded successfully.',
+                    'data' => [
+                        'id' => $avatar->id,
+                        'profile_id' => $avatar->profile_id,
+                        'source' => 'upload',
+                        'source_id' => null,
+                        'status' => $avatar->status,
+                        'file' => $avatar->file,
+                        'avatar' => $this->profileAvatarToArray($avatar),
+                    ],
+                ]);
             }
 
             $entitlements->assertCanUse(
@@ -117,6 +138,7 @@ class AvatarController extends Controller
         } catch (SubscriptionEntitlementException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
+                'code' => $e->errorCode(),
                 'errors' => $e->errors(),
             ], $e->statusCode());
         } catch (\Throwable $e) {
@@ -238,6 +260,7 @@ class AvatarController extends Controller
         Profile $profile,
         AvatarRepository $avatarRepository,
         ActivationEventRecorder $activationEvents,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -264,6 +287,18 @@ class AvatarController extends Controller
             }
 
             $variant = AvatarVariant::from((string) $validated['variant']);
+
+            if (
+                $variant !== AvatarVariant::Original
+                && ! $planCapabilities->supports($profile, 'ai_avatar')
+            ) {
+                return response()->json([
+                    'message' => 'AI avatar variants are not included in the current plan.',
+                    'code' => 'PLAN_FEATURE_NOT_INCLUDED',
+                    'errors' => ['plan_feature' => ['AI avatar variants are not included in the current plan.']],
+                ], 403);
+            }
+
             $activeAvatar = $avatarRepository->activateAvatar($profile, $avatar, $variant);
 
             $activationEvents->record(

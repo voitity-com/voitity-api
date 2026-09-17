@@ -5,6 +5,7 @@ namespace App\Classes\ChatAIService\OpenAI;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Services\Integrations\ProfileMediaPromptService;
 use App\Services\Products\ProfileProductPromptService;
@@ -111,7 +112,8 @@ class OpenAIClient implements ChatAIClient
                         'content' => $message,
                     ],
                 ],
-                'max_tokens' => 1000,
+                'max_tokens' => app(SubscriptionPlanCapabilityService::class)
+                    ->chatMaxOutputTokens($profile),
                 'temperature' => 0.7,
                 'response_format' => ['type' => 'json_object'],
             ]);

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Enums\ActivationEventType;
 use App\Enums\ProfileProductStatus;
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionPlan;
 use App\Http\Responses\Products\ProfileProductResponse;
 use App\Models\Profile;
 use App\Models\ProfileProduct;
@@ -27,6 +29,7 @@ class ProfileProductControllerTest extends TestAPI
     {
         parent::setUp();
 
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
         $this->enableFeaturesForTestProfiles();
         config(['app.key' => 'base64:'.base64_encode(str_repeat('a', 32))]);
         $this->app->forgetInstance('encrypter');
@@ -366,6 +369,29 @@ class ProfileProductControllerTest extends TestAPI
             ->getJson("/api/profile/{$profile->id}/products")
             ->assertOk()
             ->assertJsonPath('data.max_products', 2)
+            ->assertJsonPath('data.available_slots', 0);
+    }
+
+    public function test_free_plan_allows_only_one_product_per_profile(): void
+    {
+        [$user, $profile, $token] = $this->ownerContext();
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $this->createRemoteProduct($profile, $user, 'Producto Gratis');
+
+        $this->withToken($token)->post("/api/profile/{$profile->id}/products", [
+            'name' => 'Segundo producto',
+            'description' => 'No debe crearse en el plan gratuito.',
+            'image' => UploadedFile::fake()->create('second.jpg', 10, 'image/jpeg'),
+            'destination_type' => 'external_url',
+            'destination_url' => 'https://shop.example.com/second',
+            'status' => 'draft',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'A profile can have up to 1 products.');
+
+        $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/products")
+            ->assertOk()
+            ->assertJsonPath('data.max_products', 1)
             ->assertJsonPath('data.available_slots', 0);
     }
 

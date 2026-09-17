@@ -32,6 +32,10 @@ class SubscriptionEntitlementException extends RuntimeException
 
     public function errorCode(): string
     {
+        if (isset($this->errors['plan_feature'])) {
+            return 'PLAN_FEATURE_NOT_INCLUDED';
+        }
+
         if (isset($this->errors['payment_source'])) {
             return 'PAYMENT_METHOD_REQUIRED';
         }

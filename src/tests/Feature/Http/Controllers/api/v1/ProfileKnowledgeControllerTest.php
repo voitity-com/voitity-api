@@ -348,6 +348,57 @@ class ProfileKnowledgeControllerTest extends TestAPI
         $response->assertJsonValidationErrors(['file', 'text']);
     }
 
+    public function test_free_plan_allows_one_source_with_its_size_and_character_limits(): void
+    {
+        $this->fakeProfileSourcesDisk();
+        $this->assertSame(2048, config('subscriptions.plans.free.capabilities.source_max_file_kb'));
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'Fuente gratuita',
+                'text' => 'Información válida para el perfil.',
+            ])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/sources/cv', [
+                'name' => 'Segunda fuente',
+                'text' => 'No debe agregarse.',
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_LIMIT_REACHED');
+
+        $secondUser = User::factory()->create(['role' => 'user']);
+        $secondProfile = Profile::factory()->for($secondUser)->create();
+        $secondToken = $secondUser->createToken('test-token', ['profile:write'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+
+        $this->withToken($secondToken)
+            ->postJson(self::ENDPOINT_PROFILE.'/'.$secondProfile->id.'/sources/cv', [
+                'name' => 'Texto demasiado largo',
+                'text' => str_repeat('a', 20001),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'PLAN_FEATURE_LIMIT_REACHED');
+
+        $thirdUser = User::factory()->create(['role' => 'user']);
+        $thirdProfile = Profile::factory()->for($thirdUser)->create();
+        $thirdToken = $thirdUser->createToken('test-token', ['profile:write'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        config(['subscriptions.plans.free.capabilities.source_max_file_kb' => 2]);
+
+        $this->withToken($thirdToken)
+            ->post(self::ENDPOINT_PROFILE.'/'.$thirdProfile->id.'/sources/cv', [
+                'name' => 'Archivo demasiado grande',
+                'file' => UploadedFile::fake()->create('large.txt', 3, 'text/plain'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'PLAN_FEATURE_LIMIT_REACHED');
+    }
+
     public function test_user_without_profile_write_ability_can_not_import_cv_source(): void
     {
         $user = User::factory()->create(['role' => 'user']);

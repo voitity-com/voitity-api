@@ -33,6 +33,13 @@ use Tests\TestCase;
 
 class CloneVoiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
+    }
+
     public function test_successful_reclone_queues_cleanup_for_the_replaced_provider_voice(): void
     {
         Event::fake();

@@ -95,6 +95,21 @@ class ProfileInsightsControllerTest extends TestAPI
             ->assertJsonPath('data.analysis_coverage.classified', 1);
     }
 
+    public function test_free_plan_insights_are_clamped_to_the_last_thirty_days(): void
+    {
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        $token = $user->createToken('insights', ['insights:read'])->plainTextToken;
+        $to = now()->startOfDay();
+
+        $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/insights?from=".$to->copy()->subDays(120)->toDateString().'&to='.$to->toDateString().'&timezone=UTC')
+            ->assertOk()
+            ->assertJsonPath('data.range.from', $to->copy()->subDays(29)->toDateString())
+            ->assertJsonPath('data.range.to', $to->toDateString())
+            ->assertJsonPath('data.range.group_by', 'day');
+    }
+
     public function test_missing_ability_cannot_view_profile_insights(): void
     {
         $owner = User::factory()->create();

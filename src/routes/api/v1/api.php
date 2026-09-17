@@ -32,6 +32,7 @@ use App\Http\Controllers\api\v1\ProfileIntegrationController;
 use App\Http\Controllers\api\v1\ProfileKnowledgeController;
 use App\Http\Controllers\api\v1\ProfileMessagingCapabilitiesController;
 use App\Http\Controllers\api\v1\ProfileOtherIntegrationController;
+use App\Http\Controllers\api\v1\ProfilePreviewController;
 use App\Http\Controllers\api\v1\ProfileProductController;
 use App\Http\Controllers\api\v1\ProfileProductImportController;
 use App\Http\Controllers\api\v1\ProfileWidgetController;
@@ -253,6 +254,7 @@ Route::prefix('/profile')->group(function () {
     Route::post('/{profile}/activate', [ProfileController::class, 'activate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::post('/{profile}/deactivate', [ProfileController::class, 'deactivate'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::patch('/{profile}/voice-settings', [ProfileController::class, 'updateVoiceSettings'])->middleware(['auth:sanctum', 'abilities:profile:write']);
+    Route::get('/{profile}/preview', [ProfilePreviewController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::get('/{profile}', [ProfileController::class, 'show'])->middleware(['auth:sanctum', 'abilities:profile:read']);
     Route::patch('/{profile}', [ProfileController::class, 'update'])->middleware(['auth:sanctum', 'abilities:profile:write']);
     Route::put('/{profile}/data/networks', [ProfileController::class, 'updateData'])->middleware(['auth:sanctum', 'abilities:profile:write']);

@@ -158,6 +158,40 @@ class AvatarRepository
         }
     }
 
+    public function storeStaticAvatar(User $actor, Profile $profile, UploadedFile $sourceImage): ProfileAvatar
+    {
+        $profile->loadMissing('user');
+        $owner = $profile->user ?: $actor;
+        $disk = $this->profileArtifactDisk();
+        $path = $sourceImage->store($this->sourceImageFolder(), $disk);
+
+        if (! is_string($path)) {
+            throw new RuntimeException('Avatar image could not be stored.');
+        }
+
+        $file = Storage::disk($disk)->url($path);
+
+        return DB::transaction(function () use ($file, $owner, $profile): ProfileAvatar {
+            ProfileAvatar::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', ProfileAvatar::STATUS_ACTIVE)
+                ->update(['status' => ProfileAvatar::STATUS_INACTIVE]);
+
+            return ProfileAvatar::query()->create([
+                'user_id' => $owner->id,
+                'profile_id' => $profile->id,
+                'aiimage_id' => null,
+                'ai_video_id' => null,
+                'video_duration_seconds' => 0,
+                'original_file' => $file,
+                'file' => $file,
+                'status' => ProfileAvatar::STATUS_ACTIVE,
+                'generation_status' => AvatarGenerationStatus::Completed,
+                'selected_variant' => AvatarVariant::Original,
+            ])->load(['aiImage', 'aiVideo']);
+        });
+    }
+
     public function getActiveAvatarForProfile(Profile $profile): ?ProfileAvatar
     {
         return $profile->avatars()

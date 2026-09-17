@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Enums\SubscriptionPlan;
 use App\Mail\Auth\PasswordChanged;
 use App\Mail\Auth\PasswordResetLink;
 use App\Mail\Auth\VerifyEmailAddress;
@@ -649,6 +650,7 @@ class AuthControllerTest extends TestAPI
         $user = User::where('email', 'english.user@example.com')->firstOrFail();
         $this->assertNotNull($user->email_verified_at);
         $this->assertNull($user->email_verification_token);
+        $this->assertSame(SubscriptionPlan::Free, $user->activeSubscription()->firstOrFail()->plan);
 
         Mail::assertSent(
             WelcomeEmail::class,

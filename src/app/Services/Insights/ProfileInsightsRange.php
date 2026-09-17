@@ -42,6 +42,25 @@ final readonly class ProfileInsightsRange
         return $this->localFrom->diffInMonths($this->localTo) > (int) config('insights.max_range_months', 24);
     }
 
+    public function limitedToDays(int $days): self
+    {
+        $days = max(1, $days);
+        $earliestFrom = $this->localTo->copy()->subDays($days - 1)->startOfDay();
+
+        if ($this->localFrom->greaterThanOrEqualTo($earliestFrom)) {
+            return $this;
+        }
+
+        return new self(
+            localFrom: $earliestFrom,
+            localTo: $this->localTo,
+            from: $earliestFrom->copy()->utc(),
+            to: $this->to,
+            timezone: $this->timezone,
+            groupBy: $days > 92 ? 'month' : 'day',
+        );
+    }
+
     /**
      * @return array{from: string, to: string, timezone: string, group_by: string}
      */

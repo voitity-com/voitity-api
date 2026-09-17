@@ -68,29 +68,31 @@ class SubscriptionProfileAccessServiceTest extends TestCase
         $this->assertSame(ProfileStatus::Published, $profile->fresh()->status);
     }
 
-    public function test_starter_downgrade_hides_all_profiles_when_active_count_exceeds_limit(): void
+    public function test_starter_downgrade_preserves_the_latest_published_profile_and_hides_extras(): void
     {
         $user = User::factory()->create();
         $first = Profile::factory()->create([
             'user_id' => $user->id,
             'active' => true,
             'status' => ProfileStatus::Published,
+            'updated_at' => now()->subDay(),
         ]);
         $second = Profile::factory()->create([
             'user_id' => $user->id,
             'active' => true,
             'status' => ProfileStatus::Published,
+            'updated_at' => now(),
         ]);
         $subscription = $this->subscription($user, SubscriptionPlan::Starter);
 
         $deactivated = app(SubscriptionProfileAccessService::class)
             ->enforceActiveProfileLimit($subscription);
 
-        $this->assertSame(2, $deactivated);
+        $this->assertSame(1, $deactivated);
         $this->assertFalse((bool) $first->fresh()->active);
         $this->assertSame(ProfileStatus::Hidden, $first->fresh()->status);
-        $this->assertFalse((bool) $second->fresh()->active);
-        $this->assertSame(ProfileStatus::Hidden, $second->fresh()->status);
+        $this->assertTrue((bool) $second->fresh()->active);
+        $this->assertSame(ProfileStatus::Published, $second->fresh()->status);
     }
 
     public function test_unlimited_plan_keeps_multiple_active_profiles(): void

@@ -24,14 +24,18 @@ class SubscriptionEntitlementServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_rejects_usage_without_active_subscription(): void
+    public function test_it_assigns_the_free_plan_when_no_active_subscription_exists(): void
     {
         $user = User::factory()->create();
 
-        $this->expectException(SubscriptionEntitlementException::class);
-        $this->expectExceptionMessage('Active subscription not found.');
+        $subscription = app(SubscriptionEntitlementService::class)
+            ->assertCanUse($user, ['profiles' => 1]);
 
-        app(SubscriptionEntitlementService::class)->assertCanUse($user, ['profiles' => 1]);
+        $this->assertSame(SubscriptionPlan::Free, $subscription->plan);
+        $this->assertTrue($subscription->active);
+        $this->assertSame('free_recurring', $subscription->billing_mode);
+        $this->assertTrue($subscription->renews_at->isFuture());
+        $this->assertDatabaseCount('subscriptions', 1);
     }
 
     public function test_it_rejects_usage_when_metric_limit_is_not_enough(): void

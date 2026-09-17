@@ -23,7 +23,7 @@ class SubscriptionExpirationCommandTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_cancelled_subscription_keeps_profiles_until_service_end_then_hides_them(): void
+    public function test_cancelled_subscription_keeps_profiles_until_service_end_then_moves_to_free(): void
     {
         Mail::fake();
         Carbon::setTestNow(Carbon::parse('2026-08-28 09:59:00'));
@@ -50,8 +50,14 @@ class SubscriptionExpirationCommandTest extends TestCase
 
         $this->assertFalse((bool) $subscription->fresh()->active);
         $this->assertSame(SubscriptionStatus::Cancelled, $subscription->fresh()->status);
-        $this->assertFalse((bool) $profile->fresh()->active);
-        $this->assertSame(ProfileStatus::Hidden, $profile->fresh()->status);
+        $this->assertTrue((bool) $profile->fresh()->active);
+        $this->assertSame(ProfileStatus::Published, $profile->fresh()->status);
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Free->value,
+            'active' => true,
+            'billing_mode' => 'free_recurring',
+        ]);
 
         $this->artisan('subscriptions:expire-ended')
             ->expectsOutput('Ended subscriptions expired: 0')
@@ -79,6 +85,11 @@ class SubscriptionExpirationCommandTest extends TestCase
         $this->assertSame(SubscriptionStatus::Cancelled, $oldSubscription->fresh()->status);
         $this->assertTrue((bool) $profile->fresh()->active);
         $this->assertSame(ProfileStatus::Published, $profile->fresh()->status);
+        $this->assertDatabaseMissing('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Free->value,
+            'active' => true,
+        ]);
     }
 
     private function cancelledSubscription(User $user, Carbon $renewsAt): Subscription

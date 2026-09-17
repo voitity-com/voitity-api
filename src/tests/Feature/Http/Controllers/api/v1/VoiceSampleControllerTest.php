@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Classes\VoiceSampleFileManager;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SubscriptionUsageType;
+use App\Events\Voices\VoiceSampleAdded;
 use App\Models\Profile;
 use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
+use App\Models\SubscriptionUse;
 use App\Models\User;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
@@ -30,6 +33,8 @@ class VoiceSampleControllerTest extends TestAPI
     protected function setUp(): void
     {
         parent::setUp();
+
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
 
         // Use fake storage to prevent actual file operations
         Storage::fake('local');
@@ -72,7 +77,7 @@ class VoiceSampleControllerTest extends TestAPI
     {
         // Get token and create user first
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::where('email', 'voitity@gmail.com')->first();
 
         $voice = Voice::factory()->create(['user_id' => $user->id]);
 
@@ -164,7 +169,7 @@ class VoiceSampleControllerTest extends TestAPI
 
         // Get token and create user first
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::where('email', 'voitity@gmail.com')->first();
 
         $voice = Voice::factory()->create(['user_id' => $user->id]);
         $data = [
@@ -199,7 +204,7 @@ class VoiceSampleControllerTest extends TestAPI
         $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
 
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::where('email', 'voitity@gmail.com')->first();
         $voice = Voice::factory()->create(['user_id' => $user->id]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -220,7 +225,7 @@ class VoiceSampleControllerTest extends TestAPI
         $this->app->instance(VoiceSampleFileManager::class, $mockFileManager);
 
         $token = $this->getToken();
-        $user = \App\Models\User::where('email', 'voitity@gmail.com')->first();
+        $user = User::where('email', 'voitity@gmail.com')->first();
         $voice = Voice::factory()->create(['user_id' => $user->id, 'language_code' => 'es']);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -271,7 +276,7 @@ class VoiceSampleControllerTest extends TestAPI
         $response->assertStatus(200);
         $response->assertJsonPath('message', 'Voice sample is processing successfully.');
 
-        Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voice, $voiceSample) {
+        Event::assertDispatched(VoiceSampleAdded::class, function ($event) use ($voice, $voiceSample) {
             return $event->voice->id === $voice->id && $event->voiceSample->id === $voiceSample->id;
         });
         $providerRequestId = (int) $response->json('data.id');
@@ -281,9 +286,39 @@ class VoiceSampleControllerTest extends TestAPI
             'usage_type' => SubscriptionUsageType::VoiceCloned->value,
             'voice_clones_used' => 1,
             'idempotency_key' => "voice-clone:provider-request:{$providerRequestId}",
-            'status' => \App\Models\SubscriptionUse::STATUS_RESERVED,
+            'status' => SubscriptionUse::STATUS_RESERVED,
         ]);
         $this->assertSame(0, (int) $voiceUser->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
+    }
+
+    public function test_free_plan_can_not_process_a_voice_clone(): void
+    {
+        Event::fake();
+        $user = User::factory()->create([
+            'role' => 'user',
+            'password' => Hash::make('test123'),
+        ]);
+        $profile = $this->profileForUser($user);
+        $voice = Voice::factory()->create([
+            'user_id' => $user->id,
+            'profile_id' => $profile->id,
+        ]);
+        $voiceSample = VoiceSample::factory()->create([
+            'voice_id' => $voice->id,
+            'file' => 'free-plan-sample.mp3',
+            'duration' => 120,
+            'active' => true,
+        ]);
+        app(FreeSubscriptionService::class)->ensureFor($user);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
+            ->postJson($this->getProcessVoiceSampleUrl($voice->id, $voiceSample->id));
+
+        $response->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_NOT_INCLUDED');
+        Event::assertNotDispatched(VoiceSampleAdded::class);
+        $this->assertDatabaseCount('voice_provider_requests', 0);
+        $this->assertDatabaseCount('subscription_uses', 0);
     }
 
     public function test_user_can_not_process_a_voice_sample_for_another_users_profile()
@@ -343,7 +378,7 @@ class VoiceSampleControllerTest extends TestAPI
         $response->assertStatus(422);
         $response->assertJsonPath('message', 'Voice sample must be at least 5 seconds long.');
         $response->assertJsonPath('errors.duration.0', 'Voice sample must be at least 5 seconds long.');
-        Event::assertNotDispatched(\App\Events\Voices\VoiceSampleAdded::class);
+        Event::assertNotDispatched(VoiceSampleAdded::class);
         $this->assertDatabaseMissing('voice_provider_requests', [
             'voice_id' => $voice->id,
             'voice_sample_id' => $voiceSample->id,
@@ -454,7 +489,7 @@ class VoiceSampleControllerTest extends TestAPI
         $new_voice_provider_request = VoiceProviderRequest::find($response_content->data->id);
         $this->assertFalse(empty($new_voice_provider_request->status));
 
-        Event::assertDispatched(\App\Events\Voices\VoiceSampleAdded::class, function ($event) use ($voiceSample) {
+        Event::assertDispatched(VoiceSampleAdded::class, function ($event) use ($voiceSample) {
             return $event->voiceSample->id === $voiceSample->id;
         });
         $this->assertDatabaseHas('subscription_uses', [
@@ -462,7 +497,7 @@ class VoiceSampleControllerTest extends TestAPI
             'usage_type' => SubscriptionUsageType::VoiceCloned->value,
             'voice_clones_used' => 1,
             'idempotency_key' => "voice-clone:provider-request:{$new_voice_provider_request->id}",
-            'status' => \App\Models\SubscriptionUse::STATUS_RESERVED,
+            'status' => SubscriptionUse::STATUS_RESERVED,
         ]);
         $this->assertSame(0, (int) $user->subscriptions()->where('active', true)->firstOrFail()->limit()->firstOrFail()->voice_clones_remaining);
     }

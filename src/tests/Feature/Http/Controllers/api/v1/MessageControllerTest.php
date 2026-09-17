@@ -8,6 +8,7 @@ use App\Classes\ChatAIService\AudioMessageInspector;
 use App\Classes\ChatAIService\ChatAIAnswer;
 use App\Classes\ChatAIService\ChatAIClient;
 use App\Classes\ChatAIService\ChatAITextFromAudio;
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Events\MessageStored;
@@ -27,6 +28,13 @@ use Mockery;
 class MessageControllerTest extends TestAPI
 {
     private const ENDPOINT = '/api/profile';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
+    }
 
     protected function tearDown(): void
     {
@@ -822,6 +830,35 @@ class MessageControllerTest extends TestAPI
 
         $response->assertStatus(422);
         $response->assertJsonPath('code', 'AUDIO_DURATION_EXCEEDED');
+        $this->assertDatabaseCount('subscription_uses', 0);
+    }
+
+    public function test_free_plan_rejects_audio_before_inspection_or_transcription(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = $this->createProfileFor($user);
+        $profile->forceFill(['active' => true, 'status' => 'published'])->save();
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('test-token', ['messages:write'])->plainTextToken;
+
+        $inspector = Mockery::mock(AudioMessageInspector::class);
+        $inspector->shouldNotReceive('durationSeconds');
+        $this->instance(AudioMessageInspector::class, $inspector);
+        $chatAiClient = Mockery::mock(ChatAIClient::class);
+        $chatAiClient->shouldNotReceive('getTextFromAudio');
+        $chatAiClient->shouldNotReceive('getAnswer');
+        $this->instance(ChatAIClient::class, $chatAiClient);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT.'/'.$profile->id.'/messages/audio', [
+                'audio' => $this->validAudioUpload(),
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_NOT_INCLUDED')
+            ->assertJsonPath('data.messaging_capabilities.audio_messages_enabled', false)
+            ->assertJsonPath('data.messaging_capabilities.reason', 'audio_messages_not_in_plan');
+
+        $this->assertDatabaseCount('messages', 0);
         $this->assertDatabaseCount('subscription_uses', 0);
     }
 

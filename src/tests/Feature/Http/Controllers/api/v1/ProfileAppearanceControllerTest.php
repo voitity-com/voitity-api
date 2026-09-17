@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
+use App\Classes\Subscriptions\SubscriptionPlanAssigner;
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionPlan;
 use App\Models\Profile;
 use App\Models\ProfileAppearance;
 use App\Models\User;
@@ -16,6 +19,7 @@ class ProfileAppearanceControllerTest extends TestAPI
     public function test_owner_can_read_and_update_profile_appearance(): void
     {
         $user = User::factory()->create();
+        app(SubscriptionPlanAssigner::class)->assign($user, SubscriptionPlan::Starter);
         $profile = Profile::factory()->for($user)->create();
         $token = $user->createToken('appearance', ['profile:read', 'profile:write'])->plainTextToken;
 
@@ -27,7 +31,9 @@ class ProfileAppearanceControllerTest extends TestAPI
             ->assertJsonPath('data.appearance.has_background_image', false)
             ->assertJsonCount(5, 'data.templates')
             ->assertJsonPath('data.templates.0.background_color', '#ffffff')
+            ->assertJsonPath('data.templates.0.included', true)
             ->assertJsonPath('data.templates.1.key', 'profile02')
+            ->assertJsonPath('data.templates.1.included', true)
             ->assertJsonPath('data.templates.1.background_color', '#050505')
             ->assertJsonPath('data.templates.2.key', 'profile03')
             ->assertJsonPath('data.templates.2.background_color', '#f8fdff')
@@ -49,6 +55,48 @@ class ProfileAppearanceControllerTest extends TestAPI
             'template_key' => 'profile05',
             'background_type' => ProfileAppearance::BACKGROUND_CSS,
         ]);
+    }
+
+    public function test_free_plan_only_includes_the_first_template(): void
+    {
+        Storage::fake('profiles');
+        config()->set('profile-appearance.disk', 'profiles');
+
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('free-appearance', ['profile:read', 'profile:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/appearance")
+            ->assertOk()
+            ->assertJsonPath('data.templates.0.key', 'profile01')
+            ->assertJsonPath('data.templates.0.included', true)
+            ->assertJsonPath('data.templates.1.key', 'profile02')
+            ->assertJsonPath('data.templates.1.included', false);
+
+        $this->withToken($token)
+            ->patchJson("/api/profile/{$profile->id}/appearance", [
+                'template_key' => 'profile02',
+                'background_type' => ProfileAppearance::BACKGROUND_CSS,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_NOT_INCLUDED')
+            ->assertJsonPath('errors.template_key.0', 'This profile template is not included in the current plan.');
+
+        $this->withToken($token)
+            ->post("/api/profile/{$profile->id}/appearance/background-image", [
+                'image' => UploadedFile::fake()->image('blocked.jpg', 1200, 800),
+                'template_key' => 'profile02',
+            ], ['Accept' => 'application/json'])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_NOT_INCLUDED');
+
+        $this->assertDatabaseHas('profile_appearances', [
+            'profile_id' => $profile->id,
+            'template_key' => 'profile01',
+        ]);
+        $this->assertCount(0, Storage::disk('profiles')->allFiles());
     }
 
     public function test_background_upload_replaces_the_previous_file_and_is_publicly_exposed(): void

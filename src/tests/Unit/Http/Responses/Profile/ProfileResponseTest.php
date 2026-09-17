@@ -12,6 +12,13 @@ use Tests\TestCase;
 
 class ProfileResponseTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['subscriptions.default_plan' => 'starter']);
+    }
+
     public function test_profile_response_returns_profile_payload(): void
     {
         $profile = new Profile;

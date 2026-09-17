@@ -76,14 +76,16 @@ class PaymentControllerTest extends TestAPI
         $response->assertJsonPath('data.trial.enabled', true);
         $response->assertJsonPath('data.trial.available', true);
         $response->assertJsonPath('data.trial.days', 7);
-        $response->assertJsonPath('data.plans.0.id', 'starter');
-        $response->assertJsonPath('data.plans.0.purchasable', true);
+        $response->assertJsonPath('data.plans.0.id', 'free');
+        $response->assertJsonPath('data.plans.0.price_usd', 0);
+        $response->assertJsonPath('data.plans.0.purchasable', false);
 
         $plans = collect($response->json('data.plans'))->keyBy('id');
 
         $this->assertFalse($plans->has('admin'));
         $this->assertFalse($plans->has('pro'));
         $this->assertFalse($plans->has('business'));
+        $this->assertTrue($plans->has('free'));
         $this->assertTrue($plans->has('starter_annual'));
         $this->assertSame(12.99, $plans->get('starter')['price_usd']);
         $this->assertSame(129, $plans->get('starter_annual')['price_usd']);

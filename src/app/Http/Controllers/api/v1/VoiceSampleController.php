@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Classes\VoiceSampleFileManager;
 use App\Enums\SubscriptionUsageType;
+use App\Events\Voices\VoiceSampleAdded;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Voice\StoreVoiceSampleRequest;
@@ -238,7 +240,8 @@ class VoiceSampleController extends Controller
         Voice $voice,
         VoiceSample $voiceSample,
         SubscriptionEntitlementService $entitlements,
-        SubscriptionUsageRecorder $usageRecorder
+        SubscriptionUsageRecorder $usageRecorder,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -255,6 +258,12 @@ class VoiceSampleController extends Controller
                 return response()->json(['message' => 'Voice sample not found.'], 404);
             }
 
+            $profile = $voice->profile()->first();
+
+            if ($profile) {
+                $planCapabilities->assertSupports($profile, 'voice_clone', 'Voice cloning');
+            }
+
             $minimumDuration = $this->minimumCloneSampleDurationSeconds();
 
             if ((int) $voiceSample->duration < $minimumDuration) {
@@ -267,7 +276,7 @@ class VoiceSampleController extends Controller
             }
 
             // Check if voice sample was already processed
-            $existingRequest = \App\Models\VoiceProviderRequest::where('voice_id', $voice->id)
+            $existingRequest = VoiceProviderRequest::where('voice_id', $voice->id)
                 ->where('voice_sample_id', $voiceSample->id)
                 ->first();
 
@@ -307,7 +316,7 @@ class VoiceSampleController extends Controller
             });
 
             // Call to event or service to process the voice sample
-            event(new \App\Events\Voices\VoiceSampleAdded($voice, $voiceSample));
+            event(new VoiceSampleAdded($voice, $voiceSample));
 
             $this->notifyVoiceOwner($voice, 'voice_cloning_started');
 
@@ -319,6 +328,7 @@ class VoiceSampleController extends Controller
         } catch (SubscriptionEntitlementException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
+                'code' => $e->errorCode(),
                 'errors' => $e->errors(),
             ], $e->statusCode());
         } catch (\Throwable $e) {

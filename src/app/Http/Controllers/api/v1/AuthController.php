@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\EmailSignUpRequest;
 use App\Http\Requests\Auth\GoogleOAuthRequest;
@@ -450,6 +451,8 @@ class AuthController extends Controller
         if ($result === EmailVerificationResult::Verified) {
             $user->refresh();
 
+            app(FreeSubscriptionService::class)->ensureFor($user);
+
             $this->sendAuthMail($user, new WelcomeEmail($user), 'welcome');
             app(NotificationDispatcher::class)->sendInApp($user, 'welcome_after_email_verification');
 
@@ -631,6 +634,8 @@ class AuthController extends Controller
             if (! $user->email_verified_at) {
                 return response()->json(['message' => 'Please verify your email address before signing in.'], 403);
             }
+
+            app(FreeSubscriptionService::class)->ensureFor($user);
 
             // Generate access token
             $accessToken = $googleService->generateAccessToken($user);

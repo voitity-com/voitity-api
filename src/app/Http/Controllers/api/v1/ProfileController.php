@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\ProfilePublication\ProfileActivationService;
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\ActivationEventType;
 use App\Enums\ProfileStatus;
@@ -663,6 +664,7 @@ class ProfileController extends Controller
         UpdateProfileVoiceSettingsRequest $request,
         Profile $profile,
         ProfileVoiceSettings $voiceSettings,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -673,6 +675,10 @@ class ProfileController extends Controller
 
             if (! $profile || $profile->user_id !== $user->id) {
                 return response()->json(['message' => 'Profile not found.'], 404);
+            }
+
+            if ($request->boolean('voice_enabled')) {
+                $planCapabilities->assertSupports($profile, 'tts', 'Voice responses');
             }
 
             if ($request->boolean('voice_enabled') && ! $voiceSettings->hasConfiguredVoice($profile)) {
@@ -704,6 +710,12 @@ class ProfileController extends Controller
                 'message' => 'Profile voice settings updated successfully.',
                 'data' => (new ProfileResponse($profile))->toArray(),
             ], 200);
+        } catch (SubscriptionEntitlementException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => $e->errorCode(),
+                'errors' => $e->errors(),
+            ], $e->statusCode());
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }

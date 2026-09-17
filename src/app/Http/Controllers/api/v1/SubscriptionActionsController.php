@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\PaymentService\PaymentService;
 use App\Classes\PaymentService\PaymentSourceCreateRequest;
 use App\Classes\Subscriptions\CustomerTermsAcceptance;
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Classes\Subscriptions\PaymentMethodService;
 use App\Classes\Subscriptions\SubscriptionBillingService;
 use App\Classes\Subscriptions\SubscriptionPaymentSourceService;
@@ -206,12 +207,15 @@ class SubscriptionActionsController extends Controller
         Request $request,
         PaymentMethodService $paymentMethods,
         SubscriptionBillingService $billing,
+        FreeSubscriptionService $freeSubscriptions,
     ): JsonResponse {
         $user = $request->user();
 
         if (! $user instanceof User) {
             return response()->json(['message' => 'User not found.'], 404);
         }
+
+        $freeSubscriptions->ensureFor($user);
 
         $subscription = Subscription::query()
             ->where('user_id', $user->id)
@@ -243,7 +247,6 @@ class SubscriptionActionsController extends Controller
                 ->first()
             : null;
         $recoveryRequired = $subscription instanceof Subscription
-            && ! $subscription->active
             && $subscription->status === SubscriptionStatus::PastDue
             && filled($subscription->payment_failure_code);
         $automaticRetriesRemaining = $subscription instanceof Subscription

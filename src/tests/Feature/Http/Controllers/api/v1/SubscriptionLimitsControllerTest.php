@@ -150,7 +150,7 @@ class SubscriptionLimitsControllerTest extends TestAPI
         ]);
     }
 
-    public function test_user_without_active_subscription_gets_not_found(): void
+    public function test_user_with_expired_subscription_is_moved_to_free_plan(): void
     {
         $user = User::factory()->create();
         $subscription = $this->createActiveStarterSubscriptionFor($user);
@@ -163,22 +163,36 @@ class SubscriptionLimitsControllerTest extends TestAPI
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson(self::ENDPOINT);
 
-        $response->assertStatus(404);
-        $response->assertJsonPath('message', 'Active subscription not found.');
+        $response->assertOk()
+            ->assertJsonPath('data.subscription.plan', 'free')
+            ->assertJsonPath('data.subscription.plan_name', 'Gratis')
+            ->assertJsonPath('data.subscription.active', true)
+            ->assertJsonPath('data.subscription.billing_mode', 'free_recurring')
+            ->assertJsonPath('data.limits.profiles.included', 1)
+            ->assertJsonPath('data.limits.chat_messages.included', 100)
+            ->assertJsonPath('data.capabilities.incoming_audio', false);
+
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Free->value,
+            'active' => true,
+        ]);
     }
 
-    public function test_endpoint_only_returns_subscription_for_authenticated_user(): void
+    public function test_endpoint_assigns_free_plan_only_to_authenticated_user(): void
     {
         $user = User::factory()->create();
         $otherUser = User::factory()->create();
-        $this->createActiveStarterSubscriptionFor($otherUser);
+        $otherSubscription = $this->createActiveStarterSubscriptionFor($otherUser);
         $token = $user->createToken('test-token', ['subscription-limits:read'])->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson(self::ENDPOINT);
 
-        $response->assertStatus(404);
-        $response->assertJsonPath('message', 'Active subscription not found.');
+        $response->assertOk()
+            ->assertJsonPath('data.subscription.user_id', $user->id)
+            ->assertJsonPath('data.subscription.plan', 'free');
+        $this->assertNotSame($otherSubscription->id, $response->json('data.subscription.id'));
     }
 
     public function test_admin_plan_limits_are_marked_as_unlimited(): void

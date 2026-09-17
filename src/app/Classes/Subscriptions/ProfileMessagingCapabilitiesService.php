@@ -15,6 +15,7 @@ class ProfileMessagingCapabilitiesService
         private readonly SubscriptionLimitPeriodService $limitPeriods,
         private readonly SubscriptionPlanCatalog $plans,
         private readonly CreditWalletService $wallets,
+        private readonly SubscriptionPlanCapabilityService $planCapabilities,
     ) {}
 
     /**
@@ -37,11 +38,13 @@ class ProfileMessagingCapabilitiesService
         $subscription = Subscription::query()
             ->where('user_id', $profile->user_id)
             ->where('active', true)
-            ->where('renews_at', '>', now())
             ->latest('started_at')
             ->first();
 
-        if (! $subscription) {
+        if (! $subscription || (
+            $subscription->renews_at->isPast()
+            && $subscription->status !== SubscriptionStatus::PastDue
+        )) {
             return $this->disabledCapabilities('subscription_inactive');
         }
 
@@ -90,12 +93,20 @@ class ProfileMessagingCapabilitiesService
             ? min($configuredMaxDuration, (int) $limit->incoming_audio_seconds_remaining)
             : $this->affordableAudioSeconds($availableUnits - $chatCreditUnits, $configuredMaxDuration, $rates);
         $audioEnabled = $audioMaxDuration > 0;
+        $audioIncluded = $this->planCapabilities->supports($profile, 'incoming_audio');
+
+        if (! $audioIncluded) {
+            $audioEnabled = false;
+            $audioMaxDuration = $configuredMaxDuration;
+        }
 
         return [
             'text_messages_enabled' => $textEnabled,
             'audio_messages_enabled' => $audioEnabled,
             'audio_max_duration_seconds' => $audioEnabled ? $audioMaxDuration : $configuredMaxDuration,
-            'reason' => $audioEnabled ? null : 'audio_message_limit_reached',
+            'reason' => $audioEnabled
+                ? null
+                : ($audioIncluded ? 'audio_message_limit_reached' : 'audio_messages_not_in_plan'),
         ];
     }
 

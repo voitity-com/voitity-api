@@ -32,6 +32,7 @@ class SubscriptionBillingService
         private readonly PaymentMethodService $paymentMethods,
         private readonly PaymentPayloadSanitizer $payloadSanitizer,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+        private readonly ?FreeSubscriptionService $freeSubscriptions = null,
     ) {}
 
     /**
@@ -59,11 +60,25 @@ class SubscriptionBillingService
                             ->where('active', true)
                             ->where(function ($query) use ($now): void {
                                 $query
-                                    ->where('next_billing_at', '<=', $now)
+                                    ->where(function ($query) use ($now): void {
+                                        $query
+                                            ->where('status', '!=', SubscriptionStatus::PastDue->value)
+                                            ->where(function ($query) use ($now): void {
+                                                $query
+                                                    ->where('next_billing_at', '<=', $now)
+                                                    ->orWhere(function ($query) use ($now): void {
+                                                        $query
+                                                            ->whereNull('next_billing_at')
+                                                            ->where('renews_at', '<=', $now);
+                                                    });
+                                            });
+                                    })
                                     ->orWhere(function ($query) use ($now): void {
                                         $query
-                                            ->whereNull('next_billing_at')
-                                            ->where('renews_at', '<=', $now);
+                                            ->where('status', SubscriptionStatus::PastDue->value)
+                                            ->whereNotNull('payment_failure_code')
+                                            ->whereNotNull('next_payment_retry_at')
+                                            ->where('next_payment_retry_at', '<=', $now);
                                     });
                             });
                     })
@@ -390,28 +405,27 @@ class SubscriptionBillingService
 
         $retryCount = (int) $subscription->payment_retry_count + 1;
         $nextRetryAt = $this->nextRetryAt($retryCount, $now);
+        $retryWindowEnded = $nextRetryAt === null;
 
         $subscription->forceFill([
-            'active' => false,
+            'active' => ! $retryWindowEnded,
             'status' => SubscriptionStatus::PastDue,
             'payment_failure_code' => $failureCode,
             'payment_failed_at' => $now,
             'payment_retry_count' => $retryCount,
             'next_payment_retry_at' => $nextRetryAt,
             'last_failed_payment_order_id' => $paymentOrder?->id,
-            'access_ended_reason' => 'payment_failure',
+            'access_ended_reason' => $retryWindowEnded ? 'payment_failure' : null,
         ])->save();
 
-        $deactivatedProfiles = $this->profileAccess()->deactivateProfilesIfAccessEnded(
-            $subscription->user_id,
-            $failureCode,
-            $subscription->id,
-        );
+        $freeSubscription = $retryWindowEnded
+            ? $this->freeSubscriptions()->downgrade($subscription->user_id)
+            : null;
 
-        Log::warning('Subscription access suspended after payment failure.', [
+        Log::warning('Subscription recurring payment failed.', [
             'automatic_retries_remaining' => max(0, $this->maximumAutomaticAttempts() - $retryCount),
-            'deactivated_profile_count' => $deactivatedProfiles,
             'failure_code' => $failureCode,
+            'free_subscription_id' => $freeSubscription?->id,
             'next_payment_retry_at' => $nextRetryAt?->toJSON(),
             'payment_order_id' => $paymentOrder?->id,
             'payment_retry_count' => $retryCount,
@@ -462,12 +476,17 @@ class SubscriptionBillingService
         }
 
         if ($manual) {
-            return ! $subscription->active
-                && $subscription->status === SubscriptionStatus::PastDue
+            return $subscription->status === SubscriptionStatus::PastDue
                 && filled($subscription->payment_failure_code);
         }
 
         if ($subscription->active) {
+            if ($subscription->status === SubscriptionStatus::PastDue) {
+                return filled($subscription->payment_failure_code)
+                    && $subscription->next_payment_retry_at?->lessThanOrEqualTo($now)
+                    && $subscription->payment_retry_count < $this->maximumAutomaticAttempts();
+            }
+
             $dueAt = $subscription->next_billing_at ?? $subscription->renews_at;
 
             return $dueAt->lessThanOrEqualTo($now);
@@ -663,5 +682,10 @@ class SubscriptionBillingService
             'payment_order_id' => $paymentOrder->id,
             'reference' => $paymentOrder->reference,
         ];
+    }
+
+    private function freeSubscriptions(): FreeSubscriptionService
+    {
+        return $this->freeSubscriptions ?? app(FreeSubscriptionService::class);
     }
 }
