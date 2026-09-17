@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Enums\SubscriptionPlan;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
@@ -23,6 +24,7 @@ class ProfileOtherIntegrationControllerTest extends TestAPI
     {
         parent::setUp();
 
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
         $this->enableFeaturesForTestProfiles();
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Responses\Profile;
 
 use App\Classes\ProfilePublication\ProfilePublicationReadinessService;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Models\Voice;
 use App\Models\VoiceProviderRequest;
@@ -19,6 +20,8 @@ class ProfileResponse
     {
         $activeVoice = $this->activeVoice();
         $voiceSettings = app(ProfileVoiceSettings::class);
+        $voiceIncluded = app(SubscriptionPlanCapabilityService::class)
+            ->supports($this->profile, 'tts');
 
         return [
             'id' => $this->profile->id,
@@ -37,8 +40,8 @@ class ProfileResponse
             'voice_id' => $activeVoice?->id,
             'voice_name' => $activeVoice?->name,
             'voice_description' => $activeVoice?->description,
-            'voice_enabled' => $voiceSettings->voiceEnabled($this->profile),
-            'voice_autoplay_enabled' => $voiceSettings->voiceAutoplayEnabled($this->profile),
+            'voice_enabled' => $voiceIncluded && $voiceSettings->voiceEnabled($this->profile),
+            'voice_autoplay_enabled' => $voiceIncluded && $voiceSettings->voiceAutoplayEnabled($this->profile),
             'voice_clone_status' => $this->voiceCloneStatus($activeVoice, $voiceSettings),
             'voice_language_code' => $activeVoice?->language_code,
             'publication' => app(ProfilePublicationReadinessService::class)->evaluate($this->profile),

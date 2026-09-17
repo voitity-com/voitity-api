@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\UpdateProfileAppearanceRequest;
 use App\Http\Requests\Profile\UploadProfileBackgroundImageRequest;
@@ -17,6 +18,8 @@ use Illuminate\Validation\ValidationException;
 
 class ProfileAppearanceController extends Controller
 {
+    public function __construct(private readonly SubscriptionPlanCapabilityService $capabilities) {}
+
     /**
      * @OA\Get(
      *     path="/api/profile/{profile}/appearance",
@@ -39,7 +42,7 @@ class ProfileAppearanceController extends Controller
 
         $appearance = $appearances->ensureForProfile($profile);
 
-        return $this->response($appearance, 'Profile appearance retrieved successfully.');
+        return $this->response($profile, $appearance, 'Profile appearance retrieved successfully.');
     }
 
     /**
@@ -77,6 +80,10 @@ class ProfileAppearanceController extends Controller
         $appearance = $appearances->ensureForProfile($profile);
         $attributes = $request->validated();
 
+        if ($response = $this->ensureTemplateIncluded($profile, $attributes['template_key'] ?? null)) {
+            return $response;
+        }
+
         if (($attributes['background_type'] ?? null) === ProfileAppearance::BACKGROUND_IMAGE
             && ! filled($appearance->background_image_path)) {
             throw ValidationException::withMessages([
@@ -93,7 +100,7 @@ class ProfileAppearanceController extends Controller
             'background_type' => $appearance->background_type,
         ]);
 
-        return $this->response($appearance, 'Profile appearance updated successfully.');
+        return $this->response($profile, $appearance, 'Profile appearance updated successfully.');
     }
 
     /**
@@ -133,6 +140,10 @@ class ProfileAppearanceController extends Controller
             return $response;
         }
 
+        if ($response = $this->ensureTemplateIncluded($profile, $request->validated('template_key'))) {
+            return $response;
+        }
+
         $appearance = $appearances->replaceBackgroundImage(
             $profile,
             $request->file('image'),
@@ -146,10 +157,10 @@ class ProfileAppearanceController extends Controller
             'storage_path' => $appearance->background_image_path,
         ]);
 
-        return $this->response($appearance, 'Profile background image uploaded successfully.');
+        return $this->response($profile, $appearance, 'Profile background image uploaded successfully.');
     }
 
-    private function response(ProfileAppearance $appearance, string $message): JsonResponse
+    private function response(Profile $profile, ProfileAppearance $appearance, string $message): JsonResponse
     {
         return response()->json([
             'message' => $message,
@@ -160,11 +171,27 @@ class ProfileAppearanceController extends Controller
                         'key' => $key,
                         'label' => $template['label'] ?? $key,
                         'background_color' => $template['background_color'] ?? '#ffffff',
+                        'included' => $this->capabilities->includesProfileTemplate($profile, $key),
                     ])
                     ->values()
                     ->all(),
             ],
         ]);
+    }
+
+    private function ensureTemplateIncluded(Profile $profile, ?string $templateKey): ?JsonResponse
+    {
+        if (! filled($templateKey) || $this->capabilities->includesProfileTemplate($profile, $templateKey)) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'This profile template is not included in the current plan.',
+            'code' => 'PLAN_FEATURE_NOT_INCLUDED',
+            'errors' => [
+                'template_key' => ['This profile template is not included in the current plan.'],
+            ],
+        ], 403);
     }
 
     private function authorizeProfile(Request $request, Profile $profile): ?JsonResponse

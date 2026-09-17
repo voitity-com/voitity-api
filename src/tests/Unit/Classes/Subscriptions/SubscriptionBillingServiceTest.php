@@ -104,7 +104,7 @@ class SubscriptionBillingServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_suspends_due_subscription_without_chargeable_payment_source(): void
+    public function it_keeps_access_during_recovery_without_a_chargeable_payment_source(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
 
@@ -124,7 +124,7 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertCount(0, $paymentClient->charges);
         $this->assertDatabaseCount('payment_orders', 0);
         $subscription = Subscription::query()->firstOrFail();
-        $this->assertFalse($subscription->active);
+        $this->assertTrue($subscription->active);
         $this->assertSame(SubscriptionStatus::PastDue, $subscription->status);
         $this->assertSame('payment_method_required', $subscription->payment_failure_code);
         $this->assertSame(1, $subscription->payment_retry_count);
@@ -276,7 +276,7 @@ class SubscriptionBillingServiceTest extends TestCase
 
         $this->assertSame(PaymentOrderStatus::Declined, $paymentOrder->status);
         $this->assertSame('trial_conversion', $paymentOrder->billing_reason);
-        $this->assertFalse($trial->active);
+        $this->assertTrue($trial->active);
         $this->assertSame(SubscriptionStatus::PastDue, $trial->status);
     }
 
@@ -358,7 +358,7 @@ class SubscriptionBillingServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_retries_failed_payment_on_schedule_and_restores_suspended_profile(): void
+    public function it_retries_failed_payment_on_schedule_without_suspending_the_profile(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-09 00:00:00'));
         config([
@@ -381,11 +381,11 @@ class SubscriptionBillingServiceTest extends TestCase
         $this->assertSame(1, $firstSummary['failed']);
         $subscription->refresh();
         $profile->refresh();
-        $this->assertFalse($subscription->active);
+        $this->assertTrue($subscription->active);
         $this->assertSame(1, $subscription->payment_retry_count);
-        $this->assertFalse($profile->active);
-        $this->assertSame($subscription->id, $profile->suspended_by_subscription_id);
-        $this->assertSame(ProfileStatus::Published->value, $profile->subscription_suspension_previous_status);
+        $this->assertTrue($profile->active);
+        $this->assertNull($profile->suspended_by_subscription_id);
+        $this->assertNull($profile->subscription_suspension_previous_status);
         $paymentSource->refresh();
         $this->assertTrue($paymentSource->requires_attention);
         $this->assertFalse($paymentSource->isChargeable());
@@ -439,6 +439,12 @@ class SubscriptionBillingServiceTest extends TestCase
         }
 
         $this->assertNull($subscription->fresh()->next_payment_retry_at);
+        $this->assertFalse($subscription->fresh()->active);
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Free->value,
+            'active' => true,
+        ]);
         Carbon::setTestNow(now()->addWeek());
         $summary = $this->billingService(new FakeRecurringPaymentClient('APPROVED'))
             ->billDueRecurringSubscriptions();
@@ -508,7 +514,7 @@ class SubscriptionBillingServiceTest extends TestCase
         $profile->refresh();
         $this->assertTrue($rejectedSource->requires_attention);
         $this->assertFalse($rejectedSource->isChargeable());
-        $this->assertFalse($profile->active);
+        $this->assertTrue($profile->active);
 
         try {
             $this->billingService(new FakeRecurringPaymentClient('APPROVED'))

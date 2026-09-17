@@ -62,6 +62,10 @@ class ProfileIntegrationController extends Controller
             return $response;
         }
 
+        if ($response = $this->ensureConnectionSlot($profile, ProfileIntegration::PROVIDER_INSTAGRAM)) {
+            return $response;
+        }
+
         try {
             return response()->json([
                 'message' => 'Instagram connection URL created successfully.',
@@ -160,6 +164,10 @@ class ProfileIntegrationController extends Controller
         }
 
         if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_TIKTOK, $features)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureConnectionSlot($profile, ProfileIntegration::PROVIDER_TIKTOK)) {
             return $response;
         }
 
@@ -405,6 +413,10 @@ class ProfileIntegrationController extends Controller
         }
 
         if ($response = $this->ensureIntegrationEnabled($profile, ProfileIntegration::PROVIDER_ONLYFANS, $features)) {
+            return $response;
+        }
+
+        if ($response = $this->ensureConnectionSlot($profile, ProfileIntegration::PROVIDER_ONLYFANS)) {
             return $response;
         }
 
@@ -812,6 +824,10 @@ class ProfileIntegrationController extends Controller
             return $response;
         }
 
+        if ($response = $this->ensureConnectionSlot($profile, ProfileIntegration::PROVIDER_YOUTUBE)) {
+            return $response;
+        }
+
         try {
             $integration = $youtube->connect($profile, $request->user(), $request->string('channel_url')->toString());
         } catch (\InvalidArgumentException $e) {
@@ -1052,6 +1068,32 @@ class ProfileIntegrationController extends Controller
 
         return response()->json([
             'message' => ucfirst($provider).' is not enabled for this profile.',
+        ], 403);
+    }
+
+    private function ensureConnectionSlot(Profile $profile, string $provider): ?JsonResponse
+    {
+        $existingStatus = $profile->integrations()
+            ->where('provider', $provider)
+            ->value('status');
+
+        if ($existingStatus === ProfileIntegration::STATUS_CONNECTED) {
+            return null;
+        }
+
+        $limit = $this->capabilities->integrationsPerProfile($profile);
+        $connected = $profile->integrations()
+            ->where('status', ProfileIntegration::STATUS_CONNECTED)
+            ->count();
+
+        if ($connected < $limit) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => "The current plan allows up to {$limit} connected integration per profile.",
+            'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+            'errors' => ['integrations' => ["The current plan allows up to {$limit} connected integration per profile."]],
         ], 403);
     }
 

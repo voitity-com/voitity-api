@@ -36,7 +36,11 @@ class RefreshProfileDomain implements ShouldQueue
     {
         $domain = ProfileDomain::query()->find($this->profileDomainId);
 
-        if (! $domain || $domain->status === ProfileDomainStatus::Disconnecting) {
+        if (
+            ! $domain
+            || $domain->status === ProfileDomainStatus::Disconnecting
+            || $domain->last_error_code === 'free_plan_locked'
+        ) {
             return;
         }
 

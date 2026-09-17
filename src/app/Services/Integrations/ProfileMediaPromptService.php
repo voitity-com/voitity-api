@@ -122,6 +122,7 @@ class ProfileMediaPromptService
         $disabledProviders = $this->features->disabledCatalogIntegrationProviders($profile);
         $providers = $profile->integrationMedia()
             ->where('selected', true)
+            ->whereHas('integration', fn ($query) => $query->where('status', ProfileIntegration::STATUS_CONNECTED))
             ->distinct()
             ->pluck('provider')
             ->reject(fn (string $provider): bool => in_array($provider, $disabledProviders, true));
@@ -131,6 +132,7 @@ class ProfileMediaPromptService
                 return $profile->integrationMedia()
                     ->where('provider', $provider)
                     ->where('selected', true)
+                    ->whereHas('integration', fn ($query) => $query->where('status', ProfileIntegration::STATUS_CONNECTED))
                     ->with('integration')
                     ->orderByDesc('taken_at')
                     ->orderByDesc('id')

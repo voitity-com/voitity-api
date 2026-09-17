@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
+use App\Enums\SubscriptionPlan;
 use App\Models\Profile;
 use App\Models\ProfileIntegration;
 use App\Models\ProfileIntegrationMedia;
@@ -24,6 +26,7 @@ class ProfileIntegrationControllerTest extends TestAPI
     {
         parent::setUp();
 
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
         $this->enableFeaturesForTestProfiles();
     }
 
@@ -73,6 +76,42 @@ class ProfileIntegrationControllerTest extends TestAPI
             ->assertJsonPath('data.media.0.observation', 'Foto de Medellin')
             ->assertJsonPath('data.media.0.selected', true)
             ->assertJsonPath('data.selection_limit', 10);
+    }
+
+    public function test_free_plan_blocks_integrations_and_exposes_zero_media_capacity(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createInstagramIntegration($profile, $user);
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('test-token', ['profile:read', 'profile:write'])->plainTextToken;
+
+        $this->assertSame(ProfileIntegration::STATUS_REVOKED, $integration->fresh()->status);
+
+        $this->withToken($token)
+            ->getJson("/api/profile/{$profile->id}/integrations/instagram/media")
+            ->assertOk()
+            ->assertJsonPath('data.selection_limit', 0);
+
+        $this->withToken($token)
+            ->postJson("/api/profile/{$profile->id}/integrations/tiktok/connect-url")
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_LIMIT_REACHED');
+    }
+
+    public function test_free_plan_keeps_integration_disconnect_available(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $profile = Profile::factory()->for($user)->create();
+        $integration = $this->createOnlyFansIntegration($profile, $user);
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('test-token', ['profile:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->deleteJson("/api/profile/{$profile->id}/integrations/onlyfans")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('profile_integrations', ['id' => $integration->id]);
     }
 
     public function test_instagram_media_endpoint_uses_caption_as_default_observation(): void

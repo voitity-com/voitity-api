@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\CreditWalletService;
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Classes\Subscriptions\SubscriptionLimitPeriodService;
 use App\Classes\Subscriptions\SubscriptionRenewalService;
 use App\Http\Controllers\Controller;
@@ -67,6 +68,7 @@ class SubscriptionLimitsController extends Controller
         SubscriptionRenewalService $renewalService,
         SubscriptionLimitPeriodService $limitPeriods,
         CreditWalletService $wallets,
+        FreeSubscriptionService $freeSubscriptions,
     ): JsonResponse {
         try {
             $user = $request->user();
@@ -75,19 +77,11 @@ class SubscriptionLimitsController extends Controller
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
-            $subscription = $user->subscriptions()
-                ->where('active', true)
-                ->with('limit')
-                ->latest('started_at')
-                ->first();
-
-            if (! $subscription instanceof Subscription) {
-                return response()->json(['message' => 'Active subscription not found.'], 404);
-            }
+            $subscription = $freeSubscriptions->ensureFor($user)->load('limit');
 
             $subscription = $renewalService->renewIfFree($subscription)->load('limit');
 
-            if ($subscription->renews_at->isPast()) {
+            if ($subscription->renews_at->isPast() && ! $freeSubscriptions->hasPaymentRecoveryWindow($subscription)) {
                 Log::warning('Expired subscription limits request rejected without mutating billing state.', [
                     'subscription_id' => $subscription->id,
                     'user_id' => $user->id,

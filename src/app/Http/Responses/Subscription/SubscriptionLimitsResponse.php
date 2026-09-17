@@ -62,6 +62,7 @@ class SubscriptionLimitsResponse
         return [
             'subscription' => $this->subscriptionData(),
             'limits' => $this->limitsData(),
+            'capabilities' => $this->planCapabilities(),
             'credit_wallet' => (new CreditWalletResponse($this->wallet))->toArray(),
             'usage' => [
                 'totals' => [
@@ -71,6 +72,17 @@ class SubscriptionLimitsResponse
                 'by_type' => $this->usageBreakdownData(),
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function planCapabilities(): array
+    {
+        $plan = $this->enumValue($this->subscription->plan);
+        $capabilities = config("subscriptions.plans.{$plan}.capabilities", []);
+
+        return is_array($capabilities) ? $capabilities : [];
     }
 
     private function subscriptionData(): array

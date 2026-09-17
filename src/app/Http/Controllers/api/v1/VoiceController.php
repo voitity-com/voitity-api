@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api\v1;
 
 use App\Classes\Subscriptions\SubscriptionEntitlementService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Classes\VoiceService\VoiceManager;
 use App\Classes\VoiceService\VoiceService;
 use App\Exceptions\Subscriptions\SubscriptionEntitlementException;
@@ -214,7 +215,8 @@ class VoiceController extends Controller
     public function test(
         TestVoiceRequest $request,
         VoiceManager $voiceManager,
-        SubscriptionEntitlementService $entitlements
+        SubscriptionEntitlementService $entitlements,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         $profile = null;
         $voice = null;
@@ -252,6 +254,8 @@ class VoiceController extends Controller
             if (! $voice) {
                 return response()->json(['message' => 'Voice not found.'], 404);
             }
+
+            $planCapabilities->assertSupports($profile, 'tts', 'Voice responses');
 
             $entitlements->assertCanUse($voice->user_id ?: $user->id, [
                 'tts_characters' => $this->characterCount($payload['text']),
@@ -301,6 +305,7 @@ class VoiceController extends Controller
         } catch (SubscriptionEntitlementException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
+                'code' => $e->errorCode(),
                 'errors' => $e->errors(),
             ], $e->statusCode());
         } catch (\Throwable $e) {

@@ -8,6 +8,7 @@ use App\Classes\ChatAIService\ChatAITextFromAudio;
 use App\Classes\PublicProfiles\PublicChatSession;
 use App\Classes\PublicProfiles\PublicProfileAccess;
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\SubscriptionUsageType;
 use App\Events\MessageStored;
@@ -343,6 +344,15 @@ class MessageController extends Controller
 
             if ($targetError instanceof JsonResponse) {
                 return $targetError;
+            }
+
+            if (! app(SubscriptionPlanCapabilityService::class)->supports($profile, 'incoming_audio')) {
+                return response()->json([
+                    'message' => 'Audio messages are not included in the current plan.',
+                    'code' => 'PLAN_FEATURE_NOT_INCLUDED',
+                    'errors' => ['plan_feature' => ['Audio messages are not included in the current plan.']],
+                    'data' => ['messaging_capabilities' => $capabilities->forProfile($profile)],
+                ], 403);
             }
 
             $audio = $payload['audio'] ?? null;

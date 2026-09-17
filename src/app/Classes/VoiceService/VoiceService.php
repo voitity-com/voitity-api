@@ -2,6 +2,7 @@
 
 namespace App\Classes\VoiceService;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Classes\Subscriptions\SubscriptionUsageRecorder;
 use App\Enums\SubscriptionUsageType;
 use App\Models\Voice;
@@ -42,6 +43,8 @@ class VoiceService
      */
     public function cloneVoice(VoiceSample $voiceSample): VoiceClientClonedVoice
     {
+        $this->assertPlanFeature('voice_clone', 'Voice cloning');
+
         $voiceProviderRequest = VoiceProviderRequest::where('voice_id', $this->voice->id)
             ->where('voice_sample_id', $voiceSample->id)
             ->where('status', VoiceProviderRequest::STATUS_PENDING)
@@ -101,6 +104,8 @@ class VoiceService
      */
     public function generateAudio(string $text): VoiceClientGeneratedAudio
     {
+        $this->assertPlanFeature('tts', 'Voice responses');
+
         $usageKey = null;
         $recorder = app(SubscriptionUsageRecorder::class);
 
@@ -167,6 +172,16 @@ class VoiceService
     public function getVoiceClient(): VoiceClient
     {
         return $this->voiceClient;
+    }
+
+    private function assertPlanFeature(string $capability, string $featureName): void
+    {
+        $profile = $this->voice->profile()->first();
+
+        if ($profile) {
+            app(SubscriptionPlanCapabilityService::class)
+                ->assertSupports($profile, $capability, $featureName);
+        }
     }
 
     /**

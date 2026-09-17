@@ -25,6 +25,7 @@ class AnswerBuilderConversationMessagesTest extends TestCase
     {
         parent::setUp();
 
+        config(['subscriptions.default_plan' => 'starter']);
         Event::fake();
     }
 
@@ -39,6 +40,13 @@ class AnswerBuilderConversationMessagesTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = Profile::factory()->create(['user_id' => $user->id]);
+        Voice::factory()->create([
+            'active' => true,
+            'profile_id' => $profile->id,
+            'source' => 'elevenlabs',
+            'source_voice_id' => 'voice-123',
+            'user_id' => $user->id,
+        ]);
         $chat = Chat::create(['profile_id' => $profile->id]);
         $question = Message::create([
             'chat_id' => $chat->id,

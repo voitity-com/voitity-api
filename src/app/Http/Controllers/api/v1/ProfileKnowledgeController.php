@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\v1;
 use App\Classes\ProfileKnowledge\ProfileCvImporter;
 use App\Classes\ProfileKnowledge\ProfileDataSynchronizer;
 use App\Classes\ProfileKnowledge\ProfileQualityAnalyzer;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Enums\ProfileSourceStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProfileKnowledge\StoreProfileCvSourceRequest;
@@ -103,10 +104,43 @@ class ProfileKnowledgeController extends Controller
     public function storeCv(
         StoreProfileCvSourceRequest $request,
         Profile $profile,
-        ProfileCvImporter $importer
+        ProfileCvImporter $importer,
+        SubscriptionPlanCapabilityService $planCapabilities,
     ): JsonResponse {
         if ($response = $this->authorizeProfileAccess($request, $profile)) {
             return $response;
+        }
+
+        $sourceLimit = $planCapabilities->sourcesPerProfile($profile);
+
+        if ($profile->sources()->count() >= $sourceLimit) {
+            return response()->json([
+                'message' => "The current plan allows up to {$sourceLimit} source per profile.",
+                'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+                'errors' => ['sources' => ["The current plan allows up to {$sourceLimit} source per profile."]],
+            ], 403);
+        }
+
+        $maxFileKilobytes = $planCapabilities->sourceMaxFileKilobytes($profile);
+        $file = $request->file('file');
+
+        if ($file && $file->getSize() > $maxFileKilobytes * 1024) {
+            return response()->json([
+                'message' => "Source files can be up to {$maxFileKilobytes} KB on the current plan.",
+                'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+                'errors' => ['file' => ["Source files can be up to {$maxFileKilobytes} KB on the current plan."]],
+            ], 422);
+        }
+
+        $maxCharacters = $planCapabilities->sourceMaxCharacters($profile);
+        $text = (string) ($request->validated('text') ?? '');
+
+        if (mb_strlen($text) > $maxCharacters) {
+            return response()->json([
+                'message' => "Source content can contain up to {$maxCharacters} characters on the current plan.",
+                'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+                'errors' => ['text' => ["Source content can contain up to {$maxCharacters} characters on the current plan."]],
+            ], 422);
         }
 
         try {
@@ -116,7 +150,8 @@ class ProfileKnowledgeController extends Controller
                 file: $request->file('file'),
                 text: $request->validated('text'),
                 name: $request->validated('name'),
-                metadata: $request->validated('metadata') ?? []
+                metadata: $request->validated('metadata') ?? [],
+                maxCharacters: $maxCharacters,
             );
 
             $this->notifySourceImported($request->user(), $profile, $source);
@@ -131,6 +166,12 @@ class ProfileKnowledgeController extends Controller
                     : 'Profile source uploaded with attention required.',
                 'data' => (new ProfileSourceResponse($source))->toArray(),
             ], 201);
+        } catch (\LengthException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+                'errors' => ['file' => [$e->getMessage()]],
+            ], 422);
         } catch (\Throwable $e) {
             $failureMessage = 'Profile source could not be imported. Please review the content and try again.';
 

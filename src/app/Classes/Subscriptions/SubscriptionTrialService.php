@@ -32,6 +32,8 @@ class SubscriptionTrialService
         private readonly PaymentPayloadSanitizer $payloadSanitizer,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
         private readonly ?ActivationEventRecorder $activationEvents = null,
+        private readonly ?FreeSubscriptionService $freeSubscriptions = null,
+        private readonly ?FreePlanDataReconciler $freePlanData = null,
     ) {}
 
     /**
@@ -133,6 +135,20 @@ class SubscriptionTrialService
             $user = $order->user()->lockForUpdate()->firstOrFail();
             $this->ensureTrialCanStart($user, $order->plan);
 
+            $freeSubscription = $user->subscriptions()
+                ->where('active', true)
+                ->where('plan', SubscriptionPlan::Free->value)
+                ->latest('started_at')
+                ->first();
+
+            $user->subscriptions()
+                ->where('active', true)
+                ->where('plan', SubscriptionPlan::Free->value)
+                ->update([
+                    'active' => false,
+                    'status' => SubscriptionStatus::Expired->value,
+                ]);
+
             $startedAt = now();
             $trialEndsAt = $startedAt->copy()->addDays($this->trialDays());
 
@@ -154,6 +170,11 @@ class SubscriptionTrialService
             ]);
 
             $this->limitPeriods->createInitialLimit($subscription);
+
+            if ($freeSubscription instanceof Subscription) {
+                $this->profileAccess()->restoreProfilesAfterPlanUpgrade($subscription, $freeSubscription->id);
+                $this->freePlanData()->restore($subscription);
+            }
 
             $user->free_trial_used_at = $startedAt;
             $user->pending_checkout_intent = null;
@@ -313,12 +334,7 @@ class SubscriptionTrialService
                         $lockedSubscription->save();
 
                         if ($lockedSubscription->user instanceof User) {
-                            $deactivatedProfiles = $this->profileAccess()
-                                ->deactivateProfilesIfAccessEnded(
-                                    $lockedSubscription->user,
-                                    'cancelled_subscription_period_ended',
-                                    $lockedSubscription->id
-                                );
+                            $replacementSubscription = $this->freeSubscriptions()->ensureFor($lockedSubscription->user);
 
                             $this->dispatchSubscriptionNotification(
                                 $lockedSubscription->user,
@@ -327,7 +343,8 @@ class SubscriptionTrialService
                             );
 
                             Log::warning('Cancelled subscription reached its service end.', [
-                                'deactivated_profile_count' => $deactivatedProfiles,
+                                'replacement_plan' => $replacementSubscription->plan->value,
+                                'replacement_subscription_id' => $replacementSubscription->id,
                                 'plan' => $lockedSubscription->plan->value,
                                 'subscription_id' => $lockedSubscription->id,
                                 'user_id' => $lockedSubscription->user_id,
@@ -351,7 +368,9 @@ class SubscriptionTrialService
     {
         return $this->trialEnabled()
             && $user->free_trial_used_at === null
-            && ! $user->subscriptions()->exists();
+            && ! $user->subscriptions()
+                ->where('plan', '!=', SubscriptionPlan::Free->value)
+                ->exists();
     }
 
     public function trialDays(): int
@@ -373,7 +392,9 @@ class SubscriptionTrialService
             throw new RuntimeException('Free trial was already used for this account.');
         }
 
-        if ($user->subscriptions()->exists()) {
+        if ($user->subscriptions()
+            ->where('plan', '!=', SubscriptionPlan::Free->value)
+            ->exists()) {
             throw new RuntimeException('Free trial is only available before the first subscription.');
         }
     }
@@ -447,5 +468,15 @@ class SubscriptionTrialService
             'renews_at' => $subscription->renews_at?->toFormattedDateString(),
             'trial_ends_at' => $subscription->trial_ends_at?->toFormattedDateString(),
         ]);
+    }
+
+    private function freeSubscriptions(): FreeSubscriptionService
+    {
+        return $this->freeSubscriptions ?? app(FreeSubscriptionService::class);
+    }
+
+    private function freePlanData(): FreePlanDataReconciler
+    {
+        return $this->freePlanData ?? app(FreePlanDataReconciler::class);
     }
 }

@@ -85,6 +85,21 @@ class ProfileOtherIntegrationController extends Controller
             return $response;
         }
 
+        if ($this->integration($profile)?->status !== ProfileIntegration::STATUS_CONNECTED) {
+            $limit = $this->capabilities->integrationsPerProfile($profile);
+            $connected = $profile->integrations()
+                ->where('status', ProfileIntegration::STATUS_CONNECTED)
+                ->count();
+
+            if ($connected >= $limit) {
+                return response()->json([
+                    'message' => "The current plan allows up to {$limit} connected integration per profile.",
+                    'code' => 'PLAN_FEATURE_LIMIT_REACHED',
+                    'errors' => ['integrations' => ["The current plan allows up to {$limit} connected integration per profile."]],
+                ], 403);
+            }
+        }
+
         try {
             $media = $service->upload(
                 $profile,

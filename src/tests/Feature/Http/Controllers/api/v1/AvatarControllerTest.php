@@ -6,6 +6,7 @@ namespace Tests\Feature\Http\Controllers\api\v1;
 
 use App\Classes\AvatarImageValidation\AvatarImageValidationResult;
 use App\Classes\Repositories\AvatarRepository;
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Enums\AvatarGenerationStatus;
 use App\Enums\AvatarVariant;
 use App\Enums\SubscriptionPlan;
@@ -20,11 +21,19 @@ use App\Models\Subscription;
 use App\Models\SubscriptionLimit;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Mockery;
 
 class AvatarControllerTest extends TestAPI
 {
     private const ENDPOINT_GENERATE = '/api/avatar/generate';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
+    }
 
     protected function tearDown(): void
     {
@@ -69,6 +78,36 @@ class AvatarControllerTest extends TestAPI
         $response->assertJsonPath('data.profile_id', $profile->id);
         $response->assertJsonPath('data.avatar.id', $processingAvatar->id);
         $response->assertJsonPath('data.avatar.status', ProfileAvatar::STATUS_PROCESSING);
+    }
+
+    public function test_free_plan_uploads_a_static_avatar_without_ai_processing(): void
+    {
+        Storage::fake('profiles');
+        $user = User::factory()->create();
+        $profile = $this->profileForUser($user);
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('test-token', ['avatar:write'])->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->post(self::ENDPOINT_GENERATE, [
+                'profile_id' => $profile->id,
+                'image' => $this->validImageUpload(),
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Avatar uploaded successfully.')
+            ->assertJsonPath('data.source', 'upload')
+            ->assertJsonPath('data.status', ProfileAvatar::STATUS_ACTIVE)
+            ->assertJsonPath('data.avatar.selected_variant', AvatarVariant::Original->value);
+
+        $avatar = ProfileAvatar::query()->sole();
+        $this->assertNull($avatar->aiimage_id);
+        $this->assertNull($avatar->ai_video_id);
+        $this->assertSame($avatar->original_file, $avatar->file);
+        $this->assertSame(0, $avatar->video_duration_seconds);
+        $this->assertDatabaseCount('aiimages', 0);
+        $this->assertDatabaseCount('aivideos', 0);
+        $this->assertCount(1, Storage::disk('profiles')->allFiles('images/sources'));
     }
 
     public function test_user_can_not_generate_avatar_for_other_user_profile(): void

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\FreeSubscriptionService;
 use App\Enums\ProfileDomainStatus;
 use App\Enums\ProfileStatus;
+use App\Enums\SubscriptionPlan;
 use App\Jobs\ProfileDomains\RefreshProfileDomain;
 use App\Models\Profile;
 use App\Models\ProfileDomain;
@@ -15,6 +17,27 @@ use RuntimeException;
 
 class ProfileDomainControllerTest extends TestAPI
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['subscriptions.default_plan' => SubscriptionPlan::Starter->value]);
+    }
+
+    public function test_free_plan_can_not_configure_a_custom_domain(): void
+    {
+        config(['profile-domains.default' => 'local']);
+        $user = User::factory()->create();
+        $profile = Profile::factory()->for($user)->create();
+        app(FreeSubscriptionService::class)->ensureFor($user);
+        $token = $user->createToken('domain', ['profile:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson("/api/profile/{$profile->id}/domain", ['hostname' => 'profile.example.org'])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PLAN_FEATURE_NOT_INCLUDED');
+    }
+
     public function test_owner_can_configure_verify_read_and_disconnect_a_domain_locally(): void
     {
         config(['profile-domains.default' => 'local']);

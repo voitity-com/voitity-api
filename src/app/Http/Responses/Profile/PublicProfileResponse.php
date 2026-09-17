@@ -3,6 +3,7 @@
 namespace App\Http\Responses\Profile;
 
 use App\Classes\Subscriptions\ProfileMessagingCapabilitiesService;
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Profile;
 use App\Services\Features\FeatureService;
 use App\Services\ProfileConversationMessageService;
@@ -15,6 +16,8 @@ class PublicProfileResponse
     public function toArray(): array
     {
         $voiceSettings = app(ProfileVoiceSettings::class);
+        $voiceIncluded = app(SubscriptionPlanCapabilityService::class)
+            ->supports($this->profile, 'tts');
 
         return [
             'id' => $this->profile->id,
@@ -30,8 +33,8 @@ class PublicProfileResponse
             'data' => $this->profile->data,
             'networks' => (object) ($this->profile->networks ?? []),
             'products_enabled' => (bool) $this->profile->products_enabled,
-            'voice_enabled' => $voiceSettings->voiceEnabled($this->profile),
-            'voice_autoplay_enabled' => $voiceSettings->voiceAutoplayEnabled($this->profile),
+            'voice_enabled' => $voiceIncluded && $voiceSettings->voiceEnabled($this->profile),
+            'voice_autoplay_enabled' => $voiceIncluded && $voiceSettings->voiceAutoplayEnabled($this->profile),
             'feature_settings' => app(FeatureService::class)
                 ->profileFeatureRows($this->profile),
             'messaging_capabilities' => app(ProfileMessagingCapabilitiesService::class)

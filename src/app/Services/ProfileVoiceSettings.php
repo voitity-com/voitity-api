@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Voice;
@@ -29,7 +30,10 @@ class ProfileVoiceSettings
 
     public function shouldGenerateResponseAudio(Profile $profile, Message $question): bool
     {
-        if (! $this->voiceEnabled($profile)) {
+        if (
+            ! app(SubscriptionPlanCapabilityService::class)->supports($profile, 'tts')
+            || ! $this->voiceEnabled($profile)
+        ) {
             return false;
         }
 

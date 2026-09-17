@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\api\v1;
 
+use App\Classes\Subscriptions\SubscriptionPlanCapabilityService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Insights\ProfileInsightsRequest;
 use App\Models\Profile;
@@ -125,7 +126,8 @@ class ProfileInsightsController extends Controller
             return response()->json(['message' => 'Profile not found.'], 404);
         }
 
-        $range = ProfileInsightsRange::fromRequest($request);
+        $range = ProfileInsightsRange::fromRequest($request)
+            ->limitedToDays(app(SubscriptionPlanCapabilityService::class)->analyticsDays($profile));
 
         if ($range->exceedsMaximum()) {
             return response()->json(['message' => 'Insights range cannot exceed 24 months.'], 422);

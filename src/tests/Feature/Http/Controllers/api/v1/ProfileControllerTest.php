@@ -780,19 +780,25 @@ class ProfileControllerTest extends TestAPI
         $this->assertSame(ProfileStatus::Published, $profile->status);
     }
 
-    public function test_user_can_not_activate_publishable_profile_without_active_subscription(): void
+    public function test_user_without_a_subscription_receives_free_plan_and_can_publish_one_profile(): void
     {
-        $user = User::factory()->create(['role' => 'admin', 'password' => Hash::make('test123')]);
+        $user = User::factory()->create(['role' => 'user', 'password' => Hash::make('test123')]);
         $profile = $this->createPublishableProfile($user);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->getToken($user->email, 'test123'))
             ->postJson(self::ENDPOINT_PROFILE.'/'.$profile->id.'/activate');
 
-        $response->assertStatus(402);
-        $response->assertJsonPath('message', 'Active subscription not found.');
-        $response->assertJsonPath('errors.subscription.0', 'Active subscription not found.');
-        $this->assertFalse((bool) $profile->fresh()->active);
-        $this->assertSame(ProfileStatus::Draft, $profile->fresh()->status);
+        $response->assertOk()
+            ->assertJsonPath('message', 'Profile activated successfully.')
+            ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.status', ProfileStatus::Published->value);
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $user->id,
+            'plan' => SubscriptionPlan::Free->value,
+            'active' => true,
+        ]);
+        $this->assertTrue((bool) $profile->fresh()->active);
+        $this->assertSame(ProfileStatus::Published, $profile->fresh()->status);
     }
 
     public function test_starter_user_must_deactivate_current_profile_before_activating_another(): void

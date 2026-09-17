@@ -29,6 +29,17 @@ class SubscriptionPlanCapabilityServiceTest extends TestCase
         $this->assertSame(SubscriptionPlan::Starter, $service->planForProfile($profile));
         $this->assertSame(2, $service->productsPerProfile($profile));
         $this->assertSame(3, $service->selectedMediaPerProfile($profile, 'instagram'));
+        $this->assertContains('profile05', $service->profileTemplates($profile));
+    }
+
+    public function test_free_plan_only_includes_the_first_profile_template(): void
+    {
+        $profile = Profile::factory()->for(User::factory())->create();
+        $service = app(SubscriptionPlanCapabilityService::class);
+
+        $this->assertSame(['profile01'], $service->profileTemplates($profile));
+        $this->assertTrue($service->includesProfileTemplate($profile, 'profile01'));
+        $this->assertFalse($service->includesProfileTemplate($profile, 'profile02'));
     }
 
     public function test_it_uses_the_default_plan_for_legacy_profiles_without_a_subscription(): void
@@ -47,6 +58,7 @@ class SubscriptionPlanCapabilityServiceTest extends TestCase
     public function test_zero_is_a_valid_capability_limit(): void
     {
         config([
+            'subscriptions.default_plan' => 'starter',
             'subscriptions.plans.starter.capabilities.products_per_profile' => 0,
             'subscriptions.plans.starter.capabilities.integrations.tiktok.selected_media' => 0,
         ]);

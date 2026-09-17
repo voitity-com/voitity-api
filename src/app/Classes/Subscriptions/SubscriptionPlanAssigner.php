@@ -14,6 +14,7 @@ class SubscriptionPlanAssigner
     public function __construct(
         private readonly ?SubscriptionLimitPeriodService $limitPeriods = null,
         private readonly ?SubscriptionProfileAccessService $profileAccess = null,
+        private readonly ?FreePlanDataReconciler $freePlanData = null,
     ) {}
 
     /**
@@ -31,6 +32,8 @@ class SubscriptionPlanAssigner
                 ->orderByDesc('started_at')
                 ->lockForUpdate()
                 ->first();
+            $previousPlan = $previousSubscription?->plan;
+            $previousSubscriptionId = $previousSubscription?->id;
 
             if ($previousSubscription) {
                 $previousSubscription->status = SubscriptionStatus::Expired;
@@ -55,6 +58,22 @@ class SubscriptionPlanAssigner
             $this->limitPeriods()->createInitialLimit($subscription);
             $this->profileAccess()->enforceActiveProfileLimit($subscription);
 
+            if ($plan === SubscriptionPlan::Free) {
+                $this->freePlanData()->apply($subscription);
+            }
+
+            if (
+                $previousPlan === SubscriptionPlan::Free
+                && $plan !== SubscriptionPlan::Free
+                && $previousSubscriptionId !== null
+            ) {
+                $this->profileAccess()->restoreProfilesAfterPlanUpgrade(
+                    $subscription,
+                    $previousSubscriptionId,
+                );
+                $this->freePlanData()->restore($subscription);
+            }
+
             return $subscription;
         });
     }
@@ -77,5 +96,10 @@ class SubscriptionPlanAssigner
     private function profileAccess(): SubscriptionProfileAccessService
     {
         return $this->profileAccess ?? app(SubscriptionProfileAccessService::class);
+    }
+
+    private function freePlanData(): FreePlanDataReconciler
+    {
+        return $this->freePlanData ?? app(FreePlanDataReconciler::class);
     }
 }
